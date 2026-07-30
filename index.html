@@ -29,7 +29,6 @@ h1 em{font-style:normal;color:var(--miss)}
   text-transform:uppercase;color:var(--faint)}
 .controls input[type=date]{font-family:"IBM Plex Mono",monospace;font-size:12.5px;color:var(--ink);
   border:1px solid var(--line);border-radius:999px;padding:7px 13px;background:#fff}
-.controls .spacer{flex:1}
 .check{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--body);cursor:pointer}
 .check input{accent-color:var(--brand);width:15px;height:15px;cursor:pointer}
 button.pill{font-size:13px;font-weight:500;font-family:inherit;border-radius:999px;padding:8px 18px;
@@ -124,15 +123,6 @@ table.board td.bad{color:var(--miss);font-weight:600}
 .chip.mid{background:#EEF1F5;color:#5A6B85}
 .chip.bad{background:var(--miss-soft);color:var(--miss)}
 
-/* ---------- paste panel ---------- */
-.panel{display:none;margin-bottom:22px}
-.panel.open{display:block}
-.panel textarea{width:100%;height:150px;border:1px solid var(--line);border-radius:12px;padding:13px;
-  font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink);resize:vertical}
-.panel .row{display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap}
-.status{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--faint)}
-.status.bad{color:var(--miss)}
-
 footer{margin-top:34px;font-size:12px;color:var(--faint);max-width:72ch}
 footer b{color:var(--body);font-weight:500}
 
@@ -150,24 +140,9 @@ footer b{color:var(--body);font-weight:500}
   <p class="lede">One entry per person per working day. Everything here counts what's absent — a person-day with no submission at all. Sundays are excluded.</p>
 
   <div class="controls">
-    <label for="from">From</label><input type="date" id="from" value="2026-07-14">
-    <label for="to">To</label><input type="date" id="to" value="2026-07-30">
+    <label for="from">From</label><input type="date" id="from">
+    <label for="to">To</label><input type="date" id="to">
     <label class="check"><input type="checkbox" id="joined" checked> Skip days before someone's first entry</label>
-    <span class="spacer"></span>
-    <button class="pill ghost" id="toggle">Load a fresh export</button>
-  </div>
-
-  <div class="panel" id="panel">
-    <section>
-      <h2>Paste a new Asana export</h2>
-      <p class="hint">Open the sheet, select all, copy, paste. It reads <b>Due Date</b> and <b>Assignee</b> and ignores the rest. Tab-separated (straight from Sheets) or comma-separated both work.</p>
-      <textarea id="paste" placeholder="Task ID	Created At	Completed At	Last Modified	Name	Section/Column	Assignee	…"></textarea>
-      <div class="row">
-        <button class="pill" id="load">Rebuild</button>
-        <button class="pill ghost" id="reset">Back to sample data</button>
-        <span class="status" id="status"></span>
-      </div>
-    </section>
   </div>
 
   <div class="chase" id="chase"></div>
@@ -202,7 +177,7 @@ footer b{color:var(--body);font-weight:500}
 </div>
 
 <script>
-/* ---------------- sample data: name | due ---------------- */
+/* ------------- embedded dataset: name | due date ------------- */
 const SAMPLE = `
 Divya Gupta|07-30
 Akshat Wahi|07-30
@@ -338,50 +313,6 @@ function range(from,to,skipSun){
   return out;
 }
 
-/* ---------------- parsing ---------------- */
-function splitRows(t,dl){
-  const rows=[];let row=[],f='',q=false;
-  for(let i=0;i<t.length;i++){const c=t[i];
-    if(q){ if(c==='"'){ if(t[i+1]==='"'){f+='"';i++;} else q=false; } else f+=c; }
-    else if(c==='"')q=true;
-    else if(c===dl){row.push(f);f='';}
-    else if(c==='\n'){row.push(f);rows.push(row);row=[];f='';}
-    else if(c!=='\r')f+=c;}
-  row.push(f); if(row.length>1||row[0]!=='')rows.push(row);
-  return rows;
-}
-function normDate(v){
-  v=(v||'').trim(); if(!v)return null;
-  let m=v.match(/^(\d{4})-(\d{2})-(\d{2})/); if(m)return `${m[1]}-${m[2]}-${m[3]}`;
-  m=v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-  if(m)return `${m[3]}-${String(m[1]).padStart(2,'0')}-${String(m[2]).padStart(2,'0')}`;
-  const d=new Date(v); return isNaN(d)?null:iso(d);
-}
-const tc=s=>s.split(/\s+/).map(w=>w?w[0].toUpperCase()+w.slice(1).toLowerCase():w).join(' ');
-function parseExport(text){
-  const dl=(text.split('\n')[0].match(/\t/g)||[]).length>=2?'\t':',';
-  const rows=splitRows(text,dl); let head=-1,ix={};
-  for(let i=0;i<Math.min(rows.length,25);i++){
-    const h=rows[i].map(x=>x.trim().toLowerCase());
-    const d=h.indexOf('due date'), a=h.indexOf('assignee');
-    if(d>-1&&a>-1){head=i;ix={due:d,name:a,email:h.indexOf('assignee email')};break;}
-  }
-  if(head<0) throw new Error('No header row with Due Date and Assignee.');
-  const out=[];
-  for(let i=head+1;i<rows.length;i++){
-    const r=rows[i]; if(!r||r.length<2)continue;
-    const due=normDate(r[ix.due]); if(!due)continue;
-    let n=(r[ix.name]||'').trim();
-    if(!n||n.includes('@')){ // no display name set in Asana — derive one from the email
-      n=tc(((ix.email>-1?r[ix.email]:'')||n||'').split('@')[0].replace(/[._-]+/g,' '));
-    }
-    if(!n)continue;
-    out.push({name:n,due});
-  }
-  if(!out.length) throw new Error('Header found, but no rows had a usable Due Date.');
-  return out;
-}
-
 /* ---------------- analysis ---------------- */
 function analyse(rows,from,to,joined){
   const days=range(from,to,true), dayset=new Set(days);
@@ -504,30 +435,18 @@ function render(){
 }
 
 /* ---------------- wiring ---------------- */
+/* Defaults: a rolling window ending today, read from the viewer's own clock.
+   iso() formats the local calendar date — never toISOString(), which shifts
+   the day backwards in any timezone ahead of UTC. */
+const WINDOW_DAYS = 15;
+function setDefaultRange(){
+  const today = new Date();
+  const start = new Date(today); start.setDate(start.getDate() - WINDOW_DAYS);
+  document.getElementById('to').value   = iso(today);
+  document.getElementById('from').value = iso(start);
+}
+setDefaultRange();
 ['from','to','joined'].forEach(id=>document.getElementById(id).addEventListener('change',render));
-document.getElementById('toggle').addEventListener('click',()=>{
-  const p=document.getElementById('panel'),o=p.classList.toggle('open');
-  document.getElementById('toggle').textContent=o?'Hide export panel':'Load a fresh export';
-});
-document.getElementById('load').addEventListener('click',()=>{
-  const s=document.getElementById('status'),t=document.getElementById('paste').value;
-  if(!t.trim()){s.className='status bad';s.textContent='Nothing pasted yet.';return;}
-  try{
-    const p=parseExport(t); ROWS=p;
-    const ds=p.map(r=>r.due).sort();
-    document.getElementById('from').value=ds[0];
-    document.getElementById('to').value=ds[ds.length-1];
-    s.className='status';s.textContent=`${p.length} entries loaded, ${ds[0]} to ${ds[ds.length-1]}.`;
-    render();
-  }catch(e){s.className='status bad';s.textContent=e.message;}
-});
-document.getElementById('reset').addEventListener('click',()=>{
-  ROWS=SAMPLE;
-  document.getElementById('from').value='2026-07-14';
-  document.getElementById('to').value='2026-07-30';
-  const s=document.getElementById('status');s.className='status';s.textContent='Back to the July sample.';
-  render();
-});
 
 render();
 </script>
