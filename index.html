@@ -1,0 +1,533 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Missed entries — CS Internal Team Calls Tracker</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+
+:root{
+  --ink:#101B33; --body:#5A6B85; --faint:#8A97AC;
+  --page:#F4F5F7; --card:#FFFFFF; --line:#E3E7EE;
+  --brand:#FF6A13; --miss:#D6285A; --miss-soft:#FDECF1; --filed:#DCE1E9;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--page);color:var(--body);font-family:"IBM Plex Sans",system-ui,sans-serif;
+  font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1160px;margin:0 auto;padding:40px 24px 72px}
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+
+.eyebrow{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--faint);margin:0 0 14px}
+h1{font-family:"Bricolage Grotesque",sans-serif;font-weight:800;font-size:clamp(34px,5.2vw,54px);
+  line-height:1.02;letter-spacing:-.025em;color:var(--ink);margin:0 0 14px}
+h1 em{font-style:normal;color:var(--miss)}
+.lede{max-width:54ch;margin:0 0 28px;font-size:15px}
+
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:14px 16px;
+  background:var(--card);border:1px solid var(--line);border-radius:14px;margin-bottom:24px}
+.controls label{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--faint)}
+.controls input[type=date]{font-family:"IBM Plex Mono",monospace;font-size:12.5px;color:var(--ink);
+  border:1px solid var(--line);border-radius:999px;padding:7px 13px;background:#fff}
+.controls .spacer{flex:1}
+.check{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--body);cursor:pointer}
+.check input{accent-color:var(--brand);width:15px;height:15px;cursor:pointer}
+button.pill{font-size:13px;font-weight:500;font-family:inherit;border-radius:999px;padding:8px 18px;
+  cursor:pointer;border:1px solid var(--ink);background:var(--ink);color:#fff;transition:background .15s,color .15s}
+button.pill:hover{background:var(--brand);border-color:var(--brand)}
+button.ghost{background:transparent;color:var(--ink)}
+button.ghost:hover{background:var(--ink);color:#fff}
+
+/* ---------- hero: today's chase list ---------- */
+.chase{background:var(--card);border:1px solid var(--line);border-radius:18px;
+  padding:30px 30px 26px;margin-bottom:22px;border-top:3px solid var(--miss)}
+.chase .when{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--faint);margin-bottom:14px}
+.chase .count{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:20px}
+.chase .n{font-family:"Bricolage Grotesque",sans-serif;font-weight:800;font-size:64px;line-height:.9;
+  letter-spacing:-.04em;color:var(--miss);font-variant-numeric:tabular-nums}
+.chase .of{font-family:"Bricolage Grotesque",sans-serif;font-weight:600;font-size:23px;
+  letter-spacing:-.015em;color:var(--ink)}
+.names{display:flex;flex-wrap:wrap;gap:8px}
+.names a{font-family:"IBM Plex Sans",sans-serif;font-size:13.5px;font-weight:500;color:var(--miss);
+  background:var(--miss-soft);border-radius:999px;padding:6px 15px;text-decoration:none;cursor:default}
+.names a i{font-style:normal;font-family:"IBM Plex Mono",monospace;font-size:11px;opacity:.72;margin-left:6px}
+.allclear{font-family:"Bricolage Grotesque",sans-serif;font-weight:600;font-size:23px;color:var(--brand)}
+
+/* ---------- kpis ---------- */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px}
+.kpi .fig{font-family:"Bricolage Grotesque",sans-serif;font-weight:800;font-size:40px;line-height:1;
+  letter-spacing:-.03em;color:var(--ink);font-variant-numeric:tabular-nums}
+.kpi .fig .unit{font-size:18px;color:var(--faint);margin-left:2px}
+.kpi.flag .fig{color:var(--miss)}
+.kpi .lab{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--faint);margin-top:10px}
+.kpi .sub{font-size:12.5px;margin-top:5px}
+
+section{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px 24px;margin-bottom:22px}
+h2{font-family:"Bricolage Grotesque",sans-serif;font-weight:600;font-size:21px;letter-spacing:-.015em;
+  color:var(--ink);margin:0 0 4px}
+.hint{font-size:13px;margin:0 0 20px;max-width:66ch}
+
+/* ---------- gap grid: absences are the loud thing ---------- */
+.gridscroll{overflow-x:auto;padding-bottom:6px}
+table.grid{border-collapse:separate;border-spacing:0}
+table.grid th.day{font-family:"IBM Plex Mono",monospace;font-weight:500;font-size:10px;color:var(--faint);
+  padding:0 0 9px;width:26px;text-align:center}
+table.grid th.day .dow{display:block;font-size:8.5px;opacity:.6;letter-spacing:.06em}
+table.grid th.who{text-align:left;padding:0 16px 9px 0;font-family:"IBM Plex Mono",monospace;font-weight:500;
+  font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+table.grid th.tot{padding:0 0 9px 14px;font-family:"IBM Plex Mono",monospace;font-weight:500;font-size:10px;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--faint);text-align:right}
+table.grid td.who{padding:0 16px 0 0;white-space:nowrap;font-size:13.5px;color:var(--ink);font-weight:500;height:26px}
+table.grid td.tot{padding:0 0 0 14px;text-align:right;font-family:"IBM Plex Mono",monospace;font-size:12px;
+  color:var(--miss);font-weight:600;font-variant-numeric:tabular-nums}
+table.grid td.tot.zero{color:var(--faint);font-weight:400}
+.cell{width:22px;height:22px;border-radius:5px;display:block;margin:2px auto}
+.f{background:var(--filed)}                       /* filed — quiet */
+.m{background:var(--miss)}                        /* missed — loud */
+.na{background:transparent;border:1px solid var(--line);border-radius:5px;opacity:.5}
+.gutter{width:9px}
+.gutter .rule{width:1px;height:22px;margin:2px auto;
+  background:repeating-linear-gradient(to bottom,var(--line) 0 3px,transparent 3px 6px)}
+.legend{display:flex;flex-wrap:wrap;gap:18px;margin-top:22px;padding-top:18px;border-top:1px solid var(--line)}
+.legend span{display:flex;align-items:center;gap:7px;font-size:12px}
+.legend .cell{margin:0;width:15px;height:15px;border-radius:4px}
+
+/* ---------- turnout strip ---------- */
+.strip{display:flex;gap:5px;align-items:flex-end;height:110px;margin-bottom:10px}
+.strip div{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%}
+.strip i{display:block;width:100%;border-radius:4px 4px 0 0;background:var(--filed);min-height:2px}
+.strip i.bad{background:var(--miss)}
+.strip b{font-family:"IBM Plex Mono",monospace;font-size:10px;font-weight:500;color:var(--faint);
+  margin-top:7px;text-align:center;line-height:1.3}
+.strip b u{display:block;text-decoration:none;font-size:8.5px;opacity:.65}
+
+/* ---------- table ---------- */
+table.board{width:100%;border-collapse:collapse}
+table.board th{text-align:right;font-family:"IBM Plex Mono",monospace;font-weight:500;font-size:10px;
+  letter-spacing:.09em;text-transform:uppercase;color:var(--faint);padding:0 0 11px;
+  border-bottom:1px solid var(--line);white-space:nowrap}
+table.board th:first-child{text-align:left}
+table.board td{padding:11px 0;border-bottom:1px solid var(--line);text-align:right;
+  font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--ink);font-variant-numeric:tabular-nums}
+table.board td:first-child{text-align:left;font-family:"IBM Plex Sans",sans-serif;font-weight:500;font-size:14px}
+table.board td.dim{color:var(--faint)}
+table.board td.bad{color:var(--miss);font-weight:600}
+.bar{display:inline-block;vertical-align:middle;width:78px;height:6px;border-radius:3px;
+  background:var(--miss-soft);overflow:hidden;margin-left:12px}
+.bar i{display:block;height:100%;background:var(--brand);border-radius:3px}
+.chip{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:10px;font-weight:600;
+  letter-spacing:.05em;text-transform:uppercase;padding:3px 9px;border-radius:999px}
+.chip.ok{background:#FFF1E6;color:#B34700}
+.chip.mid{background:#EEF1F5;color:#5A6B85}
+.chip.bad{background:var(--miss-soft);color:var(--miss)}
+
+/* ---------- paste panel ---------- */
+.panel{display:none;margin-bottom:22px}
+.panel.open{display:block}
+.panel textarea{width:100%;height:150px;border:1px solid var(--line);border-radius:12px;padding:13px;
+  font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink);resize:vertical}
+.panel .row{display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap}
+.status{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--faint)}
+.status.bad{color:var(--miss)}
+
+footer{margin-top:34px;font-size:12px;color:var(--faint);max-width:72ch}
+footer b{color:var(--body);font-weight:500}
+
+@media (max-width:900px){
+  .kpis{grid-template-columns:repeat(2,1fr)}
+  .wrap{padding:28px 16px 56px}
+  .chase{padding:24px 20px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <p class="eyebrow">CS Internal Team Calls Tracker &nbsp;/&nbsp; daily entry compliance</p>
+  <h1>Who <em>hasn't</em> filed.</h1>
+  <p class="lede">One entry per person per working day. Everything here counts what's absent — a person-day with no submission at all. Sundays are excluded.</p>
+
+  <div class="controls">
+    <label for="from">From</label><input type="date" id="from" value="2026-07-14">
+    <label for="to">To</label><input type="date" id="to" value="2026-07-30">
+    <label class="check"><input type="checkbox" id="joined" checked> Skip days before someone's first entry</label>
+    <span class="spacer"></span>
+    <button class="pill ghost" id="toggle">Load a fresh export</button>
+  </div>
+
+  <div class="panel" id="panel">
+    <section>
+      <h2>Paste a new Asana export</h2>
+      <p class="hint">Open the sheet, select all, copy, paste. It reads <b>Due Date</b> and <b>Assignee</b> and ignores the rest. Tab-separated (straight from Sheets) or comma-separated both work.</p>
+      <textarea id="paste" placeholder="Task ID	Created At	Completed At	Last Modified	Name	Section/Column	Assignee	…"></textarea>
+      <div class="row">
+        <button class="pill" id="load">Rebuild</button>
+        <button class="pill ghost" id="reset">Back to sample data</button>
+        <span class="status" id="status"></span>
+      </div>
+    </section>
+  </div>
+
+  <div class="chase" id="chase"></div>
+  <div class="kpis" id="kpis"></div>
+
+  <section>
+    <h2>The gaps</h2>
+    <p class="hint">One square per person per working day. Filed days are deliberately quiet grey — the solid red is what you're looking for. Hollow squares are days before that person's first entry. Sundays are the dotted gutters.</p>
+    <div class="gridscroll"><table class="grid" id="grid"></table></div>
+    <div class="legend">
+      <span><i class="cell m"></i> No entry filed</span>
+      <span><i class="cell f"></i> Entry filed</span>
+      <span><i class="cell na"></i> Before they started</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Missed-entry board</h2>
+    <p class="hint">Sorted by days missed, worst first. Streak is how many working days they've missed in a row counting back from the end of the range.</p>
+    <table class="board" id="board"></table>
+  </section>
+
+  <section>
+    <h2>Turnout by day</h2>
+    <p class="hint">How much of the team filed on each working day. Red marks the share who didn't.</p>
+    <div class="strip" id="strip"></div>
+  </section>
+
+  <footer>
+    <b>How a day counts.</b> A person-day is "filed" if at least one entry exists with that due date — a separate Online Meeting and Phone call row on the same day still counts once. With the checkbox on, days before a person's first-ever entry are excluded, so a recent joiner isn't scored for a period they weren't around; days after their first entry always count, so someone who stops filing still shows up. Turn it off to see raw coverage against the full range.
+  </footer>
+</div>
+
+<script>
+/* ---------------- sample data: name | due ---------------- */
+const SAMPLE = `
+Divya Gupta|07-30
+Akshat Wahi|07-30
+Tanvi Gupta|07-30
+Rahul Sharma|07-30
+Vansh Saini|07-30
+Mansi Rana|07-29
+Mansi Rana|07-28
+Mansi Rana|07-27
+Priya|07-28
+Tinku Singh|07-29
+Sagar Mishra|07-29
+Akshat Wahi|07-29
+Divya Gupta|07-29
+Palak Singh|07-29
+Vansh Saini|07-29
+Tanvi Gupta|07-29
+Aman Sharma|07-29
+Sagar Mishra|07-28
+Vansh Saini|07-28
+Vansh Saini|07-27
+Mehak Garg|07-28
+Akshat Wahi|07-28
+Divya Gupta|07-28
+Tanvi Gupta|07-28
+Mehak Garg|07-27
+Mehak Garg|07-25
+Sagar Mishra|07-27
+Tinku Singh|07-27
+Mansi Rana|07-25
+Mansi Rana|07-24
+Palak Singh|07-27
+Akshat Wahi|07-27
+Divya Gupta|07-27
+Priya|07-27
+Aman Sharma|07-27
+Tinku Singh|07-25
+Divya Gupta|07-25
+Tanvi Gupta|07-25
+Sultan Malik|07-25
+Akshat Wahi|07-24
+Sagar Mishra|07-24
+Divya Gupta|07-24
+Tinku Singh|07-24
+Palak Singh|07-24
+Tanvi Gupta|07-24
+Sapna|07-11
+Vansh Saini|07-24
+Aman Sharma|07-24
+Sultan Malik|07-24
+Sagar Mishra|07-23
+Divya Gupta|07-23
+Mansi Rana|07-23
+Kashish Goel|07-21
+Kashish Goel|07-22
+Kashish Goel|07-23
+Kashish Goel|07-16
+Sukhmeet Singh|07-23
+Sukhmeet Singh|07-22
+Sukhmeet Singh|07-21
+Sukhmeet Singh|07-20
+Sukhmeet Singh|07-18
+Sukhmeet Singh|07-16
+Sukhmeet Singh|07-15
+Sukhmeet Singh|07-14
+Priya|07-22
+Gobind Monga|07-22
+Divya Gupta|07-22
+Mehak Garg|07-22
+Mansi Rana|07-22
+Mansi Rana|07-21
+Sagar Mishra|07-22
+Tanvi Gupta|07-22
+Amar Kumar Pandit|07-22
+Amar Kumar Pandit|07-21
+Amar Kumar Pandit|07-20
+Amar Kumar Pandit|07-18
+Amar Kumar Pandit|07-17
+Amar Kumar Pandit|07-16
+Amar Kumar Pandit|07-15
+Lokesh Kumar|07-22
+Lokesh Kumar|07-21
+Sagar Mishra|07-21
+Divya Gupta|07-21
+Sultan Malik|07-21
+Tanvi Gupta|07-20
+Sagar Mishra|07-20
+Priya|07-20
+Divya Gupta|07-20
+Mansi Rana|07-20
+Mansi Rana|07-18
+Mansi Rana|07-17
+Sultan Malik|07-20
+Lokesh Kumar|07-20
+Sagar Mishra|07-17
+Gobind Monga|07-18
+Divya Gupta|07-18
+Sultan Malik|07-18
+Divya Gupta|07-17
+Sapna|07-17
+Ankush Rana|07-13
+Ankush Rana|07-14
+Ankush Rana|07-15
+Ankush Rana|07-16
+Sagar Mishra|07-16
+Divya Gupta|07-16
+Tanvi Gupta|07-16
+Lokesh Kumar|07-16
+Sagar Mishra|07-15
+Divya Gupta|07-15
+Sultan Malik|07-15
+Lokesh Kumar|07-15
+Priya|07-14
+Gobind Monga|07-14
+Mansi Rana|07-14
+`.trim().split('\n').map(l=>{const [name,d]=l.split('|');return {name, due:'2026-'+d};});
+
+let ROWS = SAMPLE;
+
+/* ---------------- helpers ---------------- */
+const D=s=>new Date(s+'T00:00:00');
+/* Local-calendar formatting. toISOString() would convert to UTC, which shifts
+   every date back a day in any timezone ahead of UTC (IST included). */
+const iso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const DOW=['Su','Mo','Tu','We','Th','Fr','Sa'];
+const diff=(a,b)=>Math.round((D(a)-D(b))/86400000);
+const pretty=s=>D(s).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
+const shortDate=s=>D(s).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+function range(from,to,skipSun){
+  const out=[],c=D(from),e=D(to);
+  while(c<=e){ if(!skipSun||c.getDay()!==0) out.push(iso(c)); c.setDate(c.getDate()+1); }
+  return out;
+}
+
+/* ---------------- parsing ---------------- */
+function splitRows(t,dl){
+  const rows=[];let row=[],f='',q=false;
+  for(let i=0;i<t.length;i++){const c=t[i];
+    if(q){ if(c==='"'){ if(t[i+1]==='"'){f+='"';i++;} else q=false; } else f+=c; }
+    else if(c==='"')q=true;
+    else if(c===dl){row.push(f);f='';}
+    else if(c==='\n'){row.push(f);rows.push(row);row=[];f='';}
+    else if(c!=='\r')f+=c;}
+  row.push(f); if(row.length>1||row[0]!=='')rows.push(row);
+  return rows;
+}
+function normDate(v){
+  v=(v||'').trim(); if(!v)return null;
+  let m=v.match(/^(\d{4})-(\d{2})-(\d{2})/); if(m)return `${m[1]}-${m[2]}-${m[3]}`;
+  m=v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if(m)return `${m[3]}-${String(m[1]).padStart(2,'0')}-${String(m[2]).padStart(2,'0')}`;
+  const d=new Date(v); return isNaN(d)?null:iso(d);
+}
+const tc=s=>s.split(/\s+/).map(w=>w?w[0].toUpperCase()+w.slice(1).toLowerCase():w).join(' ');
+function parseExport(text){
+  const dl=(text.split('\n')[0].match(/\t/g)||[]).length>=2?'\t':',';
+  const rows=splitRows(text,dl); let head=-1,ix={};
+  for(let i=0;i<Math.min(rows.length,25);i++){
+    const h=rows[i].map(x=>x.trim().toLowerCase());
+    const d=h.indexOf('due date'), a=h.indexOf('assignee');
+    if(d>-1&&a>-1){head=i;ix={due:d,name:a,email:h.indexOf('assignee email')};break;}
+  }
+  if(head<0) throw new Error('No header row with Due Date and Assignee.');
+  const out=[];
+  for(let i=head+1;i<rows.length;i++){
+    const r=rows[i]; if(!r||r.length<2)continue;
+    const due=normDate(r[ix.due]); if(!due)continue;
+    let n=(r[ix.name]||'').trim();
+    if(!n||n.includes('@')){ // no display name set in Asana — derive one from the email
+      n=tc(((ix.email>-1?r[ix.email]:'')||n||'').split('@')[0].replace(/[._-]+/g,' '));
+    }
+    if(!n)continue;
+    out.push({name:n,due});
+  }
+  if(!out.length) throw new Error('Header found, but no rows had a usable Due Date.');
+  return out;
+}
+
+/* ---------------- analysis ---------------- */
+function analyse(rows,from,to,joined){
+  const days=range(from,to,true), dayset=new Set(days);
+  const P=new Map();
+  for(const r of rows){
+    const key=r.name.toLowerCase();
+    if(!P.has(key)) P.set(key,{name:r.name,filed:new Set(),first:r.due});
+    const p=P.get(key);
+    if(r.due<p.first)p.first=r.due;
+    if(dayset.has(r.due)) p.filed.add(r.due);
+  }
+  const stats=[];
+  for(const p of P.values()){
+    const start = joined && p.first>from ? p.first : from;
+    const due = days.filter(d=>d>=start);
+    if(!due.length) continue;
+    const missed = due.filter(d=>!p.filed.has(d));
+    let streak=0;
+    for(let i=due.length-1;i>=0;i--){ if(p.filed.has(due[i]))break; streak++; }
+    const last=[...p.filed].sort().pop()||null;
+    stats.push({name:p.name,first:p.first,filedSet:p.filed,expected:due.length,
+      filed:due.length-missed.length,missed:missed.length,
+      rate:(due.length-missed.length)/due.length,streak,last,startsAt:start});
+  }
+  const exp=stats.reduce((s,p)=>s+p.expected,0), fil=stats.reduce((s,p)=>s+p.filed,0);
+  return {days,stats,exp,fil,missed:exp-fil};
+}
+
+/* ---------------- render ---------------- */
+function render(){
+  const from=document.getElementById('from').value,to=document.getElementById('to').value;
+  const joined=document.getElementById('joined').checked;
+  if(!from||!to||D(from)>D(to))return;
+  const A=analyse(ROWS,from,to,joined);
+  const pct=n=>Math.round(n*100);
+  if(!A.days.length||!A.stats.length){
+    document.getElementById('chase').innerHTML='<div class="when">No data in this range</div>';
+    return;
+  }
+
+  /* hero — the chase list for the last working day */
+  const last=A.days[A.days.length-1];
+  const due=A.stats.filter(p=>last>=p.startsAt);
+  const out=due.filter(p=>!p.filedSet.has(last))
+               .sort((a,b)=>b.streak-a.streak||a.name.localeCompare(b.name));
+  document.getElementById('chase').innerHTML =
+    `<div class="when">Latest working day &middot; ${pretty(last)}</div>` +
+    (out.length
+      ? `<div class="count"><span class="n">${out.length}</span>
+           <span class="of">of ${due.length} people have no entry for this day</span></div>
+         <div class="names">${out.map(p=>`<a title="${esc(p.name)} — ${p.missed} missed in range">${esc(p.name)}${p.streak>1?`<i>${p.streak}d</i>`:''}</a>`).join('')}</div>`
+      : `<div class="count"><span class="allclear">Everyone filed. Nothing to chase.</span></div>`);
+
+  /* kpis */
+  const clean=A.stats.filter(p=>p.missed===0).length;
+  const worst=A.stats.reduce((m,p)=>Math.max(m,p.streak),0);
+  document.getElementById('kpis').innerHTML=`
+    <div class="kpi flag"><div class="fig">${A.missed}</div><div class="lab">Entries missed</div>
+      <div class="sub">of ${A.exp} expected person-days</div></div>
+    <div class="kpi"><div class="fig">${pct(A.fil/A.exp)}<span class="unit">%</span></div>
+      <div class="lab">Coverage</div><div class="sub">${A.fil} filed</div></div>
+    <div class="kpi"><div class="fig">${clean}<span class="unit">/${A.stats.length}</span></div>
+      <div class="lab">Never missed a day</div><div class="sub">across ${A.days.length} working days</div></div>
+    <div class="kpi flag"><div class="fig">${worst}</div><div class="lab">Longest live streak</div>
+      <div class="sub">consecutive days missed</div></div>`;
+
+  /* gap grid */
+  const cols=range(from,to,false);
+  const order=[...A.stats].sort((a,b)=>b.missed-a.missed||a.name.localeCompare(b.name));
+  let h='<thead><tr><th class="who">Person</th>';
+  for(const d of cols){
+    const dt=D(d);
+    h+= dt.getDay()===0 ? '<th class="gutter"></th>'
+      : `<th class="day">${dt.getDate()}<span class="dow">${DOW[dt.getDay()]}</span></th>`;
+  }
+  h+='<th class="tot">Missed</th></tr></thead><tbody>';
+  for(const p of order){
+    h+=`<tr><td class="who">${esc(p.name)}</td>`;
+    for(const d of cols){
+      if(D(d).getDay()===0){h+='<td class="gutter"><i class="rule"></i></td>';continue;}
+      if(d<p.startsAt){h+=`<td><i class="cell na" title="${esc(p.name)} — before first entry"></i></td>`;continue;}
+      const ok=p.filedSet.has(d);
+      h+=`<td><i class="cell ${ok?'f':'m'}" title="${esc(p.name)} — ${pretty(d)}: ${ok?'filed':'no entry'}"></i></td>`;
+    }
+    h+=`<td class="tot ${p.missed?'':'zero'}">${p.missed}</td></tr>`;
+  }
+  document.getElementById('grid').innerHTML=h+'</tbody>';
+
+  /* board */
+  const board=[...A.stats].sort((a,b)=>b.missed-a.missed||a.rate-b.rate);
+  let t=`<thead><tr><th>Person</th><th>Filed</th><th>Missed</th><th>Coverage</th>
+    <th>Current streak</th><th>Last filed</th><th>Status</th></tr></thead><tbody>`;
+  for(const p of board){
+    const v = p.streak>=3 ? '<span class="chip bad">Chase</span>'
+            : p.rate>=.9  ? '<span class="chip ok">Reliable</span>'
+            : p.rate>=.6  ? '<span class="chip mid">Patchy</span>'
+            : '<span class="chip bad">Rarely files</span>';
+    t+=`<tr><td>${esc(p.name)}</td>
+      <td class="dim">${p.filed}/${p.expected}</td>
+      <td class="${p.missed?'bad':'dim'}">${p.missed}</td>
+      <td>${pct(p.rate)}%<span class="bar"><i style="width:${pct(p.rate)}%"></i></span></td>
+      <td class="${p.streak>=2?'bad':'dim'}">${p.streak||'—'}</td>
+      <td class="dim">${p.last?shortDate(p.last):'never'}</td>
+      <td>${v}</td></tr>`;
+  }
+  document.getElementById('board').innerHTML=t+'</tbody>';
+
+  /* turnout strip */
+  let s='';
+  for(const d of A.days){
+    const exp=A.stats.filter(p=>d>=p.startsAt);
+    const f=exp.filter(p=>p.filedSet.has(d)).length;
+    const r=exp.length?f/exp.length:0;
+    const dt=D(d);
+    s+=`<div title="${pretty(d)}: ${f} of ${exp.length} filed">
+          <i class="${r<.5?'bad':''}" style="height:${Math.max(r*100,2)}%"></i>
+          <b>${dt.getDate()}<u>${DOW[dt.getDay()]}</u></b></div>`;
+  }
+  document.getElementById('strip').innerHTML=s;
+}
+
+/* ---------------- wiring ---------------- */
+['from','to','joined'].forEach(id=>document.getElementById(id).addEventListener('change',render));
+document.getElementById('toggle').addEventListener('click',()=>{
+  const p=document.getElementById('panel'),o=p.classList.toggle('open');
+  document.getElementById('toggle').textContent=o?'Hide export panel':'Load a fresh export';
+});
+document.getElementById('load').addEventListener('click',()=>{
+  const s=document.getElementById('status'),t=document.getElementById('paste').value;
+  if(!t.trim()){s.className='status bad';s.textContent='Nothing pasted yet.';return;}
+  try{
+    const p=parseExport(t); ROWS=p;
+    const ds=p.map(r=>r.due).sort();
+    document.getElementById('from').value=ds[0];
+    document.getElementById('to').value=ds[ds.length-1];
+    s.className='status';s.textContent=`${p.length} entries loaded, ${ds[0]} to ${ds[ds.length-1]}.`;
+    render();
+  }catch(e){s.className='status bad';s.textContent=e.message;}
+});
+document.getElementById('reset').addEventListener('click',()=>{
+  ROWS=SAMPLE;
+  document.getElementById('from').value='2026-07-14';
+  document.getElementById('to').value='2026-07-30';
+  const s=document.getElementById('status');s.className='status';s.textContent='Back to the July sample.';
+  render();
+});
+
+render();
+</script>
