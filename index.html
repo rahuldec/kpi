@@ -161,6 +161,9 @@ button[disabled]{opacity:.45;cursor:default;pointer-events:none}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.loading i{animation:none;border-top-color:var(--line)}}
 #content[hidden]{display:none}
+.exempt{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--faint);
+  margin:-6px 0 0;padding:0 2px}
+.exempt:empty{display:none}
 footer{margin-top:34px;font-size:12px;color:var(--faint);max-width:72ch}
 footer b{color:var(--body);font-weight:500}
 
@@ -228,6 +231,8 @@ footer b{color:var(--body);font-weight:500}
 
   </div>
 
+  <p class="exempt" id="exempt"></p>
+
   <footer>
     <b>How a day counts.</b> A person-day is "filed" if at least one entry exists with that due date — a separate Online Meeting and Phone call row on the same day still counts once. With the checkbox on, days before a person's first-ever entry are excluded, so a recent joiner isn't scored for a period they weren't around; days after their first entry always count, so someone who stops filing still shows up. Turn it off to see raw coverage against the full range.
   </footer>
@@ -242,6 +247,21 @@ const SOURCES = {
   internal: {label: 'CS Internal Team Calls Tracker', noun: 'internal calls'},
   client:   {label: 'CS Client Call Tracker',         noun: 'client calls'}
 };
+/* ---- who is not expected to file where ----------------------------------
+   Everyone on the roster is expected to file to BOTH trackers unless listed
+   here. Names are matched in lowercase. To change this, edit the file on
+   GitHub — click index.html, the pencil icon, edit, commit — and the site
+   redeploys in about a minute.
+
+   If this grows past a handful of names, or you start needing joiner and
+   leaver dates, move it to a roster sheet instead so it can be maintained in
+   Google Sheets without a deploy.                                          */
+const EXEMPT = {
+  internal: [],
+  client:   ['sagar mishra']
+};
+const isExempt = (name, src) => EXEMPT[src].includes(name.toLowerCase());
+
 const SOURCE_KEY = 'kpi.source';
 let SOURCE = 'internal';
 let ROWS = [];
@@ -335,9 +355,11 @@ function parseExport(text){
 function analyse(rows,from,to,joined){
   const days=range(from,to,true), dayset=new Set(days);
   const P=new Map();
-  // Everyone on the roster is expected here, whether or not they appear in this sheet.
+  /* Everyone on the roster is expected here, whether or not they appear in this
+     sheet — minus anyone exempt from this tracker. An exempt person who files
+     anyway is still picked up by the loop below, so their work is never hidden. */
   for(const [key,{name,first}] of ROSTER)
-    P.set(key,{name,filed:new Set(),first});
+    if(!isExempt(name, SOURCE)) P.set(key,{name,filed:new Set(),first});
   for(const r of rows){
     const key=r.name.toLowerCase();
     if(!P.has(key)) P.set(key,{name:r.name,filed:new Set(),first:r.due});
@@ -382,7 +404,7 @@ function renderChase(){
   const label = CHASE_LABEL[MODE] || 'Latest working day';
   const people = new Map();
   for (const [key, {name, first}] of ROSTER)
-    people.set(key, {name, filed:new Set(), first});
+    if (!isExempt(name, SOURCE)) people.set(key, {name, filed:new Set(), first});
   for (const r of ROWS){
     const key = r.name.toLowerCase();
     if (!people.has(key)) people.set(key, {name:r.name, filed:new Set(), first:r.due});
@@ -532,6 +554,15 @@ let MODE = 'today';
 const readStore = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
 const writeStore = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
 
+function renderExempt(){
+  const names = ROSTER.size
+    ? [...ROSTER.values()].map(p => p.name).filter(n => isExempt(n, SOURCE))
+    : EXEMPT[SOURCE];
+  $('exempt').textContent = names.length
+    ? `Not expected to file ${SOURCES[SOURCE].noun}, so excluded from every count above: ${names.join(', ')}.`
+    : '';
+}
+
 function markSource(){
   for (const b of $('sources').children)
     b.setAttribute('aria-pressed', String(b.dataset.src === SOURCE));
@@ -580,6 +611,7 @@ function setDefaultRange(){
 
 function showActive(){
   ROWS = DATA[SOURCE];
+  renderExempt();
   const total = DATA.internal.length + DATA.client.length;
   $('fresh').textContent = `${ROWS.length} of ${total} entries · ${ROSTER.size} people · ` +
     new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});

@@ -13,6 +13,24 @@ Two trackers behind one page, switched with the tabs at the top:
 Both are the same Asana export shape, so one parser handles both. The choice is
 remembered in the browser.
 
+### Exemptions
+
+Everyone on the roster is expected to file to **both** trackers, with exceptions listed
+in the `EXEMPT` block at the top of the `<script>` in `index.html`:
+
+    const EXEMPT = {
+      internal: [],
+      client:   ['sagar mishra']
+    };
+
+Lowercase names. To change it: on GitHub open `index.html`, click the pencil, edit,
+commit — live in about a minute. Exempt people are dropped from every count on that
+tab and named in a line beneath the panels, so the exclusion is never silent. If one
+files anyway, they reappear — their work is never hidden.
+
+Move this to a roster sheet if it grows past a handful of names, or if you start
+needing joiner and leaver dates.
+
 **The same team is expected to file to both.** Both sheets are therefore loaded on
 every visit and the roster is the union of everyone appearing in either. Each tab is
 scored against that full roster, not against whoever happens to appear in that one
@@ -111,11 +129,11 @@ entries loaded and when.
     node qa.js
     TZ=Asia/Kolkata node qa.js
 
-71 assertions with the network mocked: parsing (spacer rows above the header, quoted
+79 assertions with the network mocked: parsing (spacer rows above the header, quoted
 fields containing commas and newlines, blank assignees, case-variant names), every
 failure path (sheet not shared, network down, unparseable content), the date-window
 rules, cross-checks between the three places misses are counted, escaping of sheet
-content, and the source switch, the combined roster, the three view modes and their persistence, Sunday handling in Today/Yesterday,
+content, and the source switch, the combined roster, per-tracker exemptions, the three view modes and their persistence, Sunday handling in Today/Yesterday,
 inverted date ranges, and timezone independence. Run them after any change to the parser — the
 Asana form fields are expected to change once back-dated entries are blocked.
 

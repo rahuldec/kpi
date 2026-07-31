@@ -122,6 +122,45 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     check('freshness line reports roster size', /people/.test(txt(doc, '#fresh')), txt(doc, '#fresh'));
   }
 
+  // ── 1d. exemptions ──────────────────────────────────────────────
+  {
+    const SH = [
+      'Task ID,Created At,Name,Assignee,Assignee Email,Due Date',
+      '1,2026-07-30,x,Sagar Mishra,sagar@x.com,2026-07-30',
+      '2,2026-07-30,x,Divya Gupta,divya@x.com,2026-07-30'
+    ].join('\n');
+    const CL = [
+      'Task ID,Created At,Name,Assignee,Assignee Email,Due Date',
+      '3,2026-07-30,x,Divya Gupta,divya@x.com,2026-07-30'
+    ].join('\n');
+
+    const { doc } = boot({ body: SH, clientBody: CL }); await settle();
+    let names = [...doc.querySelectorAll('#board tbody td:first-child')].map(e=>e.textContent);
+    check('exempt person still counted on internal', names.includes('Sagar Mishra'), names.join('|'));
+    check('no exemption note on internal', txt(doc, '#exempt') === '', txt(doc, '#exempt'));
+
+    doc.querySelector('#sources button[data-src="client"]').click(); await settle();
+    names = [...doc.querySelectorAll('#board tbody td:first-child')].map(e=>e.textContent);
+    check('exempt person dropped from client board', !names.includes('Sagar Mishra'), names.join('|'));
+    check('non-exempt person still on client board', names.includes('Divya Gupta'), names.join('|'));
+
+    const chased = [...doc.querySelectorAll('#chase .names a')].map(a=>a.childNodes[0].textContent);
+    check('exempt person not on the client chase list', !chased.includes('Sagar Mishra'), chased.join('|'));
+    check('exemption is stated on screen', /Sagar Mishra/.test(txt(doc, '#exempt')), txt(doc, '#exempt'));
+    check('exemption note names the tracker', /client calls/.test(txt(doc, '#exempt')), txt(doc, '#exempt'));
+  }
+  {
+    // an exempt person who files anyway must not be hidden
+    const CL = [
+      'Task ID,Created At,Name,Assignee,Assignee Email,Due Date',
+      '3,2026-07-30,x,Sagar Mishra,sagar@x.com,2026-07-30'
+    ].join('\n');
+    const { doc } = boot({ clientBody: CL }); await settle();
+    doc.querySelector('#sources button[data-src="client"]').click(); await settle();
+    const names = [...doc.querySelectorAll('#board tbody td:first-child')].map(e=>e.textContent);
+    check('exempt person appears if they do file', names.includes('Sagar Mishra'), names.join('|'));
+  }
+
   // ── 2. happy path ──────────────────────────────────────────────
   {
     const { doc, errs, calls } = boot(); await settle();
