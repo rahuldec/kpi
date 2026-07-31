@@ -3,158 +3,201 @@ const { JSDOM } = require('jsdom');
 
 const FILE = process.argv[2] || '/home/claude/work.html';
 const HTML = fs.readFileSync(FILE, 'utf8');
-let pass = 0, fail = 0;
-const results = [];
-function check(name, cond, detail) {
-  if (cond) { pass++; results.push(['PASS', name, '']); }
-  else { fail++; results.push(['FAIL', name, detail || '']); }
+let pass = 0, fail = 0; const results = [];
+const check = (n, c, d) => c ? (pass++, results.push([1, n, ''])) : (fail++, results.push([0, n, d || '']));
+
+// A realistic slice of the Asana export: spacer rows and a source URL above the
+// real header, quoted fields containing commas and newlines, a blank assignee.
+const SHEET = [
+  ',,',
+  ',,https://app.asana.com/-/googleSheetsProjectCsv?domain=480944584143449',
+  ',,',
+  'Task ID,Created At,Completed At,Last Modified,Name,Section/Column,Assignee,Assignee Email,Start Date,Due Date,Tags,Notes',
+  '1,2026-07-30,,,x,Section,Divya Gupta,divya@x.com,,2026-07-30,,"Notes, with a comma',
+  'and a newline"',
+  '2,2026-07-30,,,y,Section,,vansh.saini@x.com,,2026-07-29,,plain',
+  '3,2026-07-29,,,z,Section,"O\'Brien, Sam",sam@x.com,,2026-07-28,,plain',
+  '4,2026-07-29,,,w,Section,Divya Gupta,divya@x.com,,2026-07-28,,plain',
+  '5,2026-07-29,,,v,Section,divya gupta,divya@x.com,,2026-07-27,,plain',
+].join('\n');
+
+function boot({ body = SHEET, status = 200, reject = false } = {}) {
+  const errs = [], calls = [];
+  // beforeParse installs the mock before the page's own <script> runs, so the
+  // script executes normally and its top-level bindings stay reachable via eval.
+  const dom = new JSDOM(HTML, {
+    runScripts: 'dangerously',
+    pretendToBeVisual: true,
+    beforeParse(window) {
+      window.fetch = (url) => {
+        calls.push(url);
+        if (reject) return Promise.reject(new Error('Failed to fetch'));
+        return Promise.resolve({
+          ok: status >= 200 && status < 300,
+          status,
+          text: () => Promise.resolve(body)
+        });
+      };
+    }
+  });
+  dom.virtualConsole.on('jsdomError', e => errs.push(e.message));
+  return { dom, doc: dom.window.document, win: dom.window, errs, calls };
 }
 
-function boot() {
-  const errs = [];
-  const dom = new JSDOM(HTML, { runScripts: 'dangerously', pretendToBeVisual: true });
-  dom.virtualConsole.on('jsdomError', e => errs.push(e.message));
-  return { dom, doc: dom.window.document, win: dom.window, errs };
-}
-const txt = (doc, sel) => (doc.querySelector(sel)?.textContent || '').replace(/\s+/g, ' ').trim();
+const settle = () => new Promise(r => setTimeout(r, 30));
+const txt = (doc, s) => (doc.querySelector(s)?.textContent || '').replace(/\s+/g, ' ').trim();
 const figs = doc => [...doc.querySelectorAll('#kpis .fig')].map(e => e.textContent.replace(/\s+/g, ''));
 const pad = n => String(n).padStart(2, '0');
 const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
-// ── 1. boots clean, renders every section ────────────────────────
-{
-  const { doc, errs } = boot();
-  check('boots with no JS errors', errs.length === 0, errs.join(' | '));
-  check('KPI block rendered', doc.querySelectorAll('#kpis .kpi').length === 4);
-  check('grid has rows', doc.querySelectorAll('#grid tbody tr').length > 0);
-  check('board has rows', doc.querySelectorAll('#board tbody tr').length > 0);
-  check('turnout strip rendered', doc.querySelectorAll('#strip div').length > 0);
-  check('chase block rendered', txt(doc, '#chase .when').length > 0);
-}
+(async () => {
 
-// ── 2. the paste panel is genuinely gone ─────────────────────────
-{
-  const { doc } = boot();
-  check('no panel element', !doc.getElementById('panel'));
-  check('no textarea anywhere', doc.querySelectorAll('textarea').length === 0);
-  check('no buttons left', doc.querySelectorAll('button').length === 0,
-        doc.querySelectorAll('button').length + ' remain');
-  // visible text only — textContent would otherwise include <script> bodies
-  const visible = [...doc.body.querySelectorAll('*')]
-    .filter(e => !['SCRIPT', 'STYLE'].includes(e.tagName))
-    .map(e => [...e.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join(' '))
-    .join(' ');
-  check('no export copy left in visible text',
-        !/Asana export|fresh export|sample data|Rebuild/i.test(visible),
-        (visible.match(/Asana export|fresh export|sample data|Rebuild/ig) || []).join(','));
-  check('no dead panel CSS', !/\.panel\s*\{/.test(HTML));
-  check('no dead parser code', !/parseExport|splitRows/.test(HTML));
-}
+  // ── 1. no data is embedded any more ────────────────────────────
+  {
+    check('no employee names in the shipped file', !/Sukhmeet|Divya Gupta|Mansi Rana/.test(HTML),
+          'found hardcoded names');
+    check('no SAMPLE dataset constant', !/const SAMPLE/.test(HTML));
+    check('fetches from /api/data', /DATA_URL\s*=\s*'\/api\/data'/.test(HTML));
+  }
 
-// ── 3. dates default to today, off the local clock ───────────────
-{
-  const { doc } = boot();
-  const today = isoLocal(new Date());
-  const expFrom = isoLocal(new Date(Date.now() - 15 * 86400000));
-  check('To defaults to today', doc.getElementById('to').value === today,
-        `${doc.getElementById('to').value} vs ${today}`);
-  check('From defaults to 15 days back', doc.getElementById('from').value === expFrom,
-        `${doc.getElementById('from').value} vs ${expFrom}`);
-  check('no hardcoded date in the markup', !/id="(to|from)" value=/.test(HTML));
-}
+  // ── 2. happy path ──────────────────────────────────────────────
+  {
+    const { doc, errs, calls } = boot(); await settle();
+    check('boots with no JS errors', errs.length === 0, errs.join(' | '));
+    check('called the data endpoint', calls.length === 1 && /^\/api\/data\?/.test(calls[0]), calls.join());
+    check('cache-busted the request', /[?&]t=\d+/.test(calls[0] || ''), calls[0]);
+    check('content revealed', doc.getElementById('content').hidden === false);
+    check('state panel hidden', doc.getElementById('state').hidden === true);
+    check('freshness line populated', /entries/.test(txt(doc, '#fresh')), txt(doc, '#fresh'));
+    check('grid rendered', doc.querySelectorAll('#grid tbody tr').length > 0);
+  }
 
-// ── 4. the three ways of counting misses must agree ──────────────
-{
-  const { doc } = boot();
-  const f = figs(doc);
-  check('4 KPI figures present', f.length === 4, JSON.stringify(f));
-  check('missed is a plain integer', /^\d+$/.test(f[0]), f[0]);
-  check('coverage is a percentage', /^\d+%$/.test(f[1]), f[1]);
+  // ── 3. parsing of the awkward bits ─────────────────────────────
+  {
+    const { doc } = boot(); await settle();
+    const people = [...doc.querySelectorAll('#board tbody td:first-child')].map(e => e.textContent);
+    check('header found below spacer rows', people.length === 3, people.join('|'));
+    check('quoted comma + newline survives', people.includes('Divya Gupta'), people.join('|'));
+    check('blank assignee falls back to email', people.includes('Vansh Saini'), people.join('|'));
+    check('apostrophe name kept verbatim', people.includes("O'Brien, Sam"), people.join('|'));
+    check('case variants merged', people.filter(p => /divya/i.test(p)).length === 1, people.join('|'));
+  }
 
-  const rowTotals = [...doc.querySelectorAll('#grid td.tot')].reduce((s, e) => s + Number(e.textContent), 0);
-  check('headline == sum of grid row totals', Number(f[0]) === rowTotals, `${f[0]} vs ${rowTotals}`);
+  // ── 4. date range: defaults to today, widens but never narrows ──
+  {
+    const { doc } = boot(); await settle();
+    check('To defaults to today or later', doc.getElementById('to').value >= isoLocal(new Date()),
+          doc.getElementById('to').value);
+    check('From widened back to earliest data', doc.getElementById('from').value <= '2026-07-27',
+          doc.getElementById('from').value);
+    check('no hardcoded date in markup', !/id="(to|from)" value=/.test(HTML));
+  }
+  {
+    // a single-day sheet must not collapse the window
+    const oneDay = SHEET.split('\n').slice(0, 5).join('\n') + '\nand a newline"';
+    const { doc } = boot({ body: oneDay }); await settle();
+    const span = (new Date(doc.getElementById('to').value) - new Date(doc.getElementById('from').value)) / 86400000;
+    check('one-day sheet does not narrow the range', span >= 15, span + ' days');
+  }
 
-  const redCells = doc.querySelectorAll('#grid .cell.m').length;
-  check('headline == red cell count', Number(f[0]) === redCells, `${f[0]} vs ${redCells}`);
+  // ── 5. failure paths explain themselves ────────────────────────
+  {
+    const { doc, errs } = boot({ status: 502, body: JSON.stringify({ error: 'Google returned a login page instead of the sheet.', hint: 'Set sharing to Anyone with the link.' }) });
+    await settle();
+    check('server error: no crash', errs.length === 0, errs.join(' | '));
+    check('server error: content stays hidden', doc.getElementById('content').hidden === true);
+    check('server error: message surfaced', /login page/.test(txt(doc, '#state')), txt(doc, '#state'));
+    check('server error: hint surfaced', /Anyone with the link/.test(txt(doc, '#state')));
+  }
+  {
+    const { doc, errs } = boot({ reject: true }); await settle();
+    check('network failure: no crash', errs.length === 0, errs.join(' | '));
+    check('network failure: explained', /Failed to fetch/.test(txt(doc, '#state')), txt(doc, '#state'));
+    check('network failure: local-file hint', /opened this file directly/.test(txt(doc, '#state')));
+  }
+  {
+    const { doc } = boot({ body: 'total,nonsense\n1,2' }); await settle();
+    check('unparseable sheet: named clearly', /Could not find a header row/.test(txt(doc, '#state')),
+          txt(doc, '#state'));
+    check('unparseable sheet: no empty dashboard shown', doc.getElementById('content').hidden === true);
+  }
 
-  const boardMissed = [...doc.querySelectorAll('#board tbody tr')]
-    .reduce((s, r) => s + Number(r.children[2].textContent), 0);
-  check('headline == board missed column', Number(f[0]) === boardMissed, `${f[0]} vs ${boardMissed}`);
+  // ── 6. refresh re-fetches ──────────────────────────────────────
+  {
+    const { doc, calls } = boot(); await settle();
+    doc.getElementById('refresh').click(); await settle();
+    check('refresh triggers a second fetch', calls.length === 2, calls.length + ' calls');
+  }
 
-  check('grid and board cover the same people',
-        doc.querySelectorAll('#grid tbody tr').length === doc.querySelectorAll('#board tbody tr').length);
-}
+  // ── 7. internal consistency of the figures ─────────────────────
+  {
+    const { doc } = boot(); await settle();
+    const f = figs(doc);
+    const rowTotals = [...doc.querySelectorAll('#grid td.tot')].reduce((s, e) => s + Number(e.textContent), 0);
+    const red = doc.querySelectorAll('#grid .cell.m').length;
+    const board = [...doc.querySelectorAll('#board tbody tr')].reduce((s, r) => s + Number(r.children[2].textContent), 0);
+    check('headline == grid row totals', Number(f[0]) === rowTotals, `${f[0]} vs ${rowTotals}`);
+    check('headline == red cell count', Number(f[0]) === red, `${f[0]} vs ${red}`);
+    check('headline == board missed column', Number(f[0]) === board, `${f[0]} vs ${board}`);
+    check('grid and board cover same people',
+          doc.querySelectorAll('#grid tbody tr').length === doc.querySelectorAll('#board tbody tr').length);
+  }
 
-// ── 5. chase list is self-consistent ─────────────────────────────
-{
-  const { doc } = boot();
-  const names = [...doc.querySelectorAll('#chase .names a')].map(a => a.childNodes[0].textContent);
-  const n = txt(doc, '#chase .n');
-  if (n) check('chase count matches chase names', Number(n) === names.length, `${n} vs ${names.length}`);
-  else check('all-clear shown when nobody outstanding', /Everyone filed/.test(txt(doc, '#chase')));
-}
+  // ── 8. controls still re-render ────────────────────────────────
+  {
+    const { doc, win } = boot(); await settle();
+    const before = figs(doc).join();
+    // From is the wrong lever here: with "skip days before first entry" on,
+    // widening backwards adds no expected days. Moving To forward does.
+    doc.getElementById('to').value = '2026-08-07';
+    doc.getElementById('to').dispatchEvent(new win.Event('change'));
+    check('changing To re-renders', figs(doc).join() !== before);
+    const mid = figs(doc).join();
+    doc.getElementById('joined').checked = false;
+    doc.getElementById('joined').dispatchEvent(new win.Event('change'));
+    check('joined toggle re-renders', figs(doc).join() !== mid);
+  }
 
-// ── 6. controls still work ───────────────────────────────────────
-{
-  const { doc, win } = boot();
-  const before = figs(doc).join();
-  doc.getElementById('from').value = '2026-07-01';
-  doc.getElementById('from').dispatchEvent(new win.Event('change'));
-  check('changing From re-renders', figs(doc).join() !== before);
-
-  const mid = figs(doc).join();
-  doc.getElementById('joined').checked = false;
-  doc.getElementById('joined').dispatchEvent(new win.Event('change'));
-  check('joined toggle re-renders', figs(doc).join() !== mid);
-}
-
-// ── 7. degenerate ranges must not throw ──────────────────────────
-{
-  const cases = [
-    ['from after to',      '2026-07-30', '2026-07-01'],
-    ['single working day', '2026-07-15', '2026-07-15'],
-    ['a lone Sunday',      '2026-07-19', '2026-07-19'],
-    ['range after data',   '2027-01-01', '2027-01-31'],
-    ['range before data',  '2020-01-01', '2020-01-31'],
-  ];
-  for (const [label, f, t] of cases) {
-    const { doc, win, errs } = boot();
-    doc.getElementById('from').value = f;
-    doc.getElementById('to').value = t;
+  // ── 9. degenerate ranges ───────────────────────────────────────
+  for (const [label, f, t] of [
+    ['from after to', '2026-07-30', '2026-07-01'],
+    ['single day', '2026-07-28', '2026-07-28'],
+    ['lone Sunday', '2026-07-19', '2026-07-19'],
+    ['range after data', '2027-01-01', '2027-01-31'],
+  ]) {
+    const { doc, win, errs } = boot(); await settle();
+    doc.getElementById('from').value = f; doc.getElementById('to').value = t;
     doc.getElementById('to').dispatchEvent(new win.Event('change'));
     check(`no crash: ${label}`, errs.length === 0, errs.join(' | '));
   }
-}
 
-// ── 8. date maths is timezone-independent ────────────────────────
-{
-  const { win } = boot();
-  const rt = win.eval("iso(D('2026-07-14'))");
-  check('iso() round-trips in this TZ', rt === '2026-07-14', `TZ=${process.env.TZ || 'UTC'} gave ${rt}`);
+  // ── 10. timezone independence ──────────────────────────────────
+  {
+    const { win } = boot(); await settle();
+    check('iso() round-trips in this TZ', win.eval("iso(D('2026-07-14'))") === '2026-07-14',
+          `TZ=${process.env.TZ || 'UTC'}`);
+    check('Sundays excluded',
+          win.eval("JSON.stringify(range('2026-07-17','2026-07-21',true))")
+            === '["2026-07-17","2026-07-18","2026-07-20","2026-07-21"]');
+    const fixed = win.eval(`
+      document.getElementById('from').value='2026-07-27';
+      document.getElementById('to').value='2026-07-30';
+      render();
+      [...document.querySelectorAll('#kpis .fig')].map(e=>e.textContent.replace(/\\s+/g,'')).join('|');`);
+    check('fixed range identical in every TZ', fixed === '4|56%|0/3|2',
+          `TZ=${process.env.TZ || 'UTC'} gave ${fixed}`);
+  }
 
-  const days = win.eval("JSON.stringify(range('2026-07-17','2026-07-21',true))");
-  check('Sundays excluded from working days',
-        days === '["2026-07-17","2026-07-18","2026-07-20","2026-07-21"]', days);
+  // ── 11. injection from sheet content ───────────────────────────
+  {
+    const evil = SHEET.replace('Divya Gupta,divya@x.com,,2026-07-30', '"<img src=x onerror=1>",e@x.com,,2026-07-30');
+    const { doc } = boot({ body: evil }); await settle();
+    check('sheet content cannot inject elements',
+          doc.querySelectorAll('#board img, #grid img, #chase img').length === 0);
+  }
 
-  const fixed = win.eval(`
-    document.getElementById('from').value='2026-07-15';
-    document.getElementById('to').value='2026-07-30';
-    render();
-    [...document.querySelectorAll('#kpis .fig')].map(e=>e.textContent.replace(/\\s+/g,'')).join('|');
-  `);
-  check('fixed range gives identical figures in every TZ', fixed === '112|49%|2/20|12',
-        `TZ=${process.env.TZ || 'UTC'} gave ${fixed}`);
-}
-
-// ── 9. embedded data renders as text, not markup ─────────────────
-{
-  const { doc } = boot();
-  check('no stray elements from data',
-        doc.querySelectorAll('#board img, #grid img, #chase img, #board script').length === 0);
-  check('names render as text', /Divya Gupta/.test(doc.querySelector('#board').textContent));
-}
-
-const w = Math.max(...results.map(r => r[1].length));
-for (const [s, n, d] of results) console.log(`${s === 'PASS' ? ' ok ' : 'FAIL'}  ${n.padEnd(w)}  ${d}`);
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+  const w = Math.max(...results.map(r => r[1].length));
+  for (const [ok, n, d] of results) console.log(`${ok ? ' ok ' : 'FAIL'}  ${n.padEnd(w)}  ${d}`);
+  console.log(`\n${pass} passed, ${fail} failed`);
+  process.exit(fail ? 1 : 0);
+})();

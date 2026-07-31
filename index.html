@@ -123,6 +123,28 @@ table.board td.bad{color:var(--miss);font-weight:600}
 .chip.mid{background:#EEF1F5;color:#5A6B85}
 .chip.bad{background:var(--miss-soft);color:var(--miss)}
 
+.controls .spacer{flex:1}
+.fresh{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--faint);white-space:nowrap}
+button.pill{font-size:13px;font-weight:500;font-family:inherit;border-radius:999px;padding:8px 18px;
+  cursor:pointer;border:1px solid var(--ink);background:var(--ink);color:#fff;transition:background .15s,color .15s}
+button.pill:hover{background:var(--brand);border-color:var(--brand)}
+button.ghost{background:transparent;color:var(--ink)}
+button.ghost:hover{background:var(--ink);color:#fff}
+button[disabled]{opacity:.45;cursor:default;pointer-events:none}
+.state{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px 24px;margin-bottom:22px}
+.state h2{margin-bottom:6px}
+.state p{margin:0 0 6px;font-size:13.5px;max-width:66ch}
+.state code{font-family:"IBM Plex Mono",monospace;font-size:12px;background:var(--page);
+  padding:2px 6px;border-radius:4px;color:var(--ink)}
+.state.err{border-top:3px solid var(--miss)}
+.state.err h2{color:var(--miss)}
+.loading{display:flex;align-items:center;gap:11px;font-family:"IBM Plex Mono",monospace;
+  font-size:12.5px;color:var(--faint)}
+.loading i{width:13px;height:13px;border-radius:50%;border:2px solid var(--line);
+  border-top-color:var(--brand);animation:spin .7s linear infinite;display:block}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.loading i{animation:none;border-top-color:var(--line)}}
+#content[hidden]{display:none}
 footer{margin-top:34px;font-size:12px;color:var(--faint);max-width:72ch}
 footer b{color:var(--body);font-weight:500}
 
@@ -143,8 +165,14 @@ footer b{color:var(--body);font-weight:500}
     <label for="from">From</label><input type="date" id="from">
     <label for="to">To</label><input type="date" id="to">
     <label class="check"><input type="checkbox" id="joined" checked> Skip days before someone's first entry</label>
+    <span class="spacer"></span>
+    <span class="fresh" id="fresh"></span>
+    <button class="pill ghost" id="refresh" type="button">Refresh</button>
   </div>
 
+  <div class="state" id="state" hidden></div>
+
+  <div id="content" hidden>
   <div class="chase" id="chase"></div>
   <div class="kpis" id="kpis"></div>
 
@@ -171,131 +199,20 @@ footer b{color:var(--body);font-weight:500}
     <div class="strip" id="strip"></div>
   </section>
 
+  </div>
+
   <footer>
     <b>How a day counts.</b> A person-day is "filed" if at least one entry exists with that due date — a separate Online Meeting and Phone call row on the same day still counts once. With the checkbox on, days before a person's first-ever entry are excluded, so a recent joiner isn't scored for a period they weren't around; days after their first entry always count, so someone who stops filing still shows up. Turn it off to see raw coverage against the full range.
   </footer>
 </div>
 
 <script>
-/* ------------- embedded dataset: name | due date ------------- */
-const SAMPLE = `
-Divya Gupta|07-30
-Akshat Wahi|07-30
-Tanvi Gupta|07-30
-Rahul Sharma|07-30
-Vansh Saini|07-30
-Mansi Rana|07-29
-Mansi Rana|07-28
-Mansi Rana|07-27
-Priya|07-28
-Tinku Singh|07-29
-Sagar Mishra|07-29
-Akshat Wahi|07-29
-Divya Gupta|07-29
-Palak Singh|07-29
-Vansh Saini|07-29
-Tanvi Gupta|07-29
-Aman Sharma|07-29
-Sagar Mishra|07-28
-Vansh Saini|07-28
-Vansh Saini|07-27
-Mehak Garg|07-28
-Akshat Wahi|07-28
-Divya Gupta|07-28
-Tanvi Gupta|07-28
-Mehak Garg|07-27
-Mehak Garg|07-25
-Sagar Mishra|07-27
-Tinku Singh|07-27
-Mansi Rana|07-25
-Mansi Rana|07-24
-Palak Singh|07-27
-Akshat Wahi|07-27
-Divya Gupta|07-27
-Priya|07-27
-Aman Sharma|07-27
-Tinku Singh|07-25
-Divya Gupta|07-25
-Tanvi Gupta|07-25
-Sultan Malik|07-25
-Akshat Wahi|07-24
-Sagar Mishra|07-24
-Divya Gupta|07-24
-Tinku Singh|07-24
-Palak Singh|07-24
-Tanvi Gupta|07-24
-Sapna|07-11
-Vansh Saini|07-24
-Aman Sharma|07-24
-Sultan Malik|07-24
-Sagar Mishra|07-23
-Divya Gupta|07-23
-Mansi Rana|07-23
-Kashish Goel|07-21
-Kashish Goel|07-22
-Kashish Goel|07-23
-Kashish Goel|07-16
-Sukhmeet Singh|07-23
-Sukhmeet Singh|07-22
-Sukhmeet Singh|07-21
-Sukhmeet Singh|07-20
-Sukhmeet Singh|07-18
-Sukhmeet Singh|07-16
-Sukhmeet Singh|07-15
-Sukhmeet Singh|07-14
-Priya|07-22
-Gobind Monga|07-22
-Divya Gupta|07-22
-Mehak Garg|07-22
-Mansi Rana|07-22
-Mansi Rana|07-21
-Sagar Mishra|07-22
-Tanvi Gupta|07-22
-Amar Kumar Pandit|07-22
-Amar Kumar Pandit|07-21
-Amar Kumar Pandit|07-20
-Amar Kumar Pandit|07-18
-Amar Kumar Pandit|07-17
-Amar Kumar Pandit|07-16
-Amar Kumar Pandit|07-15
-Lokesh Kumar|07-22
-Lokesh Kumar|07-21
-Sagar Mishra|07-21
-Divya Gupta|07-21
-Sultan Malik|07-21
-Tanvi Gupta|07-20
-Sagar Mishra|07-20
-Priya|07-20
-Divya Gupta|07-20
-Mansi Rana|07-20
-Mansi Rana|07-18
-Mansi Rana|07-17
-Sultan Malik|07-20
-Lokesh Kumar|07-20
-Sagar Mishra|07-17
-Gobind Monga|07-18
-Divya Gupta|07-18
-Sultan Malik|07-18
-Divya Gupta|07-17
-Sapna|07-17
-Ankush Rana|07-13
-Ankush Rana|07-14
-Ankush Rana|07-15
-Ankush Rana|07-16
-Sagar Mishra|07-16
-Divya Gupta|07-16
-Tanvi Gupta|07-16
-Lokesh Kumar|07-16
-Sagar Mishra|07-15
-Divya Gupta|07-15
-Sultan Malik|07-15
-Lokesh Kumar|07-15
-Priya|07-14
-Gobind Monga|07-14
-Mansi Rana|07-14
-`.trim().split('\n').map(l=>{const [name,d]=l.split('|');return {name, due:'2026-'+d};});
-
-let ROWS = SAMPLE;
+/* ---------------- data source ----------------
+   /api/data is a function on this same Vercel project. It fetches the tracker
+   sheet server-side and returns raw CSV, so the browser never talks to Google
+   directly and CORS never comes into it. See api/data.js.                   */
+const DATA_URL = '/api/data';
+let ROWS = [];
 
 /* ---------------- helpers ---------------- */
 const D=s=>new Date(s+'T00:00:00');
@@ -310,6 +227,54 @@ const shortDate=s=>D(s).toLocaleDateString('en-GB',{day:'numeric',month:'short'}
 function range(from,to,skipSun){
   const out=[],c=D(from),e=D(to);
   while(c<=e){ if(!skipSun||c.getDay()!==0) out.push(iso(c)); c.setDate(c.getDate()+1); }
+  return out;
+}
+
+/* ---------------- parsing ---------------- */
+function splitRows(t,dl){
+  const rows=[];let row=[],f='',q=false;
+  for(let i=0;i<t.length;i++){const c=t[i];
+    if(q){ if(c==='"'){ if(t[i+1]==='"'){f+='"';i++;} else q=false; } else f+=c; }
+    else if(c==='"')q=true;
+    else if(c===dl){row.push(f);f='';}
+    else if(c==='\n'){row.push(f);rows.push(row);row=[];f='';}
+    else if(c!=='\r')f+=c;}
+  row.push(f); if(row.length>1||row[0]!=='')rows.push(row);
+  return rows;
+}
+function normDate(v){
+  v=(v||'').trim(); if(!v)return null;
+  let m=v.match(/^(\d{4})-(\d{2})-(\d{2})/); if(m)return `${m[1]}-${m[2]}-${m[3]}`;
+  m=v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if(m)return `${m[3]}-${String(m[1]).padStart(2,'0')}-${String(m[2]).padStart(2,'0')}`;
+  const d=new Date(v); return isNaN(d)?null:iso(d);
+}
+const tc=s=>s.split(/\s+/).map(w=>w?w[0].toUpperCase()+w.slice(1).toLowerCase():w).join(' ');
+
+/* The Asana export does not start with its header — there are spacer rows and a
+   source URL above it — so scan the first rows for the real header instead of
+   assuming row 1. */
+function parseExport(text){
+  const dl=(text.split('\n')[0].match(/\t/g)||[]).length>=2?'\t':',';
+  const rows=splitRows(text,dl); let head=-1,ix={};
+  for(let i=0;i<Math.min(rows.length,40);i++){
+    const h=rows[i].map(x=>x.trim().toLowerCase());
+    const d=h.indexOf('due date'), a=h.indexOf('assignee');
+    if(d>-1&&a>-1){head=i;ix={due:d,name:a,email:h.indexOf('assignee email')};break;}
+  }
+  if(head<0) throw new Error('Could not find a header row with "Due Date" and "Assignee" in the sheet.');
+  const out=[];
+  for(let i=head+1;i<rows.length;i++){
+    const r=rows[i]; if(!r||r.length<2)continue;
+    const due=normDate(r[ix.due]); if(!due)continue;
+    let n=(r[ix.name]||'').trim();
+    if(!n||n.includes('@')){ // no display name in Asana — derive one from the email
+      n=tc(((ix.email>-1?r[ix.email]:'')||n||'').split('@')[0].replace(/[._-]+/g,' '));
+    }
+    if(!n)continue;
+    out.push({name:n,due});
+  }
+  if(!out.length) throw new Error('Found the header, but no rows had a usable Due Date.');
   return out;
 }
 
@@ -434,19 +399,81 @@ function render(){
   document.getElementById('strip').innerHTML=s;
 }
 
-/* ---------------- wiring ---------------- */
-/* Defaults: a rolling window ending today, read from the viewer's own clock.
-   iso() formats the local calendar date — never toISOString(), which shifts
-   the day backwards in any timezone ahead of UTC. */
+/* ---------------- states ---------------- */
+const $ = id => document.getElementById(id);
+function showState(html, isError){
+  $('state').innerHTML = html;
+  $('state').className = 'state' + (isError ? ' err' : '');
+  $('state').hidden = false;
+  $('content').hidden = true;
+}
+function showContent(){ $('state').hidden = true; $('content').hidden = false; }
+
+function loading(){
+  showState('<div class="loading"><i></i><span>Reading the tracker sheet…</span></div>', false);
+}
+function failed(msg, hint){
+  showState(
+    '<h2>Could not load the sheet</h2>' +
+    '<p>' + esc(msg) + '</p>' +
+    (hint ? '<p>' + esc(hint) + '</p>' : '') +
+    '<p>The sheet must be readable without signing in: <b>Share → General access → ' +
+    'Anyone with the link → Viewer</b>. If that is already set, check the sheet ID and ' +
+    'tab <code>gid</code> in <code>api/data.js</code>.</p>', true);
+}
+
+/* ---------------- load ---------------- */
 const WINDOW_DAYS = 15;
+/* Defaults: a rolling window ending today, read from the viewer's own clock.
+   iso() formats the local calendar date — never toISOString(), which shifts the
+   day backwards in any timezone ahead of UTC. */
 function setDefaultRange(){
   const today = new Date();
   const start = new Date(today); start.setDate(start.getDate() - WINDOW_DAYS);
-  document.getElementById('to').value   = iso(today);
-  document.getElementById('from').value = iso(start);
+  $('to').value   = iso(today);
+  $('from').value = iso(start);
 }
-setDefaultRange();
-['from','to','joined'].forEach(id=>document.getElementById(id).addEventListener('change',render));
 
-render();
+function applyRows(rows){
+  ROWS = rows;
+  const dates = rows.map(r => r.due).sort();
+  /* Widen the range if the sheet reaches further back than the default window,
+     but never narrow it — a short export must not silently collapse the history
+     the figures depend on. */
+  if (dates.length && dates[0] < $('from').value) $('from').value = dates[0];
+  if (dates.length && dates[dates.length-1] > $('to').value) $('to').value = dates[dates.length-1];
+  $('fresh').textContent = rows.length + ' entries · ' +
+    new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
+  showContent();
+  render();
+}
+
+async function load(){
+  loading();
+  $('refresh').disabled = true;
+  try{
+    const res = await fetch(DATA_URL + '?t=' + Date.now(), {cache:'no-store'});
+    const body = await res.text();
+    if(!res.ok){
+      let msg = 'The server returned ' + res.status + '.', hint = '';
+      try{ const j = JSON.parse(body); msg = j.error || msg; hint = j.hint || ''; }catch(e){}
+      return failed(msg, hint);
+    }
+    applyRows(parseExport(body));
+  }catch(err){
+    failed(String((err && err.message) || err),
+           'If you opened this file directly from your computer rather than the deployed URL, ' +
+           'there is no /api/data to call.');
+  }finally{
+    $('refresh').disabled = false;
+  }
+}
+
+/* ---------------- wiring ---------------- */
+['from','to','joined'].forEach(id => $(id).addEventListener('change', render));
+$('refresh').addEventListener('click', load);
+
+setDefaultRange();
+load();
+
 </script>

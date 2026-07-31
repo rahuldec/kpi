@@ -5,23 +5,31 @@ working day, from an Asana project export.
 
 No build step, no backend, no dependencies at runtime beyond a Google Fonts stylesheet.
 
-## What ships
+## How it gets its data
 
-**The July 2026 dataset is embedded in `index.html`** — 20 named employees and their
-per-day filing record. This is deliberate: the page renders populated on load rather
-than showing an empty state.
+    browser  ->  /api/data  (this project)  ->  docs.google.com  ->  the sheet
 
-Deployed to a public URL, that data is readable by anyone with the link. That is an
-accepted trade-off for this tool, not an oversight. If it ever stops being acceptable,
-two options:
+`api/data.js` is a serverless function on your own Vercel project. It fetches the
+sheet server-side and hands back raw CSV. The browser only ever talks to your own
+domain, so cross-origin restrictions never apply — which is why this is a function
+and not a direct `fetch` to Google.
 
-- Turn on **Deployment Protection** (Project → Settings → Deployment Protection →
-  Vercel Authentication). One toggle, restricts to your team.
-- Replace the `SAMPLE` block in `index.html` with an empty array and paste data at
-  use time instead.
+No employee data is stored in this repository. Everything is read live and parsed in
+the browser. Responses are cached at Vercel's edge for 5 minutes.
 
-`vercel.json` sets `noindex, nofollow` so the page stays out of search results either
-way. That is not access control — it only stops crawlers.
+**The sheet must be readable without signing in.** In the sheet: Share → General
+access → **Anyone with the link → Viewer**. Without that, Google returns a login page
+and the dashboard shows an error explaining exactly this.
+
+The page is public, so anyone with the URL sees the data. `vercel.json` sets
+`noindex, nofollow` to keep it out of search results, but that is not access control.
+For real restriction: Project → Settings → **Deployment Protection** → Vercel
+Authentication.
+
+### Pointing at a different sheet or tab
+
+Project → Settings → Environment Variables, then add `SHEET_ID` and/or `SHEET_GID`.
+No code change needed. Defaults are in `api/data.js`.
 
 ## Deploy
 
@@ -35,12 +43,13 @@ Cloudflare Pages, GitHub Pages and Render static sites all work the same way; on
 
 ## Daily use
 
-1. Open the linked Google Sheet, select all, copy.
-2. **Load a fresh export** → paste → **Rebuild**.
-3. Set the date range you care about.
+Open the URL. It reads the sheet on load. The date range defaults to the last 15 days
+ending **today**, off the viewer's own clock, then widens if the sheet reaches further
+back — it never narrows, so a short export cannot silently collapse the history the
+figures depend on.
 
-Parsing happens entirely in the browser. Nothing pasted is transmitted anywhere, and
-nothing is stored — a reload returns to the embedded July data.
+**Refresh** re-reads the sheet, bypassing the cache. The line beside it shows how many
+entries loaded and when.
 
 ## Reading the numbers
 
@@ -60,20 +69,20 @@ nothing is stored — a reload returns to the embedded July data.
     node qa.js
     TZ=Asia/Kolkata node qa.js
 
-40 assertions covering parsing (CSV and TSV, quoted fields, embedded newlines),
-degenerate date ranges, HTML escaping of pasted names, case-insensitive person
-matching, and timezone independence. Run them after any change to the parser — the
+43 assertions with the network mocked: parsing (spacer rows above the header, quoted
+fields containing commas and newlines, blank assignees, case-variant names), every
+failure path (sheet not shared, network down, unparseable content), the date-window
+rules, cross-checks between the three places misses are counted, escaping of sheet
+content, and timezone independence. Run them after any change to the parser — the
 Asana form fields are expected to change once back-dated entries are blocked.
 
 ## Known limitations
 
 These are open, not fixed:
 
-- **Loading an export resets the date range** to the span of the pasted data. Paste a
-  one-day export and every history-dependent figure silently collapses. Widen the range
-  manually after pasting.
-- **Only people present in the export are visible.** Someone who has never filed does
-  not appear at all — no row, not counted. A fixed roster would fix this.
+- **Only people present in the sheet are visible.** Someone who has never filed does
+  not appear at all — no row, not counted, absent from the chase list. This is the
+  biggest gap. A fixed roster would fix it.
 - "Never missed a day" counts anyone with a clean sheet, including someone whose first
   entry is the last day of the range. Read it alongside the Filed column.
 - Public holidays and leave are not modelled. Both read as missed days.
