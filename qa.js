@@ -161,6 +161,21 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     check('exempt person appears if they do file', names.includes('Sagar Mishra'), names.join('|'));
   }
 
+  // ── 1e. branding ────────────────────────────────────────────────
+  {
+    const { doc } = boot(); await settle();
+    const logo = doc.querySelector('.masthead img');
+    check('logo present in the masthead', !!logo);
+    check('logo is embedded, not a broken link',
+          logo && logo.getAttribute('src').startsWith('data:image/png;base64,'));
+    check('logo has alt text', logo && /Okie Dokie/.test(logo.getAttribute('alt')), logo && logo.alt);
+    check('company name in the masthead', /Okie Dokie/.test(txt(doc, '.masthead .name')),
+          txt(doc, '.masthead .name'));
+    check('no external webfont request', !/fonts\.(googleapis|gstatic)/.test(HTML));
+    check('brand orange from the logo is the accent', /--brand:#EC6724/.test(HTML));
+    check('absence colour is distinct from the accent', /--miss:#A82A1C/.test(HTML));
+  }
+
   // ── 2. happy path ──────────────────────────────────────────────
   {
     const { doc, errs, calls } = boot(); await settle();

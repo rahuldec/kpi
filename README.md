@@ -1,5 +1,11 @@
 # Timesheet gaps — CS call trackers
 
+Branded to Okie Dokie Campus Automation. Palette sampled directly from the logo —
+orange `#EC6724`, wordmark maroon `#821D13`, star gold `#FCDE5C`. Type is the native
+system stack (SF on Apple, Segoe on Windows, Roboto on Android), so there is no webfont
+to download; the logo is embedded as a data URI. The page therefore makes **no external
+requests at all**, and the CSP is tightened accordingly.
+
 Single static page. Shows who has not filed a daily timesheet entry, per person per
 working day, from an Asana project export.
 
@@ -129,11 +135,11 @@ entries loaded and when.
     node qa.js
     TZ=Asia/Kolkata node qa.js
 
-79 assertions with the network mocked: parsing (spacer rows above the header, quoted
+86 assertions with the network mocked: parsing (spacer rows above the header, quoted
 fields containing commas and newlines, blank assignees, case-variant names), every
 failure path (sheet not shared, network down, unparseable content), the date-window
 rules, cross-checks between the three places misses are counted, escaping of sheet
-content, and the source switch, the combined roster, per-tracker exemptions, the three view modes and their persistence, Sunday handling in Today/Yesterday,
+content, and the branding and embedded logo, the source switch, the combined roster, per-tracker exemptions, the three view modes and their persistence, Sunday handling in Today/Yesterday,
 inverted date ranges, and timezone independence. Run them after any change to the parser — the
 Asana form fields are expected to change once back-dated entries are blocked.
 

@@ -2,178 +2,273 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Missed entries — CS Internal Team Calls Tracker</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
-
+/* ── Okie Dokie Campus Automation ────────────────────────────────────────────
+   Palette sampled from the logo: orange #EC6724, wordmark maroon #821D13,
+   star gold #FCDE5C. Type is the native system stack — SF on Apple devices,
+   Segoe on Windows, Roboto on Android — so there is no webfont to download and
+   nothing to allow through the CSP.                                          */
 :root{
-  --ink:#101B33; --body:#5A6B85; --faint:#8A97AC;
-  --page:#F4F5F7; --card:#FFFFFF; --line:#E3E7EE;
-  --brand:#FF6A13; --miss:#D6285A; --miss-soft:#FDECF1; --filed:#DCE1E9;
+  --ink:#1D1D1F;          /* primary text            */
+  --body:#6E6E73;         /* secondary text          */
+  --faint:#86868B;        /* tertiary text           */
+  --page:#F5F5F7;         /* page background         */
+  --card:#FFFFFF;
+  --line:#D2D2D7;         /* hairline                */
+  --hair:#E8E8ED;         /* lighter hairline / filled cells */
+  --brand:#EC6724;        /* logo orange — accent, interaction */
+  --brand-dark:#C4501A;
+  --deep:#821D13;         /* wordmark maroon         */
+  --miss:#A82A1C;         /* absence — serious, on-palette, distinct from accent */
+  --miss-soft:#FBEDEB;
+  --gold:#FCDE5C;
 }
 *{box-sizing:border-box}
-html,body{margin:0;padding:0}
-body{background:var(--page);color:var(--body);font-family:"IBM Plex Sans",system-ui,sans-serif;
-  font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased}
-.wrap{max-width:1160px;margin:0 auto;padding:40px 24px 72px}
-:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--page);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text",
+    "Helvetica Neue","Segoe UI",Roboto,Arial,sans-serif;
+  font-size:17px;line-height:1.47;letter-spacing:-.012em;
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+}
+:focus-visible{outline:3px solid rgba(236,103,36,.5);outline-offset:3px;border-radius:6px}
 
-.eyebrow{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.16em;
-  text-transform:uppercase;color:var(--faint);margin:0 0 14px}
-.sources{display:inline-flex;gap:0;margin:0 0 20px;border-bottom:2px solid var(--line)}
-.sources button{font-family:"Bricolage Grotesque",sans-serif;font-weight:600;font-size:15px;
-  letter-spacing:-.01em;border:0;background:transparent;color:var(--faint);cursor:pointer;
-  padding:0 2px 11px;margin-right:26px;position:relative;transition:color .15s}
+/* ── masthead ─────────────────────────────────────────────────────────────── */
+.masthead{
+  position:sticky;top:0;z-index:20;background:rgba(245,245,247,.82);
+  backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);
+  border-bottom:1px solid rgba(0,0,0,.07);
+}
+.masthead .inner{
+  max-width:1120px;margin:0 auto;padding:11px 24px;
+  display:flex;align-items:center;gap:11px;
+}
+.masthead img{width:30px;height:30px;display:block}
+.masthead .name{font-size:15px;font-weight:600;letter-spacing:-.014em;color:var(--ink)}
+.masthead .name span{color:var(--faint);font-weight:400}
+
+.wrap{max-width:1120px;margin:0 auto;padding:56px 24px 96px}
+
+/* ── hero ─────────────────────────────────────────────────────────────────── */
+.eyebrow{
+  font-size:19px;font-weight:600;letter-spacing:-.014em;color:var(--brand);
+  margin:0 0 6px;
+}
+h1{
+  font-size:clamp(40px,6vw,64px);font-weight:700;line-height:1.05;
+  letter-spacing:-.028em;color:var(--ink);margin:0 0 18px;
+}
+h1 em{font-style:normal;color:var(--brand)}
+.lede{
+  max-width:34em;margin:0 0 36px;font-size:20px;line-height:1.42;
+  letter-spacing:-.016em;color:var(--body);
+}
+
+/* ── source tabs ──────────────────────────────────────────────────────────── */
+.sources{display:flex;gap:32px;margin:0 0 26px;border-bottom:1px solid var(--line)}
+.sources button{
+  font:inherit;font-size:17px;font-weight:500;letter-spacing:-.016em;
+  border:0;background:none;color:var(--faint);cursor:pointer;
+  padding:0 0 13px;position:relative;transition:color .2s ease;
+}
 .sources button:hover{color:var(--body)}
-.sources button[aria-pressed=true]{color:var(--ink)}
-.sources button[aria-pressed=true]::after{content:'';position:absolute;left:0;right:0;bottom:-2px;
-  height:2px;background:var(--brand)}
-h1{font-family:"Bricolage Grotesque",sans-serif;font-weight:800;font-size:clamp(34px,5.2vw,54px);
-  line-height:1.02;letter-spacing:-.025em;color:var(--ink);margin:0 0 14px}
-h1 em{font-style:normal;color:var(--miss)}
-.lede{max-width:54ch;margin:0 0 28px;font-size:15px}
+.sources button[aria-pressed=true]{color:var(--ink);font-weight:600}
+.sources button[aria-pressed=true]::after{
+  content:'';position:absolute;left:0;right:0;bottom:-1px;height:2px;
+  background:var(--brand);border-radius:2px;
+}
 
-.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:14px 16px;
-  background:var(--card);border:1px solid var(--line);border-radius:14px;margin-bottom:24px}
-.controls label{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.1em;
-  text-transform:uppercase;color:var(--faint)}
-.controls input[type=date]{font-family:"IBM Plex Mono",monospace;font-size:12.5px;color:var(--ink);
-  border:1px solid var(--line);border-radius:999px;padding:7px 13px;background:#fff}
-.check{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--body);cursor:pointer}
-.check input{accent-color:var(--brand);width:15px;height:15px;cursor:pointer}
-button.pill{font-size:13px;font-weight:500;font-family:inherit;border-radius:999px;padding:8px 18px;
-  cursor:pointer;border:1px solid var(--ink);background:var(--ink);color:#fff;transition:background .15s,color .15s}
-button.pill:hover{background:var(--brand);border-color:var(--brand)}
-button.ghost{background:transparent;color:var(--ink)}
-button.ghost:hover{background:var(--ink);color:#fff}
-
-/* ---------- hero: today's chase list ---------- */
-.chase{background:var(--card);border:1px solid var(--line);border-radius:18px;
-  padding:30px 30px 26px;margin-bottom:22px;border-top:3px solid var(--miss)}
-.chase .when{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.12em;
-  text-transform:uppercase;color:var(--faint);margin-bottom:14px}
-.chase .count{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:20px}
-.chase .n{font-family:"Bricolage Grotesque",sans-serif;font-weight:800;font-size:64px;line-height:.9;
-  letter-spacing:-.04em;color:var(--miss);font-variant-numeric:tabular-nums}
-.chase .of{font-family:"Bricolage Grotesque",sans-serif;font-weight:600;font-size:23px;
-  letter-spacing:-.015em;color:var(--ink)}
-.names{display:flex;flex-wrap:wrap;gap:8px}
-.names a{font-family:"IBM Plex Sans",sans-serif;font-size:13.5px;font-weight:500;color:var(--miss);
-  background:var(--miss-soft);border-radius:999px;padding:6px 15px;text-decoration:none;cursor:default}
-.names a i{font-style:normal;font-family:"IBM Plex Mono",monospace;font-size:11px;opacity:.72;margin-left:6px}
-.allclear{font-family:"Bricolage Grotesque",sans-serif;font-weight:600;font-size:23px;color:var(--brand)}
-
-/* ---------- kpis ---------- */
-.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px}
-.kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px}
-.kpi .fig{font-family:"Bricolage Grotesque",sans-serif;font-weight:800;font-size:40px;line-height:1;
-  letter-spacing:-.03em;color:var(--ink);font-variant-numeric:tabular-nums}
-.kpi .fig .unit{font-size:18px;color:var(--faint);margin-left:2px}
-.kpi.flag .fig{color:var(--miss)}
-.kpi .lab{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.1em;
-  text-transform:uppercase;color:var(--faint);margin-top:10px}
-.kpi .sub{font-size:12.5px;margin-top:5px}
-
-section{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px 24px;margin-bottom:22px}
-h2{font-family:"Bricolage Grotesque",sans-serif;font-weight:600;font-size:21px;letter-spacing:-.015em;
-  color:var(--ink);margin:0 0 4px}
-.hint{font-size:13px;margin:0 0 20px;max-width:66ch}
-
-/* ---------- gap grid: absences are the loud thing ---------- */
-.gridscroll{overflow-x:auto;padding-bottom:6px}
-table.grid{border-collapse:separate;border-spacing:0}
-table.grid th.day{font-family:"IBM Plex Mono",monospace;font-weight:500;font-size:10px;color:var(--faint);
-  padding:0 0 9px;width:26px;text-align:center}
-table.grid th.day .dow{display:block;font-size:8.5px;opacity:.6;letter-spacing:.06em}
-table.grid th.who{text-align:left;padding:0 16px 9px 0;font-family:"IBM Plex Mono",monospace;font-weight:500;
-  font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
-table.grid th.tot{padding:0 0 9px 14px;font-family:"IBM Plex Mono",monospace;font-weight:500;font-size:10px;
-  letter-spacing:.1em;text-transform:uppercase;color:var(--faint);text-align:right}
-table.grid td.who{padding:0 16px 0 0;white-space:nowrap;font-size:13.5px;color:var(--ink);font-weight:500;height:26px}
-table.grid td.tot{padding:0 0 0 14px;text-align:right;font-family:"IBM Plex Mono",monospace;font-size:12px;
-  color:var(--miss);font-weight:600;font-variant-numeric:tabular-nums}
-table.grid td.tot.zero{color:var(--faint);font-weight:400}
-.cell{width:22px;height:22px;border-radius:5px;display:block;margin:2px auto}
-.f{background:var(--filed)}                       /* filed — quiet */
-.m{background:var(--miss)}                        /* missed — loud */
-.na{background:transparent;border:1px solid var(--line);border-radius:5px;opacity:.5}
-.gutter{width:9px}
-.gutter .rule{width:1px;height:22px;margin:2px auto;
-  background:repeating-linear-gradient(to bottom,var(--line) 0 3px,transparent 3px 6px)}
-.legend{display:flex;flex-wrap:wrap;gap:18px;margin-top:22px;padding-top:18px;border-top:1px solid var(--line)}
-.legend span{display:flex;align-items:center;gap:7px;font-size:12px}
-.legend .cell{margin:0;width:15px;height:15px;border-radius:4px}
-
-/* ---------- turnout strip ---------- */
-.strip{display:flex;gap:5px;align-items:flex-end;height:110px;margin-bottom:10px}
-.strip div{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%}
-.strip i{display:block;width:100%;border-radius:4px 4px 0 0;background:var(--filed);min-height:2px}
-.strip i.bad{background:var(--miss)}
-.strip b{font-family:"IBM Plex Mono",monospace;font-size:10px;font-weight:500;color:var(--faint);
-  margin-top:7px;text-align:center;line-height:1.3}
-.strip b u{display:block;text-decoration:none;font-size:8.5px;opacity:.65}
-
-/* ---------- table ---------- */
-table.board{width:100%;border-collapse:collapse}
-table.board th{text-align:right;font-family:"IBM Plex Mono",monospace;font-weight:500;font-size:10px;
-  letter-spacing:.09em;text-transform:uppercase;color:var(--faint);padding:0 0 11px;
-  border-bottom:1px solid var(--line);white-space:nowrap}
-table.board th:first-child{text-align:left}
-table.board td{padding:11px 0;border-bottom:1px solid var(--line);text-align:right;
-  font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--ink);font-variant-numeric:tabular-nums}
-table.board td:first-child{text-align:left;font-family:"IBM Plex Sans",sans-serif;font-weight:500;font-size:14px}
-table.board td.dim{color:var(--faint)}
-table.board td.bad{color:var(--miss);font-weight:600}
-.bar{display:inline-block;vertical-align:middle;width:78px;height:6px;border-radius:3px;
-  background:var(--miss-soft);overflow:hidden;margin-left:12px}
-.bar i{display:block;height:100%;background:var(--brand);border-radius:3px}
-.chip{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:10px;font-weight:600;
-  letter-spacing:.05em;text-transform:uppercase;padding:3px 9px;border-radius:999px}
-.chip.ok{background:#FFF1E6;color:#B34700}
-.chip.mid{background:#EEF1F5;color:#5A6B85}
-.chip.bad{background:var(--miss-soft);color:var(--miss)}
-
+/* ── controls ─────────────────────────────────────────────────────────────── */
+.controls{
+  display:flex;flex-wrap:wrap;gap:12px;align-items:center;
+  padding:14px 16px;background:var(--card);border-radius:18px;margin-bottom:30px;
+  box-shadow:0 1px 3px rgba(0,0,0,.04),0 6px 20px rgba(0,0,0,.03);
+}
+.controls label{font-size:13px;color:var(--faint);letter-spacing:-.008em}
+.controls input[type=date]{
+  font:inherit;font-size:14px;color:var(--ink);background:var(--page);
+  border:0;border-radius:10px;padding:7px 12px;
+}
 .controls .spacer{flex:1}
-.presets{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:#fff}
-.presets button{font-family:inherit;font-size:12.5px;font-weight:500;border:0;background:transparent;
-  color:var(--body);padding:7px 14px;cursor:pointer;transition:background .15s,color .15s}
-.presets button+button{border-left:1px solid var(--line)}
-.presets button:hover{background:var(--page)}
-.presets button[aria-pressed=true]{background:var(--ink);color:#fff}
+.check{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--body);cursor:pointer}
+.check input{accent-color:var(--brand);width:16px;height:16px;cursor:pointer}
+
+/* segmented control, Apple-style: recessed track, raised active pill */
+.presets{display:inline-flex;background:var(--page);border-radius:11px;padding:2px}
+.presets button{
+  font:inherit;font-size:14px;font-weight:500;letter-spacing:-.01em;
+  border:0;background:none;color:var(--body);padding:6px 15px;border-radius:9px;
+  cursor:pointer;transition:background .2s ease,color .2s ease,box-shadow .2s ease;
+}
+.presets button:hover{color:var(--ink)}
+.presets button[aria-pressed=true]{
+  background:var(--card);color:var(--ink);font-weight:600;
+  box-shadow:0 1px 3px rgba(0,0,0,.1),0 0 0 .5px rgba(0,0,0,.04);
+}
 .dates{display:inline-flex;align-items:center;gap:10px}
 .dates[hidden]{display:none}
-.fresh{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--faint);white-space:nowrap}
-button.pill{font-size:13px;font-weight:500;font-family:inherit;border-radius:999px;padding:8px 18px;
-  cursor:pointer;border:1px solid var(--ink);background:var(--ink);color:#fff;transition:background .15s,color .15s}
-button.pill:hover{background:var(--brand);border-color:var(--brand)}
-button.ghost{background:transparent;color:var(--ink)}
-button.ghost:hover{background:var(--ink);color:#fff}
-button[disabled]{opacity:.45;cursor:default;pointer-events:none}
-.state{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px 24px;margin-bottom:22px}
-.state h2{margin-bottom:6px}
-.state p{margin:0 0 6px;font-size:13.5px;max-width:66ch}
-.state code{font-family:"IBM Plex Mono",monospace;font-size:12px;background:var(--page);
-  padding:2px 6px;border-radius:4px;color:var(--ink)}
-.state.err{border-top:3px solid var(--miss)}
+.fresh{font-size:13px;color:var(--faint);white-space:nowrap;font-variant-numeric:tabular-nums}
+
+button.pill{
+  font:inherit;font-size:14px;font-weight:500;letter-spacing:-.01em;
+  border:0;border-radius:980px;padding:8px 18px;cursor:pointer;
+  background:var(--brand);color:#fff;transition:background .2s ease,transform .1s ease;
+}
+button.pill:hover{background:var(--brand-dark)}
+button.pill:active{transform:scale(.97)}
+button.ghost{background:var(--page);color:var(--ink)}
+button.ghost:hover{background:var(--hair)}
+button[disabled]{opacity:.4;pointer-events:none}
+
+/* ── cards ────────────────────────────────────────────────────────────────── */
+section,.chase,.state{
+  background:var(--card);border-radius:18px;padding:34px 32px;margin-bottom:22px;
+  box-shadow:0 1px 3px rgba(0,0,0,.04),0 8px 28px rgba(0,0,0,.035);
+}
+h2{font-size:26px;font-weight:600;letter-spacing:-.021em;color:var(--ink);margin:0 0 6px}
+.hint{font-size:15px;line-height:1.5;color:var(--body);margin:0 0 24px;max-width:62em}
+
+/* ── hero panel: who to chase ─────────────────────────────────────────────── */
+.chase{padding:38px 32px 34px}
+.chase .when{
+  font-size:13px;font-weight:600;letter-spacing:.01em;text-transform:uppercase;
+  color:var(--brand);margin-bottom:16px;
+}
+.chase .count{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;margin-bottom:24px}
+.chase .n{
+  font-size:76px;font-weight:700;line-height:.92;letter-spacing:-.038em;
+  color:var(--miss);font-variant-numeric:tabular-nums;
+}
+.chase .of{font-size:24px;font-weight:500;letter-spacing:-.021em;color:var(--ink)}
+.allclear{font-size:28px;font-weight:600;letter-spacing:-.022em;color:var(--brand)}
+.names{display:flex;flex-wrap:wrap;gap:9px}
+.names a{
+  font-size:15px;font-weight:500;letter-spacing:-.012em;color:var(--miss);
+  background:var(--miss-soft);border-radius:980px;padding:7px 16px;
+  text-decoration:none;cursor:default;
+}
+.names a i{font-style:normal;font-size:12px;opacity:.7;margin-left:7px;font-variant-numeric:tabular-nums}
+
+/* ── figures ──────────────────────────────────────────────────────────────── */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin-bottom:22px}
+.kpi{
+  background:var(--card);border-radius:18px;padding:26px 24px;
+  box-shadow:0 1px 3px rgba(0,0,0,.04),0 8px 28px rgba(0,0,0,.035);
+}
+.kpi .fig{
+  font-size:46px;font-weight:700;line-height:1;letter-spacing:-.032em;
+  color:var(--ink);font-variant-numeric:tabular-nums;
+}
+.kpi .fig .unit{font-size:21px;font-weight:500;color:var(--faint);margin-left:3px;letter-spacing:-.02em}
+.kpi.flag .fig{color:var(--miss)}
+.kpi .lab{font-size:14px;font-weight:600;letter-spacing:-.01em;color:var(--ink);margin-top:12px}
+.kpi .sub{font-size:13px;color:var(--faint);margin-top:3px}
+
+/* ── the grid: absence is the loud thing ──────────────────────────────────── */
+.gridscroll{overflow-x:auto;padding-bottom:8px;margin:0 -4px}
+table.grid{border-collapse:separate;border-spacing:0;padding:0 4px}
+table.grid th.day{
+  font-size:11px;font-weight:500;color:var(--faint);padding:0 0 10px;
+  width:28px;text-align:center;font-variant-numeric:tabular-nums;
+}
+table.grid th.day .dow{display:block;font-size:9px;opacity:.6;font-weight:400}
+table.grid th.who{
+  text-align:left;padding:0 18px 10px 0;font-size:11px;font-weight:600;
+  letter-spacing:.03em;text-transform:uppercase;color:var(--faint);
+}
+table.grid th.tot{
+  padding:0 0 10px 16px;font-size:11px;font-weight:600;letter-spacing:.03em;
+  text-transform:uppercase;color:var(--faint);text-align:right;
+}
+table.grid td.who{
+  padding:0 18px 0 0;white-space:nowrap;font-size:15px;color:var(--ink);
+  font-weight:500;height:28px;letter-spacing:-.012em;
+}
+table.grid td.tot{
+  padding:0 0 0 16px;text-align:right;font-size:13px;font-weight:600;
+  color:var(--miss);font-variant-numeric:tabular-nums;
+}
+table.grid td.tot.zero{color:var(--faint);font-weight:400}
+.cell{width:24px;height:24px;border-radius:7px;display:block;margin:2px auto}
+.f{background:var(--hair)}
+.m{background:var(--miss)}
+.na{background:none;box-shadow:inset 0 0 0 1px var(--line);opacity:.45}
+.gutter{width:10px}
+.gutter .rule{width:1px;height:24px;margin:2px auto;
+  background:repeating-linear-gradient(to bottom,var(--line) 0 3px,transparent 3px 7px)}
+.legend{display:flex;flex-wrap:wrap;gap:22px;margin-top:26px;padding-top:22px;
+  border-top:1px solid var(--hair)}
+.legend span{display:flex;align-items:center;gap:9px;font-size:14px;color:var(--body)}
+.legend .cell{margin:0;width:16px;height:16px;border-radius:5px}
+
+/* ── turnout ──────────────────────────────────────────────────────────────── */
+.strip{display:flex;gap:6px;align-items:flex-end;height:124px;margin-bottom:10px}
+.strip div{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%}
+.strip i{display:block;width:100%;border-radius:6px 6px 0 0;background:var(--hair);min-height:3px}
+.strip i.bad{background:var(--miss)}
+.strip b{font-size:11px;font-weight:500;color:var(--faint);margin-top:9px;text-align:center;
+  line-height:1.3;font-variant-numeric:tabular-nums}
+.strip b u{display:block;text-decoration:none;font-size:9px;opacity:.62;font-weight:400}
+
+/* ── board ────────────────────────────────────────────────────────────────── */
+table.board{width:100%;border-collapse:collapse}
+table.board th{
+  text-align:right;font-size:11px;font-weight:600;letter-spacing:.03em;
+  text-transform:uppercase;color:var(--faint);padding:0 0 12px;
+  border-bottom:1px solid var(--line);white-space:nowrap;
+}
+table.board th:first-child{text-align:left}
+table.board td{
+  padding:13px 0;border-bottom:1px solid var(--hair);text-align:right;
+  font-size:15px;color:var(--ink);font-variant-numeric:tabular-nums;letter-spacing:-.012em;
+}
+table.board td:first-child{text-align:left;font-weight:500}
+table.board tr:last-child td{border-bottom:0}
+table.board td.dim{color:var(--faint)}
+table.board td.bad{color:var(--miss);font-weight:600}
+.bar{display:inline-block;vertical-align:middle;width:80px;height:6px;border-radius:3px;
+  background:var(--hair);overflow:hidden;margin-left:14px}
+.bar i{display:block;height:100%;background:var(--brand);border-radius:3px}
+.chip{display:inline-block;font-size:12px;font-weight:600;letter-spacing:-.006em;
+  padding:4px 11px;border-radius:980px}
+.chip.ok{background:rgba(236,103,36,.1);color:var(--brand-dark)}
+.chip.mid{background:var(--hair);color:var(--body)}
+.chip.bad{background:var(--miss-soft);color:var(--miss)}
+
+/* ── states ───────────────────────────────────────────────────────────────── */
+.state h2{margin-bottom:8px}
+.state p{margin:0 0 8px;font-size:15px;line-height:1.5;color:var(--body);max-width:62em}
+.state code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
+  background:var(--page);padding:2px 7px;border-radius:6px;color:var(--ink)}
 .state.err h2{color:var(--miss)}
-.loading{display:flex;align-items:center;gap:11px;font-family:"IBM Plex Mono",monospace;
-  font-size:12.5px;color:var(--faint)}
-.loading i{width:13px;height:13px;border-radius:50%;border:2px solid var(--line);
+.loading{display:flex;align-items:center;gap:13px;font-size:15px;color:var(--faint)}
+.loading i{width:16px;height:16px;border-radius:50%;border:2px solid var(--hair);
   border-top-color:var(--brand);animation:spin .7s linear infinite;display:block}
 @keyframes spin{to{transform:rotate(360deg)}}
-@media (prefers-reduced-motion:reduce){.loading i{animation:none;border-top-color:var(--line)}}
 #content[hidden]{display:none}
-.exempt{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--faint);
-  margin:-6px 0 0;padding:0 2px}
+
+.exempt{font-size:13px;color:var(--faint);margin:-8px 0 0;padding:0 4px;letter-spacing:-.006em}
 .exempt:empty{display:none}
-footer{margin-top:34px;font-size:12px;color:var(--faint);max-width:72ch}
-footer b{color:var(--body);font-weight:500}
+
+footer{margin-top:44px;font-size:13px;line-height:1.6;color:var(--faint);max-width:64em}
+footer b{color:var(--body);font-weight:600}
 
 @media (max-width:900px){
   .kpis{grid-template-columns:repeat(2,1fr)}
-  .wrap{padding:28px 16px 56px}
-  .chase{padding:24px 20px}
+  .wrap{padding:36px 18px 64px}
+  .chase{padding:28px 22px}
+  section{padding:26px 22px}
+  .chase .n{font-size:60px}
 }
-@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
+
+<header class="masthead">
+  <div class="inner">
+    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAKAAAACgCAMAAAC8EZcfAAAA/1BMVEXkrJmJJBymYVvtXyXxlG783lz016388un59/Pr1cn849L8sK+URDq7i4f5ybF7JRr49a/2s5j/AAD/c3PmcEy4hXz8tG//dQD/9nz//wD1yLeysmXuMgCxsbEA//+0ah+h////tP9/AAB/fwB/f3+LPECzfoCqqv+//7//VarBfYX/f//1mnjavcD73T39/f0AAADtZyTsOQDuZByFFgv9/v7tRgrz2M336ubwl3B5CQF6FAfveUr55df1x7HuhVYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD4kyABAAAAQHRSTlP7///+9//3XSX9mAP//6b/BKwBAv7/AwICAXED/AMBAwQDAgIC//8DBAP/ArT///8A/v7//wj+/v/8///+//7+Nf+BMAAAF4lJREFUeNq9XQd7nDqzHkooW92dU752ezcsRbC0//+v7owkWEkIWDs5h+dJ4tgsvJo+o9EYkh+5iv2b/KKIoiicLvxPUdD3o789Pe+LH3kFfB6UfN/z/l1CC3cBANRDi1eatmnbDkMN8PhrGIqb/7b/Xvx5ACVKQleEu9MjAkvL8kJXKa+L+J+XtgM87sKIPvH0VPwpAIskQm7yr8IT1K1XciREsT5grMOLsaBHgvocN/3MfwyR42/JW/GnACSuIVsfObjSawFY9WG/uh78Fw9XkA6wi/Bz75+Xx08CLB5I8sNTje8tUx/Yx+bV9XVLKyGM+OHvD0nxhwFENiHxdj6RLr0H3AQSBiRkirxGcEjK4ucDJL7+Bf/sAp+/6hPoRoz4QRSIXZgk+4c/goLfSS9gKC+e33986WKQ4to4p5+LnwsQmRJJeOvEY2gQIV5Smo8KUBzT+oRUfCh+KsC3tyTkD4f5yysFMVzzPHec10WIHz0tklPx4ecB3KNkn/iD45lkgeucbywHBwFenasr/x8jQU2wAX8SqstddvEOgMU+iXY1SjjMyIF4HIRznL7xem3cGL975fdWbpPjHf4MYnsp2yBM7tHmbYDIDOTupaw7Xdo4QATgugqNXMdBaK9NzknoXvMmz5urO+M4qotXIxG3DfcWwOIJTUtdXtpAf4F7JhpVTuMgUgVg3uD3A8RdCYF0e6KnO7c6/Jl3EBG28BVEvhl33asjaIS0ej24yvcJYNw4BNAVhAQBF7/QnsLwsTUqS/EjAPHDO8ClqpYFSOJ61FXGZQ514tqwG4sJIDQEv0LxI0jMEfciuV3NROGTBxaRCn4V4ANqB0qfuvDKvUrSERKiDkrhTQgFQJczNZaLIAp28l/dhjLUvD5cF0RYD60C7/dUMy1Bc30V6tG4kjrqz12UuiP+1cQCICE/Ck4jQTl1NSrWZQlh8l58BSBalxC8y6AoL8YHIC0Ic5o8EEIIHbyONx1QI/BqJGvzWAAjgMerc6jAba6Na7B5txY9wEpgGuKna4UhxF0QcsWZ6QpL4oxmT5gZvFx5C/4MDbmgJyOc9HXuarrSe4TwLfo0wOck9HXxQ6vRxPiX+B7kXLLIiFxH0MTIqutGiWRoxHPyLK5QJ7wVQZoGgb1cvFMU7T8HsNgXoV96etiCRs71r7k0u0Kk2BnpFSy43tg9I6qzFNaGFApGO3qTxGq4pMEil2HJ+4b1xQsMD0VvQCaJt4BzPdCbq7UIq0JfzKTBdPzJRyNtzwolfY7wl/sBYuSM/PVmcZVLHCPn5ZKSOg7cHQqiRiO9J4CuofyEMIqKewFi7If0S2/4YkkG0ksHwxeS9Oojru6PVQMid4UyWUkX3uiLQ3adCmtiCov8ZTftxeVzQZI2F5nrHD8ZTVdHINPEAQZ5Lk1NpSBMT1Y5BKv/qEsFH8JxSBWryabFx+4rIb+kYOc0Eh84vcrlXWTJBMBCvwjKcvpkhbbXRaMnzB562U9Innm9OmSZ0DyeY+mNnJsetmgP0esVxQZApHPg3fChAyBHRaEnt8YYxiwA7FgP8ur7Bd1mx4rERNh1IIW7KXP1chlCzKb+vg7wO+JLL6BqrliuK/gSH62pUj2knizJiCKN19b2xDkeBZDHGY7CkM67wG5mbEyAUYHxS61bZ/6IeIzqTMHq67QcS0U1v3wqJ11ExWMGEh0mfw7HV0ljKr1eeQnCaJ3FRbKrL61h+w6VCEYsAHvMVS4XS4GGyjKEEn9kKhR3dpy/KIHgxmrk4AWRkY+CGSLgTdoTyeeSAkPeuLOUDhPxsvX7aq2aYE30gWenM3lG4uyMdFQH+FycVAUZo/vmAEfHtK1d7d1RoeGpetn2FqfJwJklK97FD3VrCLqF2Q2aAMoYmkuzjo/Da++qgbD5rWj7KSmAWbqHBsSIG0BnMJrL+RvwaU2jcwMj2XII7i8cpZfS77RVy8x0xvuLt9NsIagZXBSUpY0o8dHVRJ1R4s2M+gdqRV0PdNVUbtVVozITf0ToWBG2F8wB9jaAFCLMGWxdpXdJe83SgN96aZrdrjT1Bt0QdoOeHSJCq8VnqMkqCUGNUaFMtyMU1pZlXanohlRg0i8CqZVgqZqgYKriheVfWpWEN4D7YpeW2362T1XydYgunWEbIeIP2lq52celbTMIUSgkBC3GGrbZWyp5HvO91EI7g5BDr316k0d9me6SyASImNEEbhZ2KY9VdDNdBzfS8QYRc7h0M1RDTYiSZxMgEXCT/rUiRdBmd8CTEOvglsOlW2RgZXpK3nSAxX9TkNXdTz9WpxJfdhfEdvxg1W4j9C918fQXDeCebHS9ja+fyJfeSb7pqiWsrt3kMpqaU/EvKkCUwMDzui39GPFV8Fl4SO1s9HZEw01Rqse6HMg0JNwkoIKvFtz9LA1H+aXYeVMKdxrAfXJKN1Q4mOSPDZk0cp+8snR8QrpFjeEChVBkkHsgsLGobnqmwJd+Hh9d/mjqNlxCX3rSnYDwwhjn9xtLakdPl/7IBVPs3G24k8fiWVES9MLrAniRD+yGLP0ZCH09sbC8cBDFYRBG2r+skpx5I0v8H8Q3ymGXrr+x89DS/CYB/kJhQrfOYCk8/r1GZflnsqbXbzDZv/hJ8sQBFsThdt3CyIfBYuCifuG1Q7sS4rSdRDCsq0nLsxMCWGCgukrvkR2szdbUl4dXGKf6or5QL6lTLZlYrull5Xk7MjQI8C35dZ3DcHkRn/FX7EuW8dYKqnpUFdUaqBtkYRUwRqbrPEZT+J0Avm9wuBrj2DUH53le3TO+X8Oo48PzlgJFcnqCHOsk7KlUs0eAVG27cTi2xuBSlRcZTNEKEzFi7VE6Utett6wrWW0nYazzOA2Ru5A8P4VKpPotsEigWCj3wJmdKHwrFGmHhGzFpjIVu15Sb4GIvbTGGgnjbxrCtoS/PiHA9+TkTVY6+PZtTmrx02BZN3iGXInqW6A3e9iXNJHQ19y9Th38KRkY+nO779u3GQlHDa+zBfPiiZS8suoZUjFbJGFXqsoZ48tj09D8A/5BsT7cCPgtiM3gsRNFCeuLUODWo6CutiDMJAk1BxYY1EEhPCXvgKFgSyIYB3QDvwK8VEKv+jh/MweaKT8XZSYTOEG8QH17PAnhYxHBW/LoeeMCpkstHQtutAv6eEc5HTxdnwlgBtKCsZG7tyue4mo/iuCpeJRWMJjfQrbFE1sbVmnP/LvK/RYDmonsepSu2IIPmYeBP5Ajrj90hPHHjMOoIhaA9Z17OTY57DVTOCFUVIChlvwClM7BTYe/GZIqdZhZVcSsEsCwgLhrM7ul6aZULZi/HLVkhxTESCHQVxFokS2THJ5fRgWu85FOSxWh+eraShFxK8CP1DshwF1bGov4pqVXy0ZQ96Td4I3KaakwDgumcDJxNoCkxggw9arpniAONBkMRNBW2QJ9swBOyjksF8Uy6+cnIZQv/79AqxT4CPDm6KQFChQ59YWOMM/Cos5AMBkPe1BuDwtHFskgIA4Cw9lB8rgWa0kd6dNtAlKJdSWK7+0q1q1VhBBgRAD9ZYBtGdhDfc/Q4Irr6VpcPsySk07RwsWQEAp/reopQ+2ZjmQmFrJDGtcDcwcFZg4v0NTYWgFpCeDFX0sMOKFmOmJKIHmcTOlxqGqk8Zaa9LN4YQHg2h1ChOdKbC6qqj1l36Si0MJYQ+eZzgg0O2Oz72VqBVixTgc4dwTejC9aOAhcSo0bWsOdZ9LO1OsAI3MJMe8eEn0tI0DT0c04bNNY+ATAV3e8jnpEuJsBhLPDm51EZ90CQG+9ekaRxXwNppxk/gSwOjtXfjXa9qINYOXk+dlxzjlvUbQCzMbFL1dyrLeYpkCECwIg59rhgJSZATRkEPLcZVUXi432JYCpYu/nzAZK4udCUC9T8IOSfRKu/LoJ8CqbEA906xLA9malWWADmHrBx2cA8s4ahKf3nnXeXIsR4LiP7fJwrZppcaYpKMwDrB7p18/JOwOomhnqXnDM1jgE+CsBrPUePFEi4N3RlYgn9WBGA9jZkhKYNm/VLu81gBzeAWyGOvkfzRezg9i5Ds68uUV6SgNgOihY1nPOG3y+ymwWEA7k6iqHehCp7FRVGsBhR8GCblGrsRemunnK2gA4RS2wnhV3indhhh+RvpiTgFpKnIPo3jSDhfVwS0oImFo8worZel/A4C9G/RlvDxNJSSXNIF6OFm7VoRqwWiOyehbMZVq0D2s+hfXTHl3nWeNBaSeOkyeBWcB6C/lFP4bWo9OLiNxM6hQr3K+EGhhxBeNW7CykHO30sLY5SABF5WN6KDWBOgf3RfQ0djY1nqq4QsyW4jmhy52IC+dZTbYZzHwM5SNmdVGrVulIn3LRC80ttmfREnLGTClsWBH2NaznnUJMxpcz20Ge1COAhb4I6gDl6iQ6eUYtWc5IqtaCsB/0k0XdQsgrPYHojnVcZtppTNz3t9LHZKsP1Uf84nBDuCSESkrSp56uKR0MLcy9n10EW+G2eO9ucw70/cs2TCAqTt6L/jDHATr6ww/aSF9ixkqZ2mACvEQ92c+69cyaEltK+wWD4nN+domIjtZgR8WjAvbJr5oak57QOZ+rdDyDnceZ1uOfIoGHuvb9eqCKK5uHD7MKoeQwV1Dg0Se6Y72BjZQ4RICoxqrDD6jpt3FGLyqZ0M1aKEATOaQpv9LBYhhtJUxfsWLyCMhH71xBy3lPRQT6LgSPsyicrm6SKstHphTqqtFDPfi1XkNfLg9mMgOU7BkBMg0g6UiR8CK65o3pNBDTd/WsYpR5d3a/2fZ/slqtf6OO8Fcemzw2dnIiSJ7R2XmanRnhsVjWkUXyPt+8ueeApyyiZ3YVkdsRTd446OZypaFVNKcg9ZK3IrK2HFF2J0t4IgCbE6LdpiGzboCLKthtO/HYOLyntdFFsOcAiySy+Bu011epU+NOTp0t7RitsLe1bT9K6VC2wkBYajCSYmQvJPjXo8ZjUnhqunRyGZy9LJaBM9tZT8Ug1Ly+PzPSnj/fj2XmIUvZFAC8700rMVWvCA4jR7RK/yZvFVIItp2cxbO81GC9sPUohHdstnPtixxElx7MWxbY+Uq+hI5TTXslotd7mJsz2kjsLSEhbdN5cs/GXlpkpbRfpCDM0rSQnqirgnoWnoyo2kVZALXJuZeHIwLPvsM61Lp1Jne3tC86bYON7ajHKx3ymR11AjIyoiUg2Ue/6jymZV0PTI382ylosrONWlblRe5uua0ik05y6oMggeenfPRFtshh0VSBqvxgtL5V3HKyGPksiF+NXQv14mtHSLInM9vo+pgaXSph0Ro0Muq5RUY6PPbNEI89tb2Wjg2LI3yj7+llZ1k1ZKtNHxvfu/nwVmpId+DN3gwOetWDb4M9JGNbykPYGv64udLJYScfTxjUF7GCbrijd2e788gfewjdaxOPphC02jNED1NrVPFs9FXgzQEDF6noNMGHtmQ2fLGzLFMqs1CK4vxH7DSvC51Ru+IGMPktCU13R3KBecl0mgKFpl5xXnc2JAl88dRphaHdi313AWSHo2wuewr1/C9GV4LmWq3UTy11X0Y4bg0wb1RJfurlAJb9By+UbbZTF/BOszQByqC08GysysKIsPtSh1k2pgksHWnB0GGd6aAZm+8fRfJcCciDVm8YMahFJHfkLWYoYyozIbyzx8x0cP3Y9zaK+/HaYPZDVDwafVtpWOz1NuUHg4STReRHozoTIXifaBEVt8pMBek3lT8795UXLhs0Meq70aQUvxWzRm+Y7+iIouzt4AxMzfjMT+9qo86MLLD3Lq0ZGzC3uR4qjYBShdVe/u/JLjV3peCM9HulU81sQngZU0rqRM/ua5VPvbGJmpr5bVbFVd/skQSarfLJw1Nk9FJVLs8/oUIy3uIGb2ok78C7k8HD1N9cTtXSyl0KJYFOXu0txzUSw53QiWyXDnY2eaN0OihTF9gdDekEb8zp1QMl6EKcI7PuD5Z9ZDmuQQdeHvW2Tbc50mHOxqHBAF13y6cvU121o5jeethFRhBePR1qA0/p4sfcMVf9gBo5+eqpfFCHehjt6AxEtkBOEvnMbnmkQomu93l4tXUip3+5qDUgOiOKuuHkZiBIsWcRFdZDV9/J1MwjeFl+UoKNjg9kuf23B95tuXKmidGJJvXRfJgFhjC5ed4MA7vdPy8cW3umRjj7SQU6oq7VOtqL/kJxKsy/nQpTj1Iyv/zdHBfCt7Lcxsw1MTQOi2L54N/CsSFXpqBqzJiWlxe4pzOKZvR46nZKPLo55LEL+sLpoMbzIkDMonaepct+PBLM/lXT8hd6cb/eHcVoIZMZFO5DRHD/5eSz46IdN4H75bOdD0nUz6YX8JO7r8LvXTWn2b/Q+ddhiY5dX7/QSDDt5+h7nfG47exwYiszpZXju0U4F0NXbpK6Tm4eZ2V0tpQfJNaEjiSyFkPVatM70UlRd0wsdEPocxO9ChBpuKt/b2cSGIt/ckMQBcbBkyeg05Z0pG1Tr+Qz61qY2wSaryKeQ1NfNIbQ8eLieeOMe/Ec7czjKEc+38MVwxGYe3DnTQ4APqEap/x5aVtDYHK+4nbHvdLuNa2y14choRftw9kkA5gPKCtOxkkFGmTAB52QwT7QFsXB6qM61vOLMatQ9ocrjS2AqysnrXxoro7i7LAotscY0CltQ5UDKobkzfFDzonKr0788dkL0OZRtQJ53B+c2clTOvITTjHM6iCIQh+0ICI2DM3l7AHyAHnz+WEL1YGMMsbO7hWC3NSPqrUoyPIojRnCDyb3gXD953hjl3gmesC35RHVgZtmdJpiupRiyQjf3/fFndNS9lFUW49CMx4mudVnKIcRPcYEZEdfm8alURd5zj50RSP6xcXTL3ePc4mSyLcgrJDNGMZqxtB1YVUeKa4653LMBUa+QIN7jmbPzyVdGny0MhBnfrSMb7hAozoowOzeIpBkePje7xGNfE/zVkjmYrIv8Wx6QfdC8mdRkLWZR29RCDO3jM/O3YNQ52lz1JEFJtd1O140YRRD0l4VBWhyEsdBkJ0HWcxIgynP2xXvnxsphOFrZAyNEtpMBS9FAVEi/YOYxOXwfhG8AeivPD+TQa+ccTiYILubX2HWxEJjUhYHWy3P3XrHwAHX1pn5l6sQANCyMRHKVo6Y1UIMRzIeHLEn4wq3FudiFg47m1UEymR30W/FFyaX0eCyl9/Ttb2QA+V7olNDTrtBJ/G/0n8LxotpBRT9jXbA2PUv69XharA6uLGIB9tcRCVOdCAWADsJUO5mgTMNWaEvXnPrVAVKEdH/fv/qcDpEuPNLbbqarjM55XyiNMrEYBZXekEYC6Yur4Tmjs05Yp7XBtH6IOOt8X5FSHMLrGymhP7g8mlkAqAYtSZUKB4BVvid67U5zPF1PuZ5u62psbA52jna+bP5kiMBUW8ZOM5B+ED6x5FlEjaOsPqoqCfGUkXA5DWFMPnPHxqQ+B8FVcFoiJ5VEgOQ6isGSuXH+Jg7csPyYIYD5iZjiQl6RFOYkh9gsZyCGcb+bAqmyukznxGELiW/TfwywwEjfqBxIeE9s1jvmcP6kPBBmOXSDFsG4+aFsmEJr8v7jHyG6C5M/qm4DQj/oUGx9JxdnaIorm5hVzHcM26Nhs8MwV0zTu8ftUvKcqqzZSreHxymNL4nLP49um8Y8N3jnvcYgj36NKin/zo8PrqnBbQtT7/8/IHZ76jPJ59PbP4aGakGUg5oWpLkt5887pmuvxYYx5JVbGnGEnx2PF1c09L8EyZu0cMfMNFbMvqdpmY/DlRvae+no5huRuO8oz9s5PiUNj8lnIxiLnq9DbLqieQXz6tPNBB906z8hN9ssH8XQ/l5xaOk7XZ7os4LNKnHayC+QPdc8PmpfyQFp+nyNF4+AN8TdRk6fO+LyX78mHFdt+n4OwX8xx1H97T/M35xwERGXsSLwvCR/w4DifOiTPjj0/ToF0Tw8UXvX/0VFl8EyIXpSeaoYRieHolsPl4D/YX/eTzRb9ng45+env7y9V+w8QMAEdrDQ/Q84Y3G3wBCXxRT7vXwQ7/9I/l/k4wM+yy3CMMAAAAASUVORK5CYII=" alt="Okie Dokie Campus Automation" width="30" height="30">
+    <span class="name">Okie Dokie <span>Campus Automation</span></span>
+  </div>
+</header>
 
 <div class="wrap">
   <div class="sources" id="sources">
@@ -566,7 +661,7 @@ function renderExempt(){
 function markSource(){
   for (const b of $('sources').children)
     b.setAttribute('aria-pressed', String(b.dataset.src === SOURCE));
-  $('eyebrow').textContent = SOURCES[SOURCE].label + '  /  daily entry compliance';
+  $('eyebrow').textContent = SOURCES[SOURCE].label;
   document.title = SOURCES[SOURCE].label + ' — who has not filed';
 }
 
