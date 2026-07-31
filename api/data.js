@@ -8,48 +8,96 @@
 // The sheet must be readable without a login:
 //   Share -> General access -> Anyone with the link -> Viewer
 //
-// To point at a different sheet or tab without editing this file, set SHEET_ID
-// and SHEET_GID in Vercel: Project -> Settings -> Environment Variables.
+// Why it hunts for the tab: this spreadsheet has more than one tab. The first
+// one holds the Asana integration URL, not the export, so asking Google for the
+// default tab returns a CSV with no "Due Date" column. Tab ids (gids) are not
+// sequential and Asana's integration can recreate a tab with a new id, so any
+// hardcoded gid is a time bomb. Instead we identify the right tab by its
+// contents. Set SHEET_GID in Vercel -> Settings -> Environment Variables to skip
+// the search if you ever want to pin it.
 
 const SHEET_ID = process.env.SHEET_ID || '1tzsf5iWijfIT8AfXTJZUbrGzH5OkNb-6xMO3EZ59cdo';
-const SHEET_GID = process.env.SHEET_GID || '0';
+const PINNED_GID = process.env.SHEET_GID || '';
+const BASE = `https://docs.google.com/spreadsheets/d/${SHEET_ID}`;
+
+const looksLikeTheExport = csv => /due date/i.test(csv) && /assignee/i.test(csv);
+const isLoginPage = body => body.trimStart().startsWith('<');
+
+async function grab(gid) {
+  const url = `${BASE}/export?format=csv` + (gid === null ? '' : `&gid=${gid}`);
+  const r = await fetch(url, { redirect: 'follow' });
+  if (!r.ok) return { ok: false, status: r.status, url };
+  const body = await r.text();
+  if (isLoginPage(body)) return { ok: false, login: true, url };
+  return { ok: true, body, url, gid };
+}
+
+// Tab ids live in the sheet's own HTML view, which link-sharing makes readable.
+async function discoverGids() {
+  for (const path of ['/htmlview', '/pubhtml']) {
+    try {
+      const r = await fetch(BASE + path, { redirect: 'follow' });
+      if (!r.ok) continue;
+      const html = await r.text();
+      const found = [...html.matchAll(/[?&#]gid=(\d+)/g)].map(m => m[1]);
+      if (found.length) return [...new Set(found)].slice(0, 12);
+    } catch (_) { /* try the next path */ }
+  }
+  return [];
+}
 
 module.exports = async (req, res) => {
-  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${SHEET_GID}`;
+  const attempted = [];
 
-  try {
-    const upstream = await fetch(url, { redirect: 'follow' });
-
-    if (!upstream.ok) {
-      return res.status(502).json({
-        error: `Google returned ${upstream.status}.`,
-        hint: upstream.status === 404
-          ? 'Check the sheet ID and the tab gid.'
-          : 'The sheet is probably not shared. Set General access to "Anyone with the link — Viewer".'
-      });
-    }
-
-    const body = await upstream.text();
-
-    // A sign-in redirect comes back as an HTML page, not CSV. Catch it here so the
-    // dashboard shows a real explanation instead of parsing login markup as data.
-    if (body.trimStart().startsWith('<')) {
-      return res.status(502).json({
-        error: 'Google returned a login page instead of the sheet.',
-        hint: 'Open the sheet, then Share -> General access -> Anyone with the link -> Viewer.'
-      });
-    }
-
+  const send = hit => {
     // Cached at the edge for 5 minutes, served stale for another 10 while it
     // refreshes behind the scenes. Keeps the page fast without going far stale.
     res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600');
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    return res.status(200).send(body);
+    res.setHeader('X-Sheet-Gid', String(hit.gid ?? 'default'));
+    return res.status(200).send(hit.body);
+  };
+
+  const fail = (error, hint) =>
+    res.status(502).json({ error, hint, sheetId: SHEET_ID, attempted });
+
+  try {
+    // 1. A pinned tab wins outright.
+    if (PINNED_GID) {
+      const hit = await grab(PINNED_GID);
+      attempted.push({ gid: PINNED_GID, ok: hit.ok, status: hit.status || 200 });
+      if (hit.ok && looksLikeTheExport(hit.body)) return send(hit);
+      if (hit.ok) return fail(
+        `SHEET_GID is set to ${PINNED_GID}, but that tab has no "Due Date" column.`,
+        'Remove the SHEET_GID environment variable to let the function find the right tab itself.');
+    }
+
+    // 2. Try the default tab.
+    const first = await grab(null);
+    attempted.push({ gid: 'default', ok: first.ok, status: first.status || 200 });
+    if (first.login) return fail(
+      'Google returned a login page instead of the sheet.',
+      'Open the sheet, then Share -> General access -> Anyone with the link -> Viewer.');
+    if (first.ok && looksLikeTheExport(first.body)) return send(first);
+
+    // 3. Walk the remaining tabs and take the one that is actually the export.
+    const gids = await discoverGids();
+    if (!gids.length) return fail(
+      'The default tab has no "Due Date" column, and the other tabs could not be listed.',
+      'Open the tab holding the Asana export, copy the number after "gid=" in the address bar, ' +
+      'and set it as SHEET_GID in Vercel -> Settings -> Environment Variables.');
+
+    for (const gid of gids) {
+      const hit = await grab(gid);
+      attempted.push({ gid, ok: hit.ok, status: hit.status || 200 });
+      if (hit.ok && looksLikeTheExport(hit.body)) return send(hit);
+    }
+
+    return fail(
+      'None of the tabs in this spreadsheet have both a "Due Date" and an "Assignee" column.',
+      'Check that the Asana export is still writing to this sheet.');
 
   } catch (err) {
-    return res.status(502).json({
-      error: 'Could not reach Google Sheets.',
-      hint: String((err && err.message) || err)
-    });
+    return fail('Could not reach Google Sheets.', String((err && err.message) || err));
   }
 };
