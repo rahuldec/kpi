@@ -124,6 +124,14 @@ table.board td.bad{color:var(--miss);font-weight:600}
 .chip.bad{background:var(--miss-soft);color:var(--miss)}
 
 .controls .spacer{flex:1}
+.presets{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:#fff}
+.presets button{font-family:inherit;font-size:12.5px;font-weight:500;border:0;background:transparent;
+  color:var(--body);padding:7px 14px;cursor:pointer;transition:background .15s,color .15s}
+.presets button+button{border-left:1px solid var(--line)}
+.presets button:hover{background:var(--page)}
+.presets button[aria-pressed=true]{background:var(--ink);color:#fff}
+.dates{display:inline-flex;align-items:center;gap:10px}
+.dates[hidden]{display:none}
 .fresh{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--faint);white-space:nowrap}
 button.pill{font-size:13px;font-weight:500;font-family:inherit;border-radius:999px;padding:8px 18px;
   cursor:pointer;border:1px solid var(--ink);background:var(--ink);color:#fff;transition:background .15s,color .15s}
@@ -162,8 +170,15 @@ footer b{color:var(--body);font-weight:500}
   <p class="lede">One entry per person per working day. Everything here counts what's absent — a person-day with no submission at all. Sundays are excluded.</p>
 
   <div class="controls">
-    <label for="from">From</label><input type="date" id="from">
-    <label for="to">To</label><input type="date" id="to">
+    <span class="presets" id="presets">
+      <button type="button" data-mode="today">Today</button>
+      <button type="button" data-mode="yesterday">Yesterday</button>
+      <button type="button" data-mode="custom">Date range</button>
+    </span>
+    <span class="dates" id="dates" hidden>
+      <label for="from">From</label><input type="date" id="from">
+      <label for="to">To</label><input type="date" id="to">
+    </span>
     <label class="check"><input type="checkbox" id="joined" checked> Skip days before someone's first entry</label>
     <span class="spacer"></span>
     <span class="fresh" id="fresh"></span>
@@ -306,6 +321,58 @@ function analyse(rows,from,to,joined){
   return {days,stats,exp,fil,missed:exp-fil};
 }
 
+/* ---------------- chase list ----------------
+   Anchored to a single day, chosen by the Today / Yesterday buttons rather than
+   by the date range. Sundays are skipped, so "Yesterday" on a Monday means the
+   previous Saturday. The header always spells out the actual date so there is
+   no ambiguity about which day is being counted.                              */
+function stepBackToWorkingDay(d){ while (d.getDay() === 0) d.setDate(d.getDate() - 1); return d; }
+function todayWorking(){ return iso(stepBackToWorkingDay(new Date())); }
+function yesterdayWorking(){
+  const d = stepBackToWorkingDay(new Date());
+  d.setDate(d.getDate() - 1);
+  return iso(stepBackToWorkingDay(d));
+}
+let CHASE_DAY = todayWorking();
+const CHASE_LABEL = { today: 'Today', yesterday: 'Yesterday' };
+
+function renderChase(){
+  const day = CHASE_DAY;
+  const label = CHASE_LABEL[MODE] || 'Latest working day';
+  const people = new Map();
+  for (const r of ROWS){
+    if (!people.has(r.name)) people.set(r.name, {name:r.name, filed:new Set(), first:r.due});
+    const p = people.get(r.name);
+    if (r.due < p.first) p.first = r.due;
+    p.filed.add(r.due);
+  }
+  // Only count people who had started filing by this day.
+  const expected = [...people.values()].filter(p => p.first <= day);
+  const out = expected.filter(p => !p.filed.has(day)).map(p => {
+    // consecutive working days missed, counting back from the anchor day
+    let streak = 0; const d = D(day);
+    while (true){
+      if (d.getDay() !== 0){
+        if (p.filed.has(iso(d))) break;
+        streak++;
+      }
+      d.setDate(d.getDate() - 1);
+      if (iso(d) < p.first || streak > 400) break;
+    }
+    return {name:p.name, streak};
+  }).sort((a,b) => b.streak - a.streak || a.name.localeCompare(b.name));
+
+  $('chase').innerHTML =
+    `<div class="when">${label} &middot; ${pretty(day)}</div>` +
+    (expected.length === 0
+      ? `<div class="count"><span class="of">No entries in the sheet for this day or earlier.</span></div>`
+      : out.length
+        ? `<div class="count"><span class="n">${out.length}</span>
+             <span class="of">of ${expected.length} people have no entry for this day</span></div>
+           <div class="names">${out.map(p=>`<a title="${esc(p.name)} — ${p.streak} working ${p.streak===1?'day':'days'} missed in a row">${esc(p.name)}${p.streak>1?`<i>${p.streak}d</i>`:''}</a>`).join('')}</div>`
+        : `<div class="count"><span class="allclear">Everyone filed. Nothing to chase.</span></div>`);
+}
+
 /* ---------------- render ---------------- */
 function render(){
   const from=document.getElementById('from').value,to=document.getElementById('to').value;
@@ -318,18 +385,7 @@ function render(){
     return;
   }
 
-  /* hero — the chase list for the last working day */
-  const last=A.days[A.days.length-1];
-  const due=A.stats.filter(p=>last>=p.startsAt);
-  const out=due.filter(p=>!p.filedSet.has(last))
-               .sort((a,b)=>b.streak-a.streak||a.name.localeCompare(b.name));
-  document.getElementById('chase').innerHTML =
-    `<div class="when">Latest working day &middot; ${pretty(last)}</div>` +
-    (out.length
-      ? `<div class="count"><span class="n">${out.length}</span>
-           <span class="of">of ${due.length} people have no entry for this day</span></div>
-         <div class="names">${out.map(p=>`<a title="${esc(p.name)} — ${p.missed} missed in range">${esc(p.name)}${p.streak>1?`<i>${p.streak}d</i>`:''}</a>`).join('')}</div>`
-      : `<div class="count"><span class="allclear">Everyone filed. Nothing to chase.</span></div>`);
+  renderChase();
 
   /* kpis */
   const clean=A.stats.filter(p=>p.missed===0).length;
@@ -423,25 +479,58 @@ function failed(msg, hint){
 }
 
 /* ---------------- load ---------------- */
-const WINDOW_DAYS = 15;
-/* Defaults: a rolling window ending today, read from the viewer's own clock.
-   iso() formats the local calendar date — never toISOString(), which shifts the
-   day backwards in any timezone ahead of UTC. */
+const MODE_KEY = 'kpi.mode';
+const CUSTOM_KEY = 'kpi.customRange';
+const CUSTOM_SPAN_DAYS = 15;
+let MODE = 'today';
+
+/* The chosen view is remembered, so the filter never has to be set twice. */
+const readStore = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+const writeStore = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+
+function markMode(){
+  for (const b of $('presets').children)
+    b.setAttribute('aria-pressed', String(b.dataset.mode === MODE));
+  $('dates').hidden = MODE !== 'custom';
+}
+
+function applyMode(mode, remember){
+  MODE = mode;
+  if (mode === 'today' || mode === 'yesterday'){
+    // A single day: the chase list is the point of these two views.
+    CHASE_DAY = mode === 'today' ? todayWorking() : yesterdayWorking();
+    $('from').value = $('to').value = CHASE_DAY;
+  } else {
+    // Custom: restore the last range used, else a fortnight ending today.
+    let from = '', to = '';
+    try { ({from, to} = JSON.parse(readStore(CUSTOM_KEY) || '{}')); } catch (e) {}
+    if (!from || !to){
+      const t = new Date(), f = new Date(); f.setDate(f.getDate() - CUSTOM_SPAN_DAYS);
+      from = iso(f); to = iso(t);
+    }
+    $('from').value = from; $('to').value = to;
+    CHASE_DAY = lastWorkingDayIn(from, to);
+  }
+  markMode();
+  if (remember) writeStore(MODE_KEY, mode);
+}
+
+/* For a custom range the chase list follows the end of that range, so the panel
+   and the grid below it are always describing the same day. */
+function lastWorkingDayIn(from, to){
+  const days = range(from, to, true);
+  return days.length ? days[days.length - 1] : todayWorking();
+}
+
 function setDefaultRange(){
-  const today = new Date();
-  const start = new Date(today); start.setDate(start.getDate() - WINDOW_DAYS);
-  $('to').value   = iso(today);
-  $('from').value = iso(start);
+  const saved = readStore(MODE_KEY);
+  applyMode(saved === 'yesterday' || saved === 'custom' ? saved : 'today', false);
 }
 
 function applyRows(rows){
   ROWS = rows;
-  const dates = rows.map(r => r.due).sort();
-  /* Widen the range if the sheet reaches further back than the default window,
-     but never narrow it — a short export must not silently collapse the history
-     the figures depend on. */
-  if (dates.length && dates[0] < $('from').value) $('from').value = dates[0];
-  if (dates.length && dates[dates.length-1] > $('to').value) $('to').value = dates[dates.length-1];
+  /* Deliberately does not touch the dates. An earlier version widened the range
+     to span the sheet, which quietly overrode whatever window was chosen. */
   $('fresh').textContent = rows.length + ' entries · ' +
     new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
   showContent();
@@ -470,7 +559,20 @@ async function load(){
 }
 
 /* ---------------- wiring ---------------- */
-['from','to','joined'].forEach(id => $(id).addEventListener('change', render));
+for (const id of ['from','to']){
+  $(id).addEventListener('change', () => {
+    if ($('from').value > $('to').value) $(id === 'from' ? 'to' : 'from').value = $(id).value;
+    writeStore(CUSTOM_KEY, JSON.stringify({from: $('from').value, to: $('to').value}));
+    CHASE_DAY = lastWorkingDayIn($('from').value, $('to').value);
+    render();
+  });
+}
+$('joined').addEventListener('change', render);
+$('presets').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  applyMode(b.dataset.mode, true);
+  render();
+});
 $('refresh').addEventListener('click', load);
 
 setDefaultRange();

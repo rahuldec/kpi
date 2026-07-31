@@ -43,10 +43,24 @@ Cloudflare Pages, GitHub Pages and Render static sites all work the same way; on
 
 ## Daily use
 
-Open the URL. It reads the sheet on load. The date range defaults to the last 15 days
-ending **today**, off the viewer's own clock, then widens if the sheet reaches further
-back — it never narrows, so a short export cannot silently collapse the history the
-figures depend on.
+Open the URL. It reads the sheet on load. Three views:
+
+| Button | Range | Chase panel counts |
+|---|---|---|
+| **Today** | today only | today |
+| **Yesterday** | previous working day | that day |
+| **Date range** | reveals From/To | last working day in the range |
+
+Whichever you last used is remembered in the browser and becomes your default, so the
+filter never has to be set twice. Custom From/To values are remembered separately.
+
+Sundays are skipped throughout, so **Yesterday** on a Monday means the previous
+Saturday. The chase panel always spells out the actual date it is counting.
+
+Under **Today** and **Yesterday** the range is a single day, so the panels below the
+chase list — the grid, streaks, coverage — have no history to measure and go flat.
+That is expected: those two views exist for the chase list. Use **Date range** for
+anything historical.
 
 **Refresh** re-reads the sheet, bypassing the cache. The line beside it shows how many
 entries loaded and when.
@@ -69,11 +83,12 @@ entries loaded and when.
     node qa.js
     TZ=Asia/Kolkata node qa.js
 
-43 assertions with the network mocked: parsing (spacer rows above the header, quoted
+56 assertions with the network mocked: parsing (spacer rows above the header, quoted
 fields containing commas and newlines, blank assignees, case-variant names), every
 failure path (sheet not shared, network down, unparseable content), the date-window
 rules, cross-checks between the three places misses are counted, escaping of sheet
-content, and timezone independence. Run them after any change to the parser — the
+content, and the three view modes and their persistence, Sunday handling in Today/Yesterday,
+inverted date ranges, and timezone independence. Run them after any change to the parser — the
 Asana form fields are expected to change once back-dated entries are blocked.
 
 ## Known limitations

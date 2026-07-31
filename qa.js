@@ -83,21 +83,80 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     check('case variants merged', people.filter(p => /divya/i.test(p)).length === 1, people.join('|'));
   }
 
-  // ── 4. date range: defaults to today, widens but never narrows ──
+  // ── 4. modes: Today / Yesterday / Date range ─────────────────────
+  const TODAY_W = (() => { const d = new Date();
+    while (d.getDay()===0) d.setDate(d.getDate()-1); return isoLocal(d); })();
+  const YEST_W = (() => { const d = new Date();
+    while (d.getDay()===0) d.setDate(d.getDate()-1);
+    d.setDate(d.getDate()-1);
+    while (d.getDay()===0) d.setDate(d.getDate()-1); return isoLocal(d); })();
+
   {
     const { doc } = boot(); await settle();
-    check('To defaults to today or later', doc.getElementById('to').value >= isoLocal(new Date()),
-          doc.getElementById('to').value);
-    check('From widened back to earliest data', doc.getElementById('from').value <= '2026-07-27',
-          doc.getElementById('from').value);
+    check('opens on Today',
+          doc.querySelector('#presets button[data-mode="today"]').getAttribute('aria-pressed') === 'true');
+    check('Today sets both dates to today',
+          doc.getElementById('from').value === TODAY_W && doc.getElementById('to').value === TODAY_W,
+          doc.getElementById('from').value + ' -> ' + doc.getElementById('to').value);
+    check('date inputs hidden unless Date range chosen', doc.getElementById('dates').hidden === true);
     check('no hardcoded date in markup', !/id="(to|from)" value=/.test(HTML));
   }
   {
-    // a single-day sheet must not collapse the window
-    const oneDay = SHEET.split('\n').slice(0, 5).join('\n') + '\nand a newline"';
-    const { doc } = boot({ body: oneDay }); await settle();
+    const { doc } = boot(); await settle();
+    doc.querySelector('#presets button[data-mode="yesterday"]').click();
+    check('Yesterday picks the previous working day', doc.getElementById('to').value === YEST_W,
+          doc.getElementById('to').value + ' vs ' + YEST_W);
+    check('Yesterday never lands on a Sunday',
+          new Date(doc.getElementById('to').value + 'T00:00:00').getDay() !== 0);
+    check('Yesterday labels the chase panel', /^Yesterday/.test(txt(doc, '#chase .when')),
+          txt(doc, '#chase .when'));
+    check('Yesterday hides the date inputs', doc.getElementById('dates').hidden === true);
+  }
+  {
+    const { doc } = boot(); await settle();
+    doc.querySelector('#presets button[data-mode="custom"]').click();
+    check('Date range reveals the inputs', doc.getElementById('dates').hidden === false);
     const span = (new Date(doc.getElementById('to').value) - new Date(doc.getElementById('from').value)) / 86400000;
-    check('one-day sheet does not narrow the range', span >= 15, span + ' days');
+    check('Date range opens on a 15-day window', span === 15, span + ' days');
+  }
+  {
+    const { doc, win } = boot(); await settle();
+    doc.querySelector('#presets button[data-mode="custom"]').click();
+    doc.getElementById('from').value = '2026-08-20';
+    doc.getElementById('from').dispatchEvent(new win.Event('change'));
+    check('From after To corrects itself',
+          doc.getElementById('from').value <= doc.getElementById('to').value,
+          doc.getElementById('from').value + ' -> ' + doc.getElementById('to').value);
+  }
+  {
+    const { doc } = boot(); await settle();
+    check('loading data leaves the chosen range alone',
+          doc.getElementById('from').value === TODAY_W, doc.getElementById('from').value);
+  }
+
+  // ── 4b. chase list follows the chosen day ───────────────────────
+  {
+    const { doc } = boot(); await settle();
+    const names = [...doc.querySelectorAll('#chase .names a')].map(a => a.childNodes[0].textContent);
+    const n = txt(doc, '#chase .n');
+    if (n) check('chase count matches chase names', Number(n) === names.length, `${n} vs ${names.length}`);
+    else check('all-clear shown when nobody outstanding', /Everyone filed/.test(txt(doc, '#chase')));
+    check('chase header says Today', /^Today/.test(txt(doc, '#chase .when')), txt(doc, '#chase .when'));
+    check('chase header names the date', /\d/.test(txt(doc, '#chase .when')));
+  }
+  {
+    const { doc } = boot(); await settle();
+    const a = txt(doc, '#chase .when');
+    doc.querySelector('#presets button[data-mode="yesterday"]').click();
+    check('switching to Yesterday changes the day', txt(doc, '#chase .when') !== a);
+  }
+  {
+    const { doc, win } = boot(); await settle();
+    doc.querySelector('#presets button[data-mode="custom"]').click();
+    doc.getElementById('to').value = '2026-07-29';
+    doc.getElementById('to').dispatchEvent(new win.Event('change'));
+    check('custom range anchors chase to its last working day',
+          /29 Jul/.test(txt(doc, '#chase .when')), txt(doc, '#chase .when'));
   }
 
   // ── 5. failure paths explain themselves ────────────────────────
@@ -152,10 +211,14 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     doc.getElementById('to').value = '2026-08-07';
     doc.getElementById('to').dispatchEvent(new win.Event('change'));
     check('changing To re-renders', figs(doc).join() !== before);
+    // The toggle only has anything to skip across a multi-day window, so switch
+    // to Date range first — under Today the range is one day and it is a no-op.
+    doc.querySelector('#presets button[data-mode="custom"]').click();
     const mid = figs(doc).join();
     doc.getElementById('joined').checked = false;
     doc.getElementById('joined').dispatchEvent(new win.Event('change'));
-    check('joined toggle re-renders', figs(doc).join() !== mid);
+    check('joined toggle re-renders over a multi-day range', figs(doc).join() !== mid,
+          mid + ' -> ' + figs(doc).join());
   }
 
   // ── 9. degenerate ranges ───────────────────────────────────────
