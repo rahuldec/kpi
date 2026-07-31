@@ -189,6 +189,31 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     check('absence colour is distinct from the accent', /--miss:#A82A1C/.test(HTML));
   }
 
+  // ── 1e2. page title and metric groups ──────────────────────────
+  {
+    const { doc } = boot(); await settle();
+    const h1s = [...doc.querySelectorAll('h1')];
+    check('exactly one h1 on the page', h1s.length === 1, `${h1s.length} found`);
+    check('h1 is the product, not the view', txt(doc, 'h1') === 'CS Team KPI', txt(doc, 'h1'));
+    check('view headline sits below the h1', doc.getElementById('h1')?.tagName === 'H2',
+          doc.getElementById('h1')?.tagName);
+
+    check('group label reads Compliance', txt(doc, '#grouplabel') === 'Compliance',
+          txt(doc, '#grouplabel'));
+    check('the three tabs sit inside the group',
+          doc.querySelectorAll('.group #sources button').length === 3);
+    check('every tab is inside a labelled group',
+          [...doc.querySelectorAll('#sources button')]
+            .every(b => b.closest('.group')?.querySelector('.grouplabel')));
+
+    check('document title leads with the product', /^CS Team KPI/.test(doc.title), doc.title);
+    doc.querySelector('#sources button[data-src="scorecard"]').click(); await settle();
+    check('page title does not change with the tab', txt(doc, 'h1') === 'CS Team KPI', txt(doc, 'h1'));
+    check('group label does not change with the tab', txt(doc, '#grouplabel') === 'Compliance');
+    check('view headline does change with the tab', /Missed days/.test(txt(doc, '#h1')),
+          txt(doc, '#h1'));
+  }
+
   // ── 1f. scorecard ───────────────────────────────────────────────
   {
     const { doc } = boot(); await settle();

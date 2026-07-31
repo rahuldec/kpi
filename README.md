@@ -9,7 +9,21 @@ requests at all**, and the CSP is tightened accordingly.
 Single static page. Shows who has not filed a daily timesheet entry, per person per
 working day, from an Asana project export.
 
-Two trackers behind one page, switched with the tabs at the top:
+## Structure
+
+The page is **CS Team KPI** — the whole set of team metrics. Everything currently on
+it measures one thing, whether people filed what they owe, so it sits in a group
+labelled **Compliance**:
+
+    CS Team KPI                                    <- fixed page title
+      Compliance                                   <- metric group
+        [ Internal team calls ][ Client calls ][ Scorecard ]
+
+The page title and the group label never change. The headline below the tabs does —
+it names the view you are in. A second family of metrics is a second `.group` block
+in `index.html` with its own label and its own tabs; nothing else has to move.
+
+Two trackers behind the first two tabs:
 
 | Tab | Asana project | Sheet |
 |---|---|---|
@@ -26,7 +40,7 @@ in the `EXEMPT` block at the top of the `<script>` in `index.html`:
 
     const EXEMPT = {
       internal: [],
-      client:   ['sagar mishra']
+      client:   ['sagar mishra', 'sumaiya khan']
     };
 
 Lowercase names. To change it: on GitHub open `index.html`, click the pencil, edit,
@@ -54,7 +68,7 @@ close that last gap.
 Names are merged case-insensitively across both sheets, since Asana display names vary
 ("kashish Goel" and "Kashish Goel" are one person).
 
-No build step, no backend, no dependencies at runtime beyond a Google Fonts stylesheet.
+No build step, no backend, no runtime dependencies at all.
 
 ## How it gets its data
 
@@ -86,7 +100,7 @@ needed. Defaults are in `api/data.js`.
 ## Deploy
 
     npm i -g vercel
-    cd deploy
+    cd kpi
     vercel --prod
 
 Or drag this folder onto the Vercel dashboard, or connect it as a Git repo. Netlify,
@@ -164,11 +178,11 @@ entries loaded and when.
     node qa.js
     TZ=Asia/Kolkata node qa.js
 
-103 assertions with the network mocked: parsing (spacer rows above the header, quoted
+126 assertions with the network mocked: parsing (spacer rows above the header, quoted
 fields containing commas and newlines, blank assignees, case-variant names), every
 failure path (sheet not shared, network down, unparseable content), the date-window
 rules, cross-checks between the three places misses are counted, escaping of sheet
-content, and the branding and embedded logo, the monthly scorecard and its CSV export, the source switch, the combined roster, per-tracker exemptions, the three view modes and their persistence, Sunday handling in Today/Yesterday,
+content, the branding and embedded logo, the page title and metric grouping, the monthly scorecard and its CSV export, the source switch, the combined roster, per-tracker exemptions, the three view modes and their persistence, Sunday handling in Today/Yesterday,
 inverted date ranges, and timezone independence. Run them after any change to the parser — the
 Asana form fields are expected to change once back-dated entries are blocked.
 
