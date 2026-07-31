@@ -350,10 +350,6 @@ footer b{color:var(--body);font-weight:600}
 
   <section id="scorecard" hidden>
     <h3>Missed days by person</h3>
-    <p class="hint">Every working day in the month counts as one expected entry per tracker.
-      Sundays are excluded. Days before a person's first ever entry are excluded while the
-      checkbox above is on, so a recent joiner is not scored for a period they were not here.
-      Sorted by total missed, worst first.</p>
     <p class="coverwarn" id="coverwarn"></p>
     <div class="gridscroll"><table class="board" id="score"></table></div>
     <div class="scoreact">
@@ -685,11 +681,7 @@ function renderScorecard(){
        ${esc(pretty(rf))}${capped ? ' — they are at the export limit, so older entries have been dropped by the sync' : ''}.
        Days before that are counted as missed here, but the entries may simply have aged out.
        Treat this month as incomplete.`
-    : capped
-      ? `Both sheets are at the export limit, so they hold only the most recent entries
-         (back to ${esc(pretty(rf))}). Earlier months will lose data over time — download the
-         CSV at month end if you need a figure that will not move.`
-      : '';
+    : '';
 
   const totMissed = rows.reduce((s,r)=>s+r.missed,0);
   const totExp = rows.reduce((s,r)=>s+r.expected,0);
@@ -849,9 +841,7 @@ function markSource(){
   const score = SOURCE === 'scorecard';
   document.title = 'CS Team KPI — ' + (score ? 'monthly scorecard' : SOURCES[SOURCE].label);
   $('h1').innerHTML = score ? 'Missed days, <em>counted</em>.' : 'Who <em>hasn\'t</em> filed.';
-  $('lede').textContent = score
-    ? 'One row per person, one number per tracker: how many working days in the month went unfiled. Recomputed from the sheets every time, so a late correction in Asana shows here at once.'
-    : 'One entry per person per working day. Everything here counts what\'s absent — a person-day with no submission at all. Sundays are excluded.';
+  $('lede').hidden = score;
   $('scorecard').hidden = !score;
   for (const id of DAILY_PANELS){ const el = $(id); if (el) el.hidden = score; }
   $('presets').hidden = score;

@@ -329,6 +329,40 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     doc.getElementById('month').dispatchEvent(new (doc.defaultView.Event)('change'));
     check('covered month shows no warning', txt(doc, '#coverwarn') === '', txt(doc, '#coverwarn'));
   }
+  {
+    // A sheet at the export limit is not itself a problem, so it says nothing. Only a
+    // month that actually falls outside the data is worth interrupting for.
+    const rows = [];
+    for (let i = 0; i < 520; i++)
+      rows.push(`${i + 10},2026-07-01,,,t${i},Section,Divya Gupta,divya@x.com,,2026-07-${
+        String((i % 28) + 1).padStart(2, '0')},,plain`);
+    const BIG = SHEET.split('\n').slice(0, 4).concat(rows).join('\n');
+    const BIG_C = BIG.replace(/\n(\d+),/g, (m, d) => '\n' + (Number(d) + 1000) + ',');
+    const { doc } = boot({ body: BIG, clientBody: BIG_C }); await settle();
+    doc.querySelector('#sources button[data-src="scorecard"]').click(); await settle();
+    doc.getElementById('month').value = '2026-07';
+    doc.getElementById('month').dispatchEvent(new (doc.defaultView.Event)('change'));
+    check('capped sheet alone raises no warning', txt(doc, '#coverwarn') === '',
+          txt(doc, '#coverwarn'));
+    doc.getElementById('month').value = '2026-01';
+    doc.getElementById('month').dispatchEvent(new (doc.defaultView.Event)('change'));
+    check('capped sheet still flags a month outside the data',
+          /outside the data/i.test(txt(doc, '#coverwarn')), txt(doc, '#coverwarn'));
+    check('that warning says the export limit is why',
+          /export limit/i.test(txt(doc, '#coverwarn')), txt(doc, '#coverwarn'));
+  }
+  {
+    // the scorecard carries no explanatory prose — the table is the whole story
+    const { doc } = boot(); await settle();
+    doc.querySelector('#sources button[data-src="scorecard"]').click(); await settle();
+    check('scorecard hides the lede', doc.getElementById('lede').hidden);
+    check('scorecard section has no hint paragraph',
+          doc.querySelectorAll('#scorecard .hint').length === 0);
+    doc.querySelector('#sources button[data-src="internal"]').click(); await settle();
+    check('daily view keeps its lede', !doc.getElementById('lede').hidden);
+    check('daily lede still describes the rule',
+          /per person per working day/i.test(txt(doc, '#lede')), txt(doc, '#lede'));
+  }
 
   // ── 2. happy path ──────────────────────────────────────────────
   {
