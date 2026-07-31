@@ -21,7 +21,7 @@ const SHEET = [
   '5,2026-07-29,,,v,Section,divya gupta,divya@x.com,,2026-07-27,,plain',
 ].join('\n');
 
-function boot({ body = SHEET, status = 200, reject = false } = {}) {
+function boot({ body = SHEET, clientBody = null, status = 200, reject = false } = {}) {
   const errs = [], calls = [];
   // beforeParse installs the mock before the page's own <script> runs, so the
   // script executes normally and its top-level bindings stay reachable via eval.
@@ -32,10 +32,11 @@ function boot({ body = SHEET, status = 200, reject = false } = {}) {
       window.fetch = (url) => {
         calls.push(url);
         if (reject) return Promise.reject(new Error('Failed to fetch'));
+        const isClient = /src=client/.test(url);
         return Promise.resolve({
           ok: status >= 200 && status < 300,
           status,
-          text: () => Promise.resolve(body)
+          text: () => Promise.resolve(isClient ? (clientBody !== null ? clientBody : body) : body)
         });
       };
     }
@@ -57,14 +58,76 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     check('no employee names in the shipped file', !/Sukhmeet|Divya Gupta|Mansi Rana/.test(HTML),
           'found hardcoded names');
     check('no SAMPLE dataset constant', !/const SAMPLE/.test(HTML));
-    check('fetches from /api/data', /DATA_URL\s*=\s*'\/api\/data'/.test(HTML));
+    check('fetches from /api/data with a source', /fetch\(`\/api\/data\?src=/.test(HTML));
+    check('both sheet sources declared', /internal:/.test(HTML) && /client:/.test(HTML));
+  }
+
+  // ── 1b. two sources ─────────────────────────────────────────────
+  {
+    const { doc, calls } = boot(); await settle();
+    check('opens on Internal', doc.querySelector('#sources button[data-src="internal"]')
+          .getAttribute('aria-pressed') === 'true');
+    check('requests the internal sheet', /src=internal/.test(calls[0] || ''), calls[0]);
+    check('heading names the internal tracker', /Internal Team Calls/.test(txt(doc, '#eyebrow')),
+          txt(doc, '#eyebrow'));
+
+    check('both sheets fetched on load', calls.some(u=>/src=internal/.test(u)) &&
+          calls.some(u=>/src=client/.test(u)), calls.join(' | '));
+    const n = calls.length;
+    doc.querySelector('#sources button[data-src="client"]').click(); await settle();
+    check('switching tabs does not refetch', calls.length === n, calls.length + ' vs ' + n);
+    check('client tab marked active', doc.querySelector('#sources button[data-src="client"]')
+          .getAttribute('aria-pressed') === 'true');
+    check('heading follows the source', /Client Call Tracker/.test(txt(doc, '#eyebrow')),
+          txt(doc, '#eyebrow'));
+    check('document title follows the source', /Client Call Tracker/.test(doc.title), doc.title);
+  }
+  {
+    // clicking the tab you are already on must not refetch
+    const { doc, calls } = boot(); await settle();
+    const n = calls.length;
+    doc.querySelector('#sources button[data-src="internal"]').click(); await settle();
+    check('re-clicking the active source is a no-op', calls.length === n, calls.length + ' vs ' + n);
+  }
+
+  // ── 1c. the roster spans both sheets ────────────────────────────
+  {
+    // someone present only in the internal sheet must still be scored on the client tab
+    const CLIENT_ONLY = [
+      'Task ID,Created At,Name,Assignee,Assignee Email,Due Date',
+      '9,2026-07-30,z,Amit Kumar,amit@x.com,2026-07-30'
+    ].join('\n');
+    const { doc } = boot({ clientBody: CLIENT_ONLY }); await settle();
+
+    const internalNames = [...doc.querySelectorAll('#board tbody td:first-child')].map(e=>e.textContent);
+    check('internal tab includes the client-only person', internalNames.includes('Amit Kumar'),
+          internalNames.join('|'));
+
+    doc.querySelector('#sources button[data-src="client"]').click(); await settle();
+    const clientNames = [...doc.querySelectorAll('#board tbody td:first-child')].map(e=>e.textContent);
+    check('client tab includes internal-only people', clientNames.includes('Divya Gupta'),
+          clientNames.join('|'));
+    check('both tabs cover the same roster', internalNames.length === clientNames.length,
+          internalNames.length + ' vs ' + clientNames.length);
+
+    // and a never-filer on this sheet must show 100% missed, not vanish
+    const row = [...doc.querySelectorAll('#board tbody tr')]
+      .find(r => r.children[0].textContent === 'Divya Gupta');
+    check('never-filed-here shows as fully missed', row && row.children[3].textContent.startsWith('0%'),
+          row ? row.children[3].textContent : 'row missing');
+  }
+  {
+    // roster count is surfaced
+    const { doc } = boot(); await settle();
+    check('freshness line reports roster size', /people/.test(txt(doc, '#fresh')), txt(doc, '#fresh'));
   }
 
   // ── 2. happy path ──────────────────────────────────────────────
   {
     const { doc, errs, calls } = boot(); await settle();
     check('boots with no JS errors', errs.length === 0, errs.join(' | '));
-    check('called the data endpoint', calls.length === 1 && /^\/api\/data\?/.test(calls[0]), calls.join());
+    check('called the data endpoint for both sheets', calls.length === 2 &&
+          calls.every(u => /^\/api\/data\?src=/.test(u)), calls.join());
     check('cache-busted the request', /[?&]t=\d+/.test(calls[0] || ''), calls[0]);
     check('content revealed', doc.getElementById('content').hidden === false);
     check('state panel hidden', doc.getElementById('state').hidden === true);
@@ -185,7 +248,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
   {
     const { doc, calls } = boot(); await settle();
     doc.getElementById('refresh').click(); await settle();
-    check('refresh triggers a second fetch', calls.length === 2, calls.length + ' calls');
+    check('refresh refetches both sheets', calls.length === 4, calls.length + ' calls');
   }
 
   // ── 7. internal consistency of the figures ─────────────────────

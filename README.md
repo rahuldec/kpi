@@ -1,7 +1,34 @@
-# Timesheet gaps — CS Internal Team Calls Tracker
+# Timesheet gaps — CS call trackers
 
 Single static page. Shows who has not filed a daily timesheet entry, per person per
 working day, from an Asana project export.
+
+Two trackers behind one page, switched with the tabs at the top:
+
+| Tab | Asana project | Sheet |
+|---|---|---|
+| Internal team calls | CS Internal Team Calls Tracker | `1tzsf5iWij…` |
+| Client calls | CS Client Call Tracker | `1oUHAjf6zA…` |
+
+Both are the same Asana export shape, so one parser handles both. The choice is
+remembered in the browser.
+
+**The same team is expected to file to both.** Both sheets are therefore loaded on
+every visit and the roster is the union of everyone appearing in either. Each tab is
+scored against that full roster, not against whoever happens to appear in that one
+sheet.
+
+This is deliberate and it is the point. Six people appear only in the internal sheet
+and one only in the client sheet. Scored per-sheet they would simply be absent from
+the other tab — invisible rather than flagged. Scored against the union they show as
+what they are: a full row of red.
+
+The roster is still only as complete as the two sheets. Anyone who has never filed to
+either has never appeared anywhere and cannot be counted. A fixed list of names would
+close that last gap.
+
+Names are merged case-insensitively across both sheets, since Asana display names vary
+("kashish Goel" and "Kashish Goel" are one person).
 
 No build step, no backend, no dependencies at runtime beyond a Google Fonts stylesheet.
 
@@ -9,8 +36,8 @@ No build step, no backend, no dependencies at runtime beyond a Google Fonts styl
 
     browser  ->  /api/data  (this project)  ->  docs.google.com  ->  the sheet
 
-`api/data.js` is a serverless function on your own Vercel project. It fetches the
-sheet server-side and hands back raw CSV. The browser only ever talks to your own
+`api/data.js` is a serverless function on your own Vercel project. It takes
+`?src=internal` or `?src=client`, fetches the matching sheet server-side and hands back raw CSV. The browser only ever talks to your own
 domain, so cross-origin restrictions never apply — which is why this is a function
 and not a direct `fetch` to Google.
 
@@ -28,8 +55,9 @@ Authentication.
 
 ### Pointing at a different sheet or tab
 
-Project → Settings → Environment Variables, then add `SHEET_ID` and/or `SHEET_GID`.
-No code change needed. Defaults are in `api/data.js`.
+Project → Settings → Environment Variables: `SHEET_ID` / `SHEET_GID` for the internal
+tracker, `CLIENT_SHEET_ID` / `CLIENT_SHEET_GID` for the client one. No code change
+needed. Defaults are in `api/data.js`.
 
 ## Deploy
 
@@ -83,11 +111,11 @@ entries loaded and when.
     node qa.js
     TZ=Asia/Kolkata node qa.js
 
-56 assertions with the network mocked: parsing (spacer rows above the header, quoted
+71 assertions with the network mocked: parsing (spacer rows above the header, quoted
 fields containing commas and newlines, blank assignees, case-variant names), every
 failure path (sheet not shared, network down, unparseable content), the date-window
 rules, cross-checks between the three places misses are counted, escaping of sheet
-content, and the three view modes and their persistence, Sunday handling in Today/Yesterday,
+content, and the source switch, the combined roster, the three view modes and their persistence, Sunday handling in Today/Yesterday,
 inverted date ranges, and timezone independence. Run them after any change to the parser — the
 Asana form fields are expected to change once back-dated entries are blocked.
 

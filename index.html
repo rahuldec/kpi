@@ -18,6 +18,14 @@ body{background:var(--page);color:var(--body);font-family:"IBM Plex Sans",system
 
 .eyebrow{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.16em;
   text-transform:uppercase;color:var(--faint);margin:0 0 14px}
+.sources{display:inline-flex;gap:0;margin:0 0 20px;border-bottom:2px solid var(--line)}
+.sources button{font-family:"Bricolage Grotesque",sans-serif;font-weight:600;font-size:15px;
+  letter-spacing:-.01em;border:0;background:transparent;color:var(--faint);cursor:pointer;
+  padding:0 2px 11px;margin-right:26px;position:relative;transition:color .15s}
+.sources button:hover{color:var(--body)}
+.sources button[aria-pressed=true]{color:var(--ink)}
+.sources button[aria-pressed=true]::after{content:'';position:absolute;left:0;right:0;bottom:-2px;
+  height:2px;background:var(--brand)}
 h1{font-family:"Bricolage Grotesque",sans-serif;font-weight:800;font-size:clamp(34px,5.2vw,54px);
   line-height:1.02;letter-spacing:-.025em;color:var(--ink);margin:0 0 14px}
 h1 em{font-style:normal;color:var(--miss)}
@@ -165,7 +173,11 @@ footer b{color:var(--body);font-weight:500}
 </style>
 
 <div class="wrap">
-  <p class="eyebrow">CS Internal Team Calls Tracker &nbsp;/&nbsp; daily entry compliance</p>
+  <div class="sources" id="sources">
+    <button type="button" data-src="internal">Internal team calls</button>
+    <button type="button" data-src="client">Client calls</button>
+  </div>
+  <p class="eyebrow" id="eyebrow"></p>
   <h1>Who <em>hasn't</em> filed.</h1>
   <p class="lede">One entry per person per working day. Everything here counts what's absent — a person-day with no submission at all. Sundays are excluded.</p>
 
@@ -226,8 +238,34 @@ footer b{color:var(--body);font-weight:500}
    /api/data is a function on this same Vercel project. It fetches the tracker
    sheet server-side and returns raw CSV, so the browser never talks to Google
    directly and CORS never comes into it. See api/data.js.                   */
-const DATA_URL = '/api/data';
+const SOURCES = {
+  internal: {label: 'CS Internal Team Calls Tracker', noun: 'internal calls'},
+  client:   {label: 'CS Client Call Tracker',         noun: 'client calls'}
+};
+const SOURCE_KEY = 'kpi.source';
+let SOURCE = 'internal';
 let ROWS = [];
+/* Both trackers are loaded on every visit, not just the visible one. The team is
+   expected to file to both, so the roster is the union of everyone appearing in
+   either sheet — otherwise somebody who has never once filed a client call simply
+   would not exist on the client tab, which is precisely the person to catch.
+   ROSTER maps name -> earliest entry date across both sheets. */
+let DATA = {internal: [], client: []};
+let ROSTER = new Map();
+
+/* Keyed case-insensitively — Asana display names vary ("kashish Goel" vs
+   "Kashish Goel") and two spellings of one person must not become two people.
+   The first spelling seen wins for display. */
+function buildRoster(){
+  ROSTER = new Map();
+  for (const rows of Object.values(DATA))
+    for (const r of rows){
+      const key = r.name.toLowerCase();
+      const prev = ROSTER.get(key);
+      if (!prev) ROSTER.set(key, {name: r.name, first: r.due});
+      else if (r.due < prev.first) prev.first = r.due;
+    }
+}
 
 /* ---------------- helpers ---------------- */
 const D=s=>new Date(s+'T00:00:00');
@@ -297,6 +335,9 @@ function parseExport(text){
 function analyse(rows,from,to,joined){
   const days=range(from,to,true), dayset=new Set(days);
   const P=new Map();
+  // Everyone on the roster is expected here, whether or not they appear in this sheet.
+  for(const [key,{name,first}] of ROSTER)
+    P.set(key,{name,filed:new Set(),first});
   for(const r of rows){
     const key=r.name.toLowerCase();
     if(!P.has(key)) P.set(key,{name:r.name,filed:new Set(),first:r.due});
@@ -340,9 +381,12 @@ function renderChase(){
   const day = CHASE_DAY;
   const label = CHASE_LABEL[MODE] || 'Latest working day';
   const people = new Map();
+  for (const [key, {name, first}] of ROSTER)
+    people.set(key, {name, filed:new Set(), first});
   for (const r of ROWS){
-    if (!people.has(r.name)) people.set(r.name, {name:r.name, filed:new Set(), first:r.due});
-    const p = people.get(r.name);
+    const key = r.name.toLowerCase();
+    if (!people.has(key)) people.set(key, {name:r.name, filed:new Set(), first:r.due});
+    const p = people.get(key);
     if (r.due < p.first) p.first = r.due;
     p.filed.add(r.due);
   }
@@ -488,6 +532,13 @@ let MODE = 'today';
 const readStore = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
 const writeStore = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
 
+function markSource(){
+  for (const b of $('sources').children)
+    b.setAttribute('aria-pressed', String(b.dataset.src === SOURCE));
+  $('eyebrow').textContent = SOURCES[SOURCE].label + '  /  daily entry compliance';
+  document.title = SOURCES[SOURCE].label + ' — who has not filed';
+}
+
 function markMode(){
   for (const b of $('presets').children)
     b.setAttribute('aria-pressed', String(b.dataset.mode === MODE));
@@ -527,30 +578,38 @@ function setDefaultRange(){
   applyMode(saved === 'yesterday' || saved === 'custom' ? saved : 'today', false);
 }
 
-function applyRows(rows){
-  ROWS = rows;
-  /* Deliberately does not touch the dates. An earlier version widened the range
-     to span the sheet, which quietly overrode whatever window was chosen. */
-  $('fresh').textContent = rows.length + ' entries · ' +
+function showActive(){
+  ROWS = DATA[SOURCE];
+  const total = DATA.internal.length + DATA.client.length;
+  $('fresh').textContent = `${ROWS.length} of ${total} entries · ${ROSTER.size} people · ` +
     new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
   showContent();
   render();
+}
+
+async function fetchSource(src){
+  const res = await fetch(`/api/data?src=${src}&t=${Date.now()}`, {cache:'no-store'});
+  const body = await res.text();
+  if(!res.ok){
+    let msg = `The server returned ${res.status} for the ${src} sheet.`, hint = '';
+    try{ const j = JSON.parse(body); msg = j.error || msg; hint = j.hint || ''; }catch(e){}
+    const err = new Error(msg); err.hint = hint; err.src = src; throw err;
+  }
+  return parseExport(body);
 }
 
 async function load(){
   loading();
   $('refresh').disabled = true;
   try{
-    const res = await fetch(DATA_URL + '?t=' + Date.now(), {cache:'no-store'});
-    const body = await res.text();
-    if(!res.ok){
-      let msg = 'The server returned ' + res.status + '.', hint = '';
-      try{ const j = JSON.parse(body); msg = j.error || msg; hint = j.hint || ''; }catch(e){}
-      return failed(msg, hint);
-    }
-    applyRows(parseExport(body));
+    // Both sheets, in parallel — the roster needs both regardless of which tab is open.
+    const [internal, client] = await Promise.all([fetchSource('internal'), fetchSource('client')]);
+    DATA = {internal, client};
+    buildRoster();
+    showActive();
   }catch(err){
     failed(String((err && err.message) || err),
+           (err && err.hint) ||
            'If you opened this file directly from your computer rather than the deployed URL, ' +
            'there is no /api/data to call.');
   }finally{
@@ -568,6 +627,13 @@ for (const id of ['from','to']){
   });
 }
 $('joined').addEventListener('change', render);
+$('sources').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b || b.dataset.src === SOURCE) return;
+  SOURCE = b.dataset.src;
+  writeStore(SOURCE_KEY, SOURCE);
+  markSource();
+  showActive();   // both sheets are already in memory; no refetch needed
+});
 $('presets').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   applyMode(b.dataset.mode, true);
@@ -575,6 +641,8 @@ $('presets').addEventListener('click', e => {
 });
 $('refresh').addEventListener('click', load);
 
+SOURCE = readStore(SOURCE_KEY) === 'client' ? 'client' : 'internal';
+markSource();
 setDefaultRange();
 load();
 
