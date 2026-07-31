@@ -251,6 +251,10 @@ table.board td.bad{color:var(--miss);font-weight:600}
 .month[hidden]{display:none}
 .controls input[type=month]{font:inherit;font-size:14px;color:var(--ink);
   background:var(--page);border:0;border-radius:10px;padding:7px 12px}
+.coverwarn{font-size:14px;line-height:1.5;color:var(--miss);background:var(--miss-soft);
+  border-radius:12px;padding:14px 16px;margin:0 0 22px}
+.coverwarn:empty{display:none}
+.coverwarn strong{font-weight:600}
 .scoreact{display:flex;align-items:center;gap:16px;margin-top:26px;padding-top:22px;
   border-top:1px solid var(--hair)}
 table.board td.tot{font-weight:700;color:var(--miss)}
@@ -317,6 +321,7 @@ footer b{color:var(--body);font-weight:600}
       Sundays are excluded. Days before a person's first ever entry are excluded while the
       checkbox above is on, so a recent joiner is not scored for a period they were not here.
       Sorted by total missed, worst first.</p>
+    <p class="coverwarn" id="coverwarn"></p>
     <div class="gridscroll"><table class="board" id="score"></table></div>
     <div class="scoreact">
       <button class="pill" id="csv" type="button">Download CSV</button>
@@ -382,7 +387,7 @@ const MONTH_KEY = 'kpi.month';
    Google Sheets without a deploy.                                          */
 const EXEMPT = {
   internal: [],
-  client:   ['sagar mishra']
+  client:   ['sagar mishra', 'sumaiya khan']
 };
 const isExempt = (name, src) => EXEMPT[src].includes(name.toLowerCase());
 
@@ -396,6 +401,12 @@ let ROWS = [];
    ROSTER maps name -> earliest entry date across both sheets. */
 let DATA = {internal: [], client: []};
 const LAST_BODY = {};
+/* The Asana -> Sheets sync keeps only the most recent ~500 tasks, oldest dropped
+   first. So each export is a rolling window, not a full history, and a month that
+   has partly aged out would score as missed days rather than as missing data.
+   COVER records how far back each sheet actually reaches. */
+const COVER = {};
+const EXPORT_CAP = 500;
 let ROSTER = new Map();
 
 /* Keyed case-insensitively — Asana display names vary ("kashish Goel" vs
@@ -632,6 +643,21 @@ function renderScorecard(){
   }
   $('score').innerHTML = t + '</tbody>';
 
+  // Warn rather than report confident nonsense for a month the export no longer covers.
+  const rf = reliableFrom();
+  const monthStart = ym + '-01';
+  const capped = TRACKERS.some(t => COVER[t] && COVER[t].capped);
+  $('coverwarn').innerHTML = (rf && monthStart < rf)
+    ? `<strong>Part of this month is outside the data.</strong> The sheets only reach back to
+       ${esc(pretty(rf))}${capped ? ' — they are at the export limit, so older entries have been dropped by the sync' : ''}.
+       Days before that are counted as missed here, but the entries may simply have aged out.
+       Treat this month as incomplete.`
+    : capped
+      ? `Both sheets are at the export limit, so they hold only the most recent entries
+         (back to ${esc(pretty(rf))}). Earlier months will lose data over time — download the
+         CSV at month end if you need a figure that will not move.`
+      : '';
+
   const totMissed = rows.reduce((s,r)=>s+r.missed,0);
   const totExp = rows.reduce((s,r)=>s+r.expected,0);
   const label = D(ym+'-01').toLocaleDateString('en-GB',{month:'long',year:'numeric'});
@@ -867,7 +893,17 @@ async function fetchSource(src){
     try{ const j = JSON.parse(body); msg = j.error || msg; hint = j.hint || ''; }catch(e){}
     const err = new Error(msg); err.hint = hint; err.src = src; throw err;
   }
-  return parseExport(body);
+  const parsed = parseExport(body);
+  const dues = parsed.map(r => r.due).sort();
+  COVER[src] = {rows: parsed.length, from: dues[0], to: dues[dues.length-1],
+                capped: parsed.length >= EXPORT_CAP - 5};
+  return parsed;
+}
+
+/* The later of the two start dates: before this, at least one tracker has no data. */
+function reliableFrom(){
+  const f = TRACKERS.map(t => COVER[t] && COVER[t].from).filter(Boolean);
+  return f.length ? f.sort()[f.length-1] : null;
 }
 
 async function load(){
