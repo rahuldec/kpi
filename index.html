@@ -252,6 +252,21 @@ table.board td:first-child{text-align:left;font-weight:500}
 table.board tr:last-child td{border-bottom:0}
 table.board td.dim{color:var(--faint)}
 table.board td.bad{color:var(--miss);font-weight:600}
+
+/* sortable headers — the button carries the click so the keyboard gets it too */
+table.board th button{
+  font:inherit;color:inherit;letter-spacing:inherit;text-transform:inherit;
+  background:none;border:0;padding:0;margin:0;cursor:pointer;
+  display:inline-flex;align-items:center;gap:5px;
+  transition:color .15s ease;
+}
+table.board th button:hover{color:var(--body)}
+table.board th[aria-sort] button{color:var(--ink)}
+table.board th button i{
+  font-style:normal;font-size:9px;line-height:1;opacity:0;transition:opacity .15s ease;
+}
+table.board th[aria-sort] button i{opacity:1;color:var(--brand)}
+table.board th button:hover i{opacity:.45}
 .bar{display:inline-block;vertical-align:middle;width:80px;height:6px;border-radius:3px;
   background:var(--hair);overflow:hidden;margin-left:14px}
 .bar i{display:block;height:100%;background:var(--brand);border-radius:3px}
@@ -618,6 +633,37 @@ function monthDays(ym){
   return range(from, to, true);
 }
 
+/* ---------------- scorecard sorting ----------------
+   Default is total missed, worst first — the question the page exists to answer.
+   Any other column is one click away and is remembered, so a review that always
+   reads the same way does not have to be set up twice. */
+const SORT_KEY = 'kpi.sort';
+const SORT_COLS = {
+  name:     {label:'Person',          get: r => r.name.toLowerCase(),                    dir:'asc'},
+  internal: {label:'Internal missed', get: r => r.per.internal ? r.per.internal.missed : null, dir:'desc'},
+  client:   {label:'Client missed',   get: r => r.per.client   ? r.per.client.missed   : null, dir:'desc'},
+  missed:   {label:'Total missed',    get: r => r.missed,                                dir:'desc'},
+  filed:    {label:'Filed',           get: r => r.filed,                                 dir:'desc'},
+  rate:     {label:'Compliance',      get: r => r.rate,                                  dir:'asc'}
+};
+let SORT = {col:'missed', dir:'desc'};
+
+function sortScore(rows){
+  const {get} = SORT_COLS[SORT.col] || SORT_COLS.missed;
+  const sign = SORT.dir === 'asc' ? 1 : -1;
+  return rows.sort((a,b) => {
+    const x = get(a), y = get(b);
+    /* An exempt cell is a dash, not a zero. It sinks to the bottom whichever way
+       the column is pointed, so "fewest missed" never crowns someone who was
+       never expected to file. */
+    if (x === null || y === null) return x === null && y === null
+      ? a.name.localeCompare(b.name) : (x === null ? 1 : -1);
+    if (x < y) return -sign;
+    if (x > y) return sign;
+    return a.name.localeCompare(b.name);   // stable, and readable when values tie
+  });
+}
+
 function scoreRows(){
   const ym = $('month').value || iso(new Date()).slice(0,7);
   const days = monthDays(ym);
@@ -650,8 +696,7 @@ function scoreRows(){
     row.rate = row.expected ? row.filed / row.expected : 1;
     out.push(row);
   }
-  out.sort((a,b) => b.missed - a.missed || a.name.localeCompare(b.name));
-  return {ym, days, live, rows: out};
+  return {ym, days, live, rows: sortScore(out)};
 }
 
 function renderScorecard(){
@@ -660,8 +705,14 @@ function renderScorecard(){
     ? '<td class="dim">—</td>'
     : `<td class="${v.missed ? 'bad' : 'dim'}">${v.missed}</td>`;
 
-  let t = `<thead><tr><th>Person</th><th>Internal missed</th><th>Client missed</th>
-    <th>Total missed</th><th>Filed</th><th>Compliance</th></tr></thead><tbody>`;
+  const th = col => {
+    const on = SORT.col === col;
+    const arrow = on ? (SORT.dir === 'asc' ? '\u25B2' : '\u25BC') : '\u25BC';
+    return `<th${on ? ` aria-sort="${SORT.dir === 'asc' ? 'ascending' : 'descending'}"` : ''}>` +
+           `<button type="button" data-col="${col}" title="Sort by ${esc(SORT_COLS[col].label.toLowerCase())}">` +
+           `${esc(SORT_COLS[col].label)}<i aria-hidden="true">${arrow}</i></button></th>`;
+  };
+  let t = '<thead><tr>' + Object.keys(SORT_COLS).map(th).join('') + '</tr></thead><tbody>';
   for (const r of rows){
     t += `<tr><td>${esc(r.name)}</td>
       ${cell(r.per.internal)}${cell(r.per.client)}
@@ -973,6 +1024,17 @@ $('month').addEventListener('change', () => {
   renderScorecard();
 });
 $('csv').addEventListener('click', downloadCsv);
+$('score').addEventListener('click', e => {
+  const b = e.target.closest('button[data-col]'); if (!b) return;
+  const col = b.dataset.col;
+  // Same column flips direction; a new column opens at whichever end is useful
+  // for it — worst first for the counts, A-Z for names, weakest first for rates.
+  SORT = SORT.col === col
+    ? {col, dir: SORT.dir === 'asc' ? 'desc' : 'asc'}
+    : {col, dir: SORT_COLS[col].dir};
+  writeStore(SORT_KEY, JSON.stringify(SORT));
+  renderScorecard();
+});
 $('sources').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b || b.dataset.src === SOURCE) return;
   SOURCE = b.dataset.src;
@@ -990,6 +1052,10 @@ $('refresh').addEventListener('click', load);
 const savedSrc = readStore(SOURCE_KEY);
 SOURCE = SOURCES[savedSrc] ? savedSrc : 'internal';
 $('month').value = readStore(MONTH_KEY) || iso(new Date()).slice(0,7);
+try {
+  const saved = JSON.parse(readStore(SORT_KEY) || 'null');
+  if (saved && SORT_COLS[saved.col] && (saved.dir === 'asc' || saved.dir === 'desc')) SORT = saved;
+} catch (e) {}
 markSource();
 setDefaultRange();
 load();

@@ -30,6 +30,10 @@ function boot({ body = SHEET, clientBody = CLIENT_DEFAULT, status = 200, reject 
   const dom = new JSDOM(HTML, {
     runScripts: 'dangerously',
     pretendToBeVisual: true,
+    // Without an origin, localStorage throws and every writeStore call is swallowed
+    // by its try/catch — so the page's remembered state would look untested-but-fine.
+    // Each JSDOM gets its own storage, so the cases below stay independent.
+    url: 'https://kpi.test/',
     beforeParse(window) {
       window.fetch = (url) => {
         calls.push(url);
@@ -292,6 +296,80 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     check('month picker hidden again', doc.getElementById('monthwrap').hidden === true);
   }
 
+  // ── 1f2. scorecard sorting ──────────────────────────────────────
+  {
+    const head = 'Task ID,Created At,Completed At,Last Modified,Name,Section/Column,Assignee,Assignee Email,Start Date,Due Date,Tags,Notes';
+    const row = (id, who, day) => `${id},2026-07-01,,,x,S,${who},${who.split(' ')[0].toLowerCase()}@x.com,,2026-07-${day},,n`;
+    // Zara files most internally, Anil least. Sagar Mishra is exempt from client calls,
+    // so his client cell is a dash and must never sort as a zero.
+    const INT = [',,', ',,url', ',,', head,
+      row(1,'Zara Khan','01'), row(2,'Zara Khan','02'), row(3,'Zara Khan','03'),
+      row(4,'Anil Roy','01'),
+      row(5,'Sagar Mishra','01'), row(6,'Sagar Mishra','02')].join('\n');
+    const CLI = [',,', ',,url', ',,', head,
+      row(101,'Zara Khan','01'),
+      row(102,'Anil Roy','01'), row(103,'Anil Roy','02'), row(104,'Anil Roy','03')].join('\n');
+
+    const { doc, win } = boot({ body: INT, clientBody: CLI }); await settle();
+    doc.querySelector('#sources button[data-src="scorecard"]').click(); await settle();
+    doc.getElementById('month').value = '2026-07';
+    doc.getElementById('month').dispatchEvent(new (win.Event)('change'));
+    const names = () => [...doc.querySelectorAll('#score tbody td:first-child')].map(e => e.textContent);
+    const clientCells = () => [...doc.querySelectorAll('#score tbody tr')].map(r => r.children[2].textContent);
+    const hit = col => doc.querySelector(`#score th button[data-col="${col}"]`).click();
+
+    check('default is total missed, worst first', (() => {
+      const tot = [...doc.querySelectorAll('#score tbody tr')].map(r => Number(r.children[3].textContent));
+      return tot.every((v, i) => i === 0 || tot[i-1] >= v);
+    })());
+    check('one header marked as sorted by default',
+          doc.querySelectorAll('#score th[aria-sort]').length === 1);
+
+    hit('name');
+    check('sorting by person goes A to Z', names().join('|') === [...names()].sort().join('|'),
+          names().join('|'));
+    check('aria-sort follows the active column',
+          doc.querySelector('#score th[aria-sort]')?.querySelector('button')?.dataset.col === 'name' &&
+          doc.querySelector('#score th[aria-sort]')?.getAttribute('aria-sort') === 'ascending');
+    hit('name');
+    check('clicking the same column flips it', names().join('|') === [...names()].sort().reverse().join('|'),
+          names().join('|'));
+    check('only ever one column marked sorted',
+          doc.querySelectorAll('#score th[aria-sort]').length === 1);
+
+    hit('rate');
+    check('compliance opens weakest first', (() => {
+      const r = [...doc.querySelectorAll('#score tbody tr')].map(x => parseInt(x.children[5].textContent));
+      return r.every((v, i) => i === 0 || r[i-1] <= v);
+    })());
+
+    hit('client');
+    check('exempt dash sinks to the bottom, worst first',
+          clientCells()[clientCells().length - 1] === '—', clientCells().join('|'));
+    hit('client');
+    check('exempt dash still sinks when flipped',
+          clientCells()[clientCells().length - 1] === '—', clientCells().join('|'));
+
+    check('sort choice is remembered', (() => {
+      try { return JSON.parse(win.localStorage.getItem('kpi.sort')).col === 'client'; }
+      catch (e) { return false; }
+    })());
+
+    // the exported file must match what is on screen, not the default order
+    let csv = null;
+    win.URL.createObjectURL = b => { csv = b; return 'blob:x'; };
+    win.URL.revokeObjectURL = () => {};
+    const orig = win.HTMLAnchorElement.prototype.click;
+    win.HTMLAnchorElement.prototype.click = function(){};
+    hit('name');
+    doc.getElementById('csv').click();
+    win.HTMLAnchorElement.prototype.click = orig;
+    const text = csv ? await csv.text() : '';
+    const csvNames = text.trim().split('\n').slice(1).map(l => l.split(',')[0]);
+    check('CSV follows the sort on screen', csvNames.join('|') === names().join('|'),
+          `${csvNames.join('|')} vs ${names().join('|')}`);
+  }
+
   // ── 1g. stale-function guard ────────────────────────────────────
   {
     // an old api/data.js ignores ?src= and serves one sheet for both
@@ -518,12 +596,43 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     check('changing To re-renders', figs(doc).join() !== before);
     // The toggle only has anything to skip across a multi-day window, so switch
     // to Date range first — under Today the range is one day and it is a no-op.
+    // Pin the window explicitly rather than taking whatever custom range was
+    // last remembered: the toggle can only bite where the range actually
+    // contains days before someone's first entry.
     doc.querySelector('#presets button[data-mode="custom"]').click();
+    doc.getElementById('from').value = '2026-07-20';
+    doc.getElementById('to').value = '2026-07-30';
+    doc.getElementById('to').dispatchEvent(new win.Event('change'));
     const mid = figs(doc).join();
     doc.getElementById('joined').checked = false;
     doc.getElementById('joined').dispatchEvent(new win.Event('change'));
     check('joined toggle re-renders over a multi-day range', figs(doc).join() !== mid,
           mid + ' -> ' + figs(doc).join());
+  }
+
+  // ── 8b. remembered state (needs a real origin for localStorage) ──
+  {
+    const { doc, win } = boot(); await settle();
+    check('localStorage is actually available in the harness',
+          (() => { try { win.localStorage.setItem('x','1'); return true; } catch (e) { return false; } })());
+    doc.querySelector('#presets button[data-mode="custom"]').click();
+    doc.getElementById('from').value = '2026-07-20';
+    doc.getElementById('to').value = '2026-07-29';
+    doc.getElementById('to').dispatchEvent(new win.Event('change'));
+    check('custom range is written to storage',
+          JSON.parse(win.localStorage.getItem('kpi.customRange') || '{}').to === '2026-07-29',
+          win.localStorage.getItem('kpi.customRange'));
+    doc.querySelector('#presets button[data-mode="today"]').click();
+    doc.querySelector('#presets button[data-mode="custom"]').click();
+    check('coming back to Date range restores it',
+          doc.getElementById('from').value === '2026-07-20' &&
+          doc.getElementById('to').value === '2026-07-29',
+          `${doc.getElementById('from').value}..${doc.getElementById('to').value}`);
+    check('view mode is written to storage', win.localStorage.getItem('kpi.mode') === 'custom',
+          win.localStorage.getItem('kpi.mode'));
+    doc.querySelector('#sources button[data-src="scorecard"]').click(); await settle();
+    check('tab choice is written to storage', win.localStorage.getItem('kpi.source') === 'scorecard',
+          win.localStorage.getItem('kpi.source'));
   }
 
   // ── 9. degenerate ranges ───────────────────────────────────────

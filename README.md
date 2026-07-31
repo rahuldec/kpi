@@ -119,8 +119,22 @@ The third tab counts missed days per person, per tracker, for a whole month.
 | Filed | entries filed / entries expected |
 | Compliance | filed as a percentage of expected |
 
-Sorted worst first. **Download CSV** gives the same table for whatever KPI process
-you keep it in.
+### Sorting
+
+Every column header is a button. Click one to sort by it, click it again to reverse.
+The default is total missed, worst first — the question the page exists to answer —
+and your choice is remembered in the browser, so a review that always reads the same
+way does not have to be set up each time.
+
+A new column opens at whichever end is useful for it: worst first for the three
+missed counts and for Filed, A–Z for Person, weakest first for Compliance.
+
+An exempt cell is a dash, not a zero, so those rows sink to the bottom whichever way
+a tracker's column is pointed. Sorting Client missed ascending will not crown someone
+who was never expected to file client calls.
+
+**Download CSV** gives the table in the order you are looking at it, for whatever KPI
+process you keep it in.
 
 Rules, deliberately simple:
 
@@ -178,11 +192,11 @@ entries loaded and when.
     node qa.js
     TZ=Asia/Kolkata node qa.js
 
-133 assertions with the network mocked: parsing (spacer rows above the header, quoted
+149 assertions with the network mocked: parsing (spacer rows above the header, quoted
 fields containing commas and newlines, blank assignees, case-variant names), every
 failure path (sheet not shared, network down, unparseable content), the date-window
 rules, cross-checks between the three places misses are counted, escaping of sheet
-content, the branding and embedded logo, the page title and metric grouping, the monthly scorecard and its CSV export, the coverage warning firing only for a month that really is outside the data, the source switch, the combined roster, per-tracker exemptions, the three view modes and their persistence, Sunday handling in Today/Yesterday,
+content, the branding and embedded logo, the page title and metric grouping, the monthly scorecard and its CSV export, the coverage warning firing only for a month that really is outside the data, scorecard sorting (every column, both directions, exempt cells sinking, CSV matching the screen), the remembered view mode, range, tab and sort order, the source switch, the combined roster, per-tracker exemptions, the three view modes and their persistence, Sunday handling in Today/Yesterday,
 inverted date ranges, and timezone independence. Run them after any change to the parser — the
 Asana form fields are expected to change once back-dated entries are blocked.
 
