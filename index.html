@@ -395,6 +395,7 @@ let ROWS = [];
    would not exist on the client tab, which is precisely the person to catch.
    ROSTER maps name -> earliest entry date across both sheets. */
 let DATA = {internal: [], client: []};
+const LAST_BODY = {};
 let ROSTER = new Map();
 
 /* Keyed case-insensitively — Asana display names vary ("kashish Goel" vs
@@ -860,6 +861,7 @@ function showActive(){
 async function fetchSource(src){
   const res = await fetch(`/api/data?src=${src}&t=${Date.now()}`, {cache:'no-store'});
   const body = await res.text();
+  LAST_BODY[src] = body;
   if(!res.ok){
     let msg = `The server returned ${res.status} for the ${src} sheet.`, hint = '';
     try{ const j = JSON.parse(body); msg = j.error || msg; hint = j.hint || ''; }catch(e){}
@@ -874,6 +876,17 @@ async function load(){
   try{
     // Both sheets, in parallel — the roster needs both regardless of which tab is open.
     const [internal, client] = await Promise.all([fetchSource('internal'), fetchSource('client')]);
+    /* If both sources come back byte-identical, the function is ignoring ?src=
+       and serving one sheet for both. That silently makes every person with no
+       entries in the served sheet read as 0% on the other tab — a wrong answer
+       that looks exactly like a real one. Refuse to render it. */
+    if (LAST_BODY.internal && LAST_BODY.internal === LAST_BODY.client){
+      return failed(
+        'Both trackers returned the same sheet, so the Client tab would be showing internal data.',
+        'api/data.js on the server is an older version that ignores the ?src= parameter. ' +
+        'Upload the current api/data.js to the repository. To confirm, open /api/data?src=internal ' +
+        'and /api/data?src=client — right now they return identical content.');
+    }
     DATA = {internal, client};
     buildRoster();
     showActive();

@@ -21,7 +21,9 @@ const SHEET = [
   '5,2026-07-29,,,v,Section,divya gupta,divya@x.com,,2026-07-27,,plain',
 ].join('\n');
 
-function boot({ body = SHEET, clientBody = null, status = 200, reject = false } = {}) {
+const CLIENT_DEFAULT = SHEET.replace(/\n(\d),/g, (m, d) => '\n' + (Number(d) + 100) + ',');
+
+function boot({ body = SHEET, clientBody = CLIENT_DEFAULT, status = 200, reject = false } = {}) {
   const errs = [], calls = [];
   // beforeParse installs the mock before the page's own <script> runs, so the
   // script executes normally and its top-level bindings stay reachable via eval.
@@ -36,7 +38,7 @@ function boot({ body = SHEET, clientBody = null, status = 200, reject = false } 
         return Promise.resolve({
           ok: status >= 200 && status < 300,
           status,
-          text: () => Promise.resolve(isClient ? (clientBody !== null ? clientBody : body) : body)
+          text: () => Promise.resolve(isClient ? clientBody : body)
         });
       };
     }
@@ -217,7 +219,9 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     // an exempt person shows a dash, not a zero, in that tracker's column
     const SH = ['Task ID,Created At,Name,Assignee,Assignee Email,Due Date',
       '1,2026-07-30,x,Sagar Mishra,sagar@x.com,2026-07-30'].join('\n');
-    const { doc } = boot({ body: SH, clientBody: SH }); await settle();
+    const CL = ['Task ID,Created At,Name,Assignee,Assignee Email,Due Date',
+      '2,2026-07-30,x,Sagar Mishra,sagar@x.com,2026-07-30'].join('\n');
+    const { doc } = boot({ body: SH, clientBody: CL }); await settle();
     doc.querySelector('#sources button[data-src="scorecard"]').click(); await settle();
     const row = [...doc.querySelectorAll('#score tbody tr')]
       .find(r => r.children[0].textContent === 'Sagar Mishra');
@@ -250,6 +254,23 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
           doc.getElementById('chase').hidden === false &&
           doc.getElementById('scorecard').hidden === true);
     check('month picker hidden again', doc.getElementById('monthwrap').hidden === true);
+  }
+
+  // ── 1g. stale-function guard ────────────────────────────────────
+  {
+    // an old api/data.js ignores ?src= and serves one sheet for both
+    const { doc, errs } = boot({ body: SHEET, clientBody: SHEET }); await settle();
+    check('identical sources refuse to render', doc.getElementById('content').hidden === true);
+    check('the cause is named', /same sheet/.test(txt(doc, '#state')), txt(doc, '#state'));
+    check('the fix is named', /api\/data\.js/.test(txt(doc, '#state')), txt(doc, '#state'));
+    check('no crash', errs.length === 0, errs.join(' | '));
+  }
+  {
+    // genuinely different sheets must still render
+    const OTHER = ['Task ID,Created At,Name,Assignee,Assignee Email,Due Date',
+      '9,2026-07-30,z,Amit Kumar,amit@x.com,2026-07-30'].join('\n');
+    const { doc } = boot({ clientBody: OTHER }); await settle();
+    check('different sources render normally', doc.getElementById('content').hidden === false);
   }
 
   // ── 2. happy path ──────────────────────────────────────────────
