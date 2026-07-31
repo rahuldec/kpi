@@ -247,6 +247,14 @@ table.board td.bad{color:var(--miss);font-weight:600}
 @keyframes spin{to{transform:rotate(360deg)}}
 #content[hidden]{display:none}
 
+.month{display:inline-flex;align-items:center;gap:10px}
+.month[hidden]{display:none}
+.controls input[type=month]{font:inherit;font-size:14px;color:var(--ink);
+  background:var(--page);border:0;border-radius:10px;padding:7px 12px}
+.scoreact{display:flex;align-items:center;gap:16px;margin-top:26px;padding-top:22px;
+  border-top:1px solid var(--hair)}
+table.board td.tot{font-weight:700;color:var(--miss)}
+table.board td.tot.zero{font-weight:400;color:var(--faint)}
 .exempt{font-size:13px;color:var(--faint);margin:-8px 0 0;padding:0 4px;letter-spacing:-.006em}
 .exempt:empty{display:none}
 
@@ -274,16 +282,20 @@ footer b{color:var(--body);font-weight:600}
   <div class="sources" id="sources">
     <button type="button" data-src="internal">Internal team calls</button>
     <button type="button" data-src="client">Client calls</button>
+    <button type="button" data-src="scorecard">Scorecard</button>
   </div>
   <p class="eyebrow" id="eyebrow"></p>
-  <h1>Who <em>hasn't</em> filed.</h1>
-  <p class="lede">One entry per person per working day. Everything here counts what's absent — a person-day with no submission at all. Sundays are excluded.</p>
+  <h1 id="h1">Who <em>hasn't</em> filed.</h1>
+  <p class="lede" id="lede">One entry per person per working day. Everything here counts what's absent — a person-day with no submission at all. Sundays are excluded.</p>
 
   <div class="controls">
     <span class="presets" id="presets">
       <button type="button" data-mode="today">Today</button>
       <button type="button" data-mode="yesterday">Yesterday</button>
       <button type="button" data-mode="custom">Date range</button>
+    </span>
+    <span class="month" id="monthwrap" hidden>
+      <label for="month">Month</label><input type="month" id="month">
     </span>
     <span class="dates" id="dates" hidden>
       <label for="from">From</label><input type="date" id="from">
@@ -298,10 +310,24 @@ footer b{color:var(--body);font-weight:600}
   <div class="state" id="state" hidden></div>
 
   <div id="content" hidden>
+
+  <section id="scorecard" hidden>
+    <h2>Missed days by person</h2>
+    <p class="hint">Every working day in the month counts as one expected entry per tracker.
+      Sundays are excluded. Days before a person's first ever entry are excluded while the
+      checkbox above is on, so a recent joiner is not scored for a period they were not here.
+      Sorted by total missed, worst first.</p>
+    <div class="gridscroll"><table class="board" id="score"></table></div>
+    <div class="scoreact">
+      <button class="pill" id="csv" type="button">Download CSV</button>
+      <span class="fresh" id="scorenote"></span>
+    </div>
+  </section>
+
   <div class="chase" id="chase"></div>
   <div class="kpis" id="kpis"></div>
 
-  <section>
+  <section id="gridsec">
     <h2>The gaps</h2>
     <p class="hint">One square per person per working day. Filed days are deliberately quiet grey — the solid red is what you're looking for. Hollow squares are days before that person's first entry. Sundays are the dotted gutters.</p>
     <div class="gridscroll"><table class="grid" id="grid"></table></div>
@@ -312,13 +338,13 @@ footer b{color:var(--body);font-weight:600}
     </div>
   </section>
 
-  <section>
+  <section id="boardsec">
     <h2>Missed-entry board</h2>
     <p class="hint">Sorted by days missed, worst first. Streak is how many working days they've missed in a row counting back from the end of the range.</p>
     <table class="board" id="board"></table>
   </section>
 
-  <section>
+  <section id="stripsec">
     <h2>Turnout by day</h2>
     <p class="hint">How much of the team filed on each working day. Red marks the share who didn't.</p>
     <div class="strip" id="strip"></div>
@@ -339,9 +365,12 @@ footer b{color:var(--body);font-weight:600}
    sheet server-side and returns raw CSV, so the browser never talks to Google
    directly and CORS never comes into it. See api/data.js.                   */
 const SOURCES = {
-  internal: {label: 'CS Internal Team Calls Tracker', noun: 'internal calls'},
-  client:   {label: 'CS Client Call Tracker',         noun: 'client calls'}
+  internal:  {label: 'CS Internal Team Calls Tracker', noun: 'internal calls'},
+  client:    {label: 'CS Client Call Tracker',         noun: 'client calls'},
+  scorecard: {label: 'CS Team — monthly scorecard',    noun: 'calls'}
 };
+const TRACKERS = ['internal','client'];
+const MONTH_KEY = 'kpi.month';
 /* ---- who is not expected to file where ----------------------------------
    Everyone on the roster is expected to file to BOTH trackers unless listed
    here. Names are matched in lowercase. To change this, edit the file on
@@ -534,6 +563,100 @@ function renderChase(){
         : `<div class="count"><span class="allclear">Everyone filed. Nothing to chase.</span></div>`);
 }
 
+/* ---------------- scorecard ----------------
+   A plain count of missed days per person per month, across both trackers.
+   Every working day in the month is one expected entry per tracker, so a person
+   owes two entries a day unless exempt from one. Nothing is stored — the figure
+   is recomputed from the sheets each time, so a late correction in Asana shows
+   up here immediately rather than being frozen into a saved record.          */
+function monthDays(ym){
+  const [y,m] = ym.split('-').map(Number);
+  const from = `${y}-${String(m).padStart(2,'0')}-01`;
+  const last = new Date(y, m, 0).getDate();
+  const to = `${y}-${String(m).padStart(2,'0')}-${String(last).padStart(2,'0')}`;
+  return range(from, to, true);
+}
+
+function scoreRows(){
+  const ym = $('month').value || iso(new Date()).slice(0,7);
+  const days = monthDays(ym);
+  const joined = $('joined').checked;
+  const today = iso(new Date());
+  // Do not score days that have not happened yet.
+  const live = days.filter(d => d <= today);
+
+  const filedBy = {};
+  for (const t of TRACKERS){
+    filedBy[t] = new Map();
+    for (const r of DATA[t]){
+      const k = r.name.toLowerCase();
+      if (!filedBy[t].has(k)) filedBy[t].set(k, new Set());
+      filedBy[t].get(k).add(r.due);
+    }
+  }
+
+  const out = [];
+  for (const [key, {name, first}] of ROSTER){
+    const row = {name, expected:0, filed:0, missed:0, per:{}};
+    for (const t of TRACKERS){
+      if (isExempt(name, t)){ row.per[t] = null; continue; }
+      const mine = live.filter(d => !joined || d >= first);
+      const filed = filedBy[t].get(key) || new Set();
+      const hit = mine.filter(d => filed.has(d)).length;
+      row.per[t] = {expected: mine.length, filed: hit, missed: mine.length - hit};
+      row.expected += mine.length; row.filed += hit; row.missed += mine.length - hit;
+    }
+    row.rate = row.expected ? row.filed / row.expected : 1;
+    out.push(row);
+  }
+  out.sort((a,b) => b.missed - a.missed || a.name.localeCompare(b.name));
+  return {ym, days, live, rows: out};
+}
+
+function renderScorecard(){
+  const {ym, days, live, rows} = scoreRows();
+  const cell = v => v === null
+    ? '<td class="dim">—</td>'
+    : `<td class="${v.missed ? 'bad' : 'dim'}">${v.missed}</td>`;
+
+  let t = `<thead><tr><th>Person</th><th>Internal missed</th><th>Client missed</th>
+    <th>Total missed</th><th>Filed</th><th>Compliance</th></tr></thead><tbody>`;
+  for (const r of rows){
+    t += `<tr><td>${esc(r.name)}</td>
+      ${cell(r.per.internal)}${cell(r.per.client)}
+      <td class="tot ${r.missed ? '' : 'zero'}">${r.missed}</td>
+      <td class="dim">${r.filed}/${r.expected}</td>
+      <td>${Math.round(r.rate*100)}%<span class="bar"><i style="width:${Math.round(r.rate*100)}%"></i></span></td>
+    </tr>`;
+  }
+  $('score').innerHTML = t + '</tbody>';
+
+  const totMissed = rows.reduce((s,r)=>s+r.missed,0);
+  const totExp = rows.reduce((s,r)=>s+r.expected,0);
+  const label = D(ym+'-01').toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+  $('scorenote').textContent =
+    `${label} · ${live.length} of ${days.length} working days elapsed · ` +
+    `${totMissed} missed of ${totExp} expected entries`;
+}
+
+function downloadCsv(){
+  const {ym, rows} = scoreRows();
+  const head = ['Person','Internal missed','Client missed','Total missed','Filed','Expected','Compliance %'];
+  const esc2 = v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g,'""') + '"' : String(v);
+  const lines = [head.join(',')].concat(rows.map(r => [
+    r.name,
+    r.per.internal ? r.per.internal.missed : '',
+    r.per.client   ? r.per.client.missed   : '',
+    r.missed, r.filed, r.expected, Math.round(r.rate*100)
+  ].map(esc2).join(',')));
+  const blob = new Blob([lines.join('\n')], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `cs-team-missed-days-${ym}.csv`;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
+}
+
 /* ---------------- render ---------------- */
 function render(){
   const from=document.getElementById('from').value,to=document.getElementById('to').value;
@@ -658,11 +781,24 @@ function renderExempt(){
     : '';
 }
 
+const DAILY_PANELS = ['chase','kpis','gridsec','boardsec','stripsec'];
 function markSource(){
   for (const b of $('sources').children)
     b.setAttribute('aria-pressed', String(b.dataset.src === SOURCE));
   $('eyebrow').textContent = SOURCES[SOURCE].label;
-  document.title = SOURCES[SOURCE].label + ' — who has not filed';
+  const score = SOURCE === 'scorecard';
+  document.title = score ? 'CS Team scorecard — missed days'
+                         : SOURCES[SOURCE].label + ' — who has not filed';
+  $('h1').innerHTML = score ? 'Missed days, <em>counted</em>.' : 'Who <em>hasn\'t</em> filed.';
+  $('lede').textContent = score
+    ? 'One row per person, one number per tracker: how many working days in the month went unfiled. Recomputed from the sheets every time, so a late correction in Asana shows here at once.'
+    : 'One entry per person per working day. Everything here counts what\'s absent — a person-day with no submission at all. Sundays are excluded.';
+  $('scorecard').hidden = !score;
+  for (const id of DAILY_PANELS){ const el = $(id); if (el) el.hidden = score; }
+  $('presets').hidden = score;
+  $('monthwrap').hidden = !score;
+  $('dates').hidden = score || MODE !== 'custom';
+  $('exempt').hidden = score;
 }
 
 function markMode(){
@@ -705,6 +841,13 @@ function setDefaultRange(){
 }
 
 function showActive(){
+  if (SOURCE === 'scorecard'){
+    showContent();
+    $('fresh').textContent =
+      `${DATA.internal.length + DATA.client.length} entries · ${ROSTER.size} people`;
+    renderScorecard();
+    return;
+  }
   ROWS = DATA[SOURCE];
   renderExempt();
   const total = DATA.internal.length + DATA.client.length;
@@ -753,7 +896,12 @@ for (const id of ['from','to']){
     render();
   });
 }
-$('joined').addEventListener('change', render);
+$('joined').addEventListener('change', () => SOURCE === 'scorecard' ? renderScorecard() : render());
+$('month').addEventListener('change', () => {
+  writeStore(MONTH_KEY, $('month').value);
+  renderScorecard();
+});
+$('csv').addEventListener('click', downloadCsv);
 $('sources').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b || b.dataset.src === SOURCE) return;
   SOURCE = b.dataset.src;
@@ -768,7 +916,9 @@ $('presets').addEventListener('click', e => {
 });
 $('refresh').addEventListener('click', load);
 
-SOURCE = readStore(SOURCE_KEY) === 'client' ? 'client' : 'internal';
+const savedSrc = readStore(SOURCE_KEY);
+SOURCE = SOURCES[savedSrc] ? savedSrc : 'internal';
+$('month').value = readStore(MONTH_KEY) || iso(new Date()).slice(0,7);
 markSource();
 setDefaultRange();
 load();

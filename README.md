@@ -93,6 +93,35 @@ Or drag this folder onto the Vercel dashboard, or connect it as a Git repo. Netl
 Cloudflare Pages, GitHub Pages and Render static sites all work the same way; only
 `vercel.json` is Vercel-specific, and dropping it costs you the headers, not the page.
 
+## Scorecard — the monthly KPI record
+
+The third tab counts missed days per person, per tracker, for a whole month.
+
+| Column | Meaning |
+|---|---|
+| Internal missed | working days in the month with no internal entry |
+| Client missed | same for client calls; `—` if exempt from that tracker |
+| Total missed | the two added together |
+| Filed | entries filed / entries expected |
+| Compliance | filed as a percentage of expected |
+
+Sorted worst first. **Download CSV** gives the same table for whatever KPI process
+you keep it in.
+
+Rules, deliberately simple:
+
+- One expected entry **per tracker per working day**, so most people owe two a day.
+- Sundays excluded. Days later than today are not counted, so a mid-month figure
+  reads against days elapsed, not the whole month.
+- Days before a person's first ever entry are excluded while **Skip days before
+  someone's first entry** is ticked.
+- Exempt people are not scored for that tracker at all.
+
+**Nothing is stored.** The figure is recomputed from the sheets every time it is
+opened, so a late correction in Asana is reflected immediately rather than frozen into
+a saved record. If you need a fixed snapshot — a number that will not move after a
+review has happened — download the CSV on the last day of the month and keep the file.
+
 ## Daily use
 
 Open the URL. It reads the sheet on load. Three views:
@@ -135,11 +164,11 @@ entries loaded and when.
     node qa.js
     TZ=Asia/Kolkata node qa.js
 
-86 assertions with the network mocked: parsing (spacer rows above the header, quoted
+103 assertions with the network mocked: parsing (spacer rows above the header, quoted
 fields containing commas and newlines, blank assignees, case-variant names), every
 failure path (sheet not shared, network down, unparseable content), the date-window
 rules, cross-checks between the three places misses are counted, escaping of sheet
-content, and the branding and embedded logo, the source switch, the combined roster, per-tracker exemptions, the three view modes and their persistence, Sunday handling in Today/Yesterday,
+content, and the branding and embedded logo, the monthly scorecard and its CSV export, the source switch, the combined roster, per-tracker exemptions, the three view modes and their persistence, Sunday handling in Today/Yesterday,
 inverted date ranges, and timezone independence. Run them after any change to the parser — the
 Asana form fields are expected to change once back-dated entries are blocked.
 

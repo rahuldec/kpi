@@ -176,6 +176,82 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     check('absence colour is distinct from the accent', /--miss:#A82A1C/.test(HTML));
   }
 
+  // ── 1f. scorecard ───────────────────────────────────────────────
+  {
+    const { doc } = boot(); await settle();
+    doc.querySelector('#sources button[data-src="scorecard"]').click(); await settle();
+
+    check('scorecard section shown', doc.getElementById('scorecard').hidden === false);
+    check('daily panels hidden', doc.getElementById('chase').hidden === true &&
+          doc.getElementById('gridsec').hidden === true);
+    check('month picker shown, day presets hidden',
+          doc.getElementById('monthwrap').hidden === false &&
+          doc.getElementById('presets').hidden === true);
+    check('month defaults to the current month',
+          doc.getElementById('month').value === isoLocal(new Date()).slice(0,7),
+          doc.getElementById('month').value);
+    check('headline changes for the scorecard', /Missed days/.test(txt(doc, '#h1')), txt(doc, '#h1'));
+
+    const rows = [...doc.querySelectorAll('#score tbody tr')];
+    check('one row per person on the roster', rows.length === 3, rows.length + ' rows');
+    check('columns: internal, client, total', doc.querySelectorAll('#score thead th').length === 6,
+          doc.querySelectorAll('#score thead th').length + ' cols');
+
+    // total must equal internal + client for every row
+    const bad = rows.filter(r => {
+      const i = r.children[1].textContent, c = r.children[2].textContent;
+      const tot = Number(r.children[3].textContent);
+      return Number(i === '—' ? 0 : i) + Number(c === '—' ? 0 : c) !== tot;
+    });
+    check('total equals internal + client on every row', bad.length === 0,
+          bad.map(r=>r.children[0].textContent).join('|'));
+
+    check('sorted worst first', rows.map(r=>Number(r.children[3].textContent))
+          .every((v,i,a) => i === 0 || a[i-1] >= v));
+    check('summary line names the month', /2026|July|August/.test(txt(doc, '#scorenote')),
+          txt(doc, '#scorenote'));
+    check('does not score days that have not happened',
+          /of \d+ working days elapsed/.test(txt(doc, '#scorenote')), txt(doc, '#scorenote'));
+  }
+  {
+    // an exempt person shows a dash, not a zero, in that tracker's column
+    const SH = ['Task ID,Created At,Name,Assignee,Assignee Email,Due Date',
+      '1,2026-07-30,x,Sagar Mishra,sagar@x.com,2026-07-30'].join('\n');
+    const { doc } = boot({ body: SH, clientBody: SH }); await settle();
+    doc.querySelector('#sources button[data-src="scorecard"]').click(); await settle();
+    const row = [...doc.querySelectorAll('#score tbody tr')]
+      .find(r => r.children[0].textContent === 'Sagar Mishra');
+    check('exempt tracker shows a dash', row && row.children[2].textContent === '—',
+          row ? row.children[2].textContent : 'no row');
+    check('exempt person still scored on the other tracker',
+          row && row.children[1].textContent !== '—', row && row.children[1].textContent);
+  }
+  {
+    // CSV export
+    const { doc, win } = boot(); await settle();
+    let downloaded = null;
+    win.URL.createObjectURL = () => 'blob:x';
+    win.URL.revokeObjectURL = () => {};
+    const origClick = win.HTMLAnchorElement.prototype.click;
+    win.HTMLAnchorElement.prototype.click = function(){ downloaded = this.download; };
+    doc.querySelector('#sources button[data-src="scorecard"]').click(); await settle();
+    doc.getElementById('csv').click();
+    win.HTMLAnchorElement.prototype.click = origClick;
+    check('CSV download offered', !!downloaded, String(downloaded));
+    check('CSV filename carries the month', /cs-team-missed-days-\d{4}-\d{2}\.csv/.test(downloaded || ''),
+          String(downloaded));
+  }
+  {
+    // scorecard choice is remembered like the other tabs
+    const { doc } = boot(); await settle();
+    doc.querySelector('#sources button[data-src="scorecard"]').click(); await settle();
+    doc.querySelector('#sources button[data-src="internal"]').click(); await settle();
+    check('leaving the scorecard restores the daily panels',
+          doc.getElementById('chase').hidden === false &&
+          doc.getElementById('scorecard').hidden === true);
+    check('month picker hidden again', doc.getElementById('monthwrap').hidden === true);
+  }
+
   // ── 2. happy path ──────────────────────────────────────────────
   {
     const { doc, errs, calls } = boot(); await settle();
