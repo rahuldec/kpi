@@ -174,6 +174,17 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     check('company name in the masthead', /Okie Dokie/.test(txt(doc, '.masthead .name')),
           txt(doc, '.masthead .name'));
     check('no external webfont request', !/fonts\.(googleapis|gstatic)/.test(HTML));
+
+    const fav = doc.querySelector('link[rel="icon"]');
+    check('favicon present', !!fav);
+    check('favicon is embedded, not a separate request',
+          fav && fav.getAttribute('href').startsWith('data:image/png;base64,'));
+    const touch = doc.querySelector('link[rel="apple-touch-icon"]');
+    check('apple touch icon present', !!touch);
+    check('apple touch icon is embedded',
+          touch && touch.getAttribute('href').startsWith('data:image/png;base64,'));
+    check('theme colour is the brand orange',
+          doc.querySelector('meta[name="theme-color"]')?.getAttribute('content') === '#EC6724');
     check('brand orange from the logo is the accent', /--brand:#EC6724/.test(HTML));
     check('absence colour is distinct from the accent', /--miss:#A82A1C/.test(HTML));
   }
@@ -271,6 +282,27 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
       '9,2026-07-30,z,Amit Kumar,amit@x.com,2026-07-30'].join('\n');
     const { doc } = boot({ clientBody: OTHER }); await settle();
     check('different sources render normally', doc.getElementById('content').hidden === false);
+  }
+
+  // ── 1h. export-window coverage ──────────────────────────────────
+  {
+    // a month that starts before the data begins must be flagged, not scored silently
+    const { doc } = boot(); await settle();
+    doc.querySelector('#sources button[data-src="scorecard"]').click(); await settle();
+    doc.getElementById('month').value = '2026-01';
+    doc.getElementById('month').dispatchEvent(new (doc.defaultView.Event)('change'));
+    check('month outside the data is flagged',
+          /outside the data/i.test(txt(doc, '#coverwarn')), txt(doc, '#coverwarn'));
+    check('warning names how far back the data reaches',
+          /Jul/.test(txt(doc, '#coverwarn')), txt(doc, '#coverwarn'));
+  }
+  {
+    // a fully covered month gets no warning
+    const { doc } = boot(); await settle();
+    doc.querySelector('#sources button[data-src="scorecard"]').click(); await settle();
+    doc.getElementById('month').value = '2026-08';
+    doc.getElementById('month').dispatchEvent(new (doc.defaultView.Event)('change'));
+    check('covered month shows no warning', txt(doc, '#coverwarn') === '', txt(doc, '#coverwarn'));
   }
 
   // ── 2. happy path ──────────────────────────────────────────────
