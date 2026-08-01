@@ -53,6 +53,15 @@ function boot({ body = SHEET, clientBody = CLIENT_DEFAULT, status = 200, reject 
 
 const settle = () => new Promise(r => setTimeout(r, 30));
 const txt = (doc, s) => (doc.querySelector(s)?.textContent || '').replace(/\s+/g, ' ').trim();
+/* `.hidden` being true is not the same as being off the screen: a class with an
+   explicit display rule outranks the browser's [hidden] rule, which is exactly how
+   the day presets stayed visible on the client book tab while every property-based
+   assertion passed. Check the computed style instead. */
+const shown = (doc, sel) => {
+  const el = doc.querySelector(sel);
+  if (!el) return false;
+  return doc.defaultView.getComputedStyle(el).display !== 'none';
+};
 const figs = doc => [...doc.querySelectorAll('#kpis .fig')].map(e => e.textContent.replace(/\s+/g, ''));
 const pad = n => String(n).padStart(2, '0');
 const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -440,8 +449,11 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     const { doc, win } = boot(); await settle();
     const tab = () => doc.querySelector('#sources2 button[data-src="clients"]');
     check('the book tab lives in its own group',
-          tab().closest('.group')?.querySelector('.grouplabel')?.textContent === 'Accounts',
+          tab().closest('.group')?.querySelector('.grouplabel')?.textContent === 'Business',
           tab().closest('.group')?.querySelector('.grouplabel')?.textContent);
+    check('both groups sit on one row',
+          doc.querySelectorAll('.groups > .group').length === 2,
+          String(doc.querySelectorAll('.groups > .group').length));
 
     tab().click(); await settle();
     check('book panel shown', doc.getElementById('clients').hidden === false);
@@ -449,9 +461,12 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
           doc.getElementById('scorecard').hidden === true &&
           doc.getElementById('chase').hidden === true &&
           doc.getElementById('boardsec').hidden === true);
-    check('month picker and day presets hidden too',
-          doc.getElementById('monthwrap').hidden === true &&
-          doc.getElementById('presets').hidden === true);
+    check('month picker and day presets are actually off screen',
+          !shown(doc, '#monthwrap') && !shown(doc, '#presets'));
+    check('the joined toggle is off screen on the book tab', !shown(doc, '#joinedwrap'));
+    check('day presets are really gone, not just flagged hidden',
+          !/Yesterday/.test(doc.querySelector('.controls').textContent.trim()) ||
+          !shown(doc, '#presets'));
     check('title follows the book tab', /client book/i.test(doc.title), doc.title);
 
     const rmRows = [...doc.querySelectorAll('#byrm tbody tr')];
@@ -526,6 +541,40 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     const last2 = [...doc.querySelectorAll('#score tbody tr')].pop();
     check('and still sink when reversed', last2.children[6].textContent === '—',
           last2.children[6].textContent);
+  }
+
+  // ── 1f6. hidden really means hidden ─────────────────────────────
+  {
+    // A regression guard for the whole class of bug, not just the one instance:
+    // walk every element the tab switch is supposed to hide, on every tab, and
+    // check the computed style rather than the property.
+    const HIDES = ['#presets','#monthwrap','#dates','#joinedwrap','#exempt',
+                   '#scorecard','#clients','#chase','#kpis','#gridsec','#boardsec','#stripsec'];
+    const { doc } = boot(); await settle();
+    const visible = () => HIDES.filter(sel => shown(doc, sel));
+
+    doc.querySelector('#sources2 button[data-src="clients"]').click(); await settle();
+    check('client book shows only its own panel',
+          visible().join() === '#clients', visible().join() || '(nothing)');
+
+    doc.querySelector('#sources button[data-src="scorecard"]').click(); await settle();
+    const sc = visible();
+    check('scorecard shows the month picker and the joined toggle',
+          sc.includes('#monthwrap') && sc.includes('#joinedwrap') && sc.includes('#scorecard'),
+          sc.join());
+    check('scorecard hides the day presets and the daily panels',
+          !sc.includes('#presets') && !sc.includes('#chase') && !sc.includes('#boardsec'),
+          sc.join());
+    check('scorecard hides the client book', !sc.includes('#clients'), sc.join());
+
+    doc.querySelector('#sources button[data-src="internal"]').click(); await settle();
+    const dy = visible();
+    check('daily view shows the presets and the daily panels',
+          dy.includes('#presets') && dy.includes('#chase') && dy.includes('#boardsec'),
+          dy.join());
+    check('daily view hides the month picker, scorecard and book',
+          !dy.includes('#monthwrap') && !dy.includes('#scorecard') && !dy.includes('#clients'),
+          dy.join());
   }
 
   // ── 1g. stale-function guard ────────────────────────────────────

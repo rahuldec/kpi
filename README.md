@@ -16,10 +16,8 @@ it measures one thing, whether people filed what they owe, so it sits in a group
 labelled **Compliance**:
 
     CS Team KPI                                    <- fixed page title
-      Compliance                                   <- metric group
-        [ Internal team calls ][ Client calls ][ Scorecard ]
-      Accounts
-        [ Client book ]
+      Compliance                            Business      <- metric groups
+        [ Internal ][ Client ][ Scorecard ]    [ Client book ]
 
 The page title and the group label never change. The headline below the tabs does —
 it names the view you are in. A second family of metrics is a second `.group` block
@@ -154,7 +152,7 @@ one on screen, so a spreadsheet can total it.
 
 ## Client book
 
-The **Accounts -> Client book** tab shows who owns what: revenue by RM with each one's
+The **Business -> Client book** tab shows who owns what: revenue by RM with each one's
 share of the total, then every client with its owner, type, size band and billing for
 the financial year, filterable by owner and by institution type.
 
@@ -237,11 +235,11 @@ entries loaded and when.
     node qa.js
     TZ=Asia/Kolkata node qa.js
 
-181 assertions with the network mocked: parsing (spacer rows above the header, quoted
+190 assertions with the network mocked: parsing (spacer rows above the header, quoted
 fields containing commas and newlines, blank assignees, case-variant names), every
 failure path (sheet not shared, network down, unparseable content), the date-window
 rules, cross-checks between the three places misses are counted, escaping of sheet
-content, the branding and embedded logo, the page title and metric grouping, the monthly scorecard and its CSV export, the coverage warning firing only for a month that really is outside the data, scorecard sorting (every column, both directions, exempt cells sinking, CSV matching the screen), the remembered view mode, range, tab and sort order, hidden people leaving no trace in any count while exempt people keep their row, the client book tab and its filters, the book column sitting beside compliance without altering it, lakh/crore formatting, the source switch, the combined roster, per-tracker exemptions, the three view modes and their persistence, Sunday handling in Today/Yesterday,
+content, the branding and embedded logo, the page title and metric grouping, the monthly scorecard and its CSV export, the coverage warning firing only for a month that really is outside the data, scorecard sorting (every column, both directions, exempt cells sinking, CSV matching the screen), the remembered view mode, range, tab and sort order, hidden people leaving no trace in any count while exempt people keep their row, the client book tab and its filters, the book column sitting beside compliance without altering it, lakh/crore formatting, and a sweep over every tab checking that what should be hidden is hidden in computed style rather than merely flagged, the source switch, the combined roster, per-tracker exemptions, the three view modes and their persistence, Sunday handling in Today/Yesterday,
 inverted date ranges, and timezone independence. Run them after any change to the parser — the
 Asana form fields are expected to change once back-dated entries are blocked.
 

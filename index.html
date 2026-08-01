@@ -65,6 +65,12 @@ h1{
   color:var(--faint);
 }
 
+/* Any element carrying an explicit display rule ignores the `hidden` attribute,
+   because a class selector outranks the browser's `[hidden]{display:none}`. That
+   is how .presets stayed on screen while its .hidden property read true — and why
+   the tests below assert on computed style, not on the property. */
+[hidden]{display:none !important}
+
 /* ── client book ──────────────────────────────────────────────────────────── */
 .clientfilter{
   display:flex;gap:22px;align-items:center;flex-wrap:wrap;margin:0 0 18px;
@@ -82,8 +88,13 @@ table.board th.num,table.board th.num button{justify-content:flex-end}
 
 /* ── metric groups ────────────────────────────────────────────────────────────
    One label per family of metrics, with that family's views as the tabs beneath
-   it. Compliance is the only group so far; a second is another .group block. */
-.group{margin:0 0 30px}
+   it. Groups sit side by side on one rule so every view reads as a peer; they
+   wrap onto their own line when the window is too narrow to hold them. */
+.groups{
+  display:flex;gap:52px;align-items:flex-end;flex-wrap:wrap;
+  border-bottom:1px solid var(--line);margin:0 0 30px;
+}
+.group{margin:0}
 .grouplabel{
   display:block;font-size:12px;font-weight:600;text-transform:uppercase;
   letter-spacing:.09em;color:var(--deep);margin:0 0 12px;
@@ -105,7 +116,7 @@ table.board th.num,table.board th.num button{justify-content:flex-end}
 }
 
 /* ── source tabs ──────────────────────────────────────────────────────────── */
-.sources{display:flex;gap:32px;margin:0;border-bottom:1px solid var(--line)}
+.sources{display:flex;gap:32px;margin:0}
 .sources button{
   font:inherit;font-size:17px;font-weight:500;letter-spacing:-.016em;
   border:0;background:none;color:var(--faint);cursor:pointer;
@@ -342,19 +353,21 @@ footer b{color:var(--body);font-weight:600}
   <h1>CS Team KPI</h1>
   <p class="tagline">Team metrics, recomputed from the trackers every time this page is opened.</p>
 
-  <div class="group">
-    <span class="grouplabel" id="grouplabel">Compliance</span>
-    <div class="sources" id="sources">
-      <button type="button" data-src="internal">Internal team calls</button>
-      <button type="button" data-src="client">Client calls</button>
-      <button type="button" data-src="scorecard">Scorecard</button>
+  <div class="groups">
+    <div class="group">
+      <span class="grouplabel" id="grouplabel">Compliance</span>
+      <div class="sources" id="sources">
+        <button type="button" data-src="internal">Internal team calls</button>
+        <button type="button" data-src="client">Client calls</button>
+        <button type="button" data-src="scorecard">Scorecard</button>
+      </div>
     </div>
-  </div>
 
-  <div class="group">
-    <span class="grouplabel">Accounts</span>
-    <div class="sources" id="sources2">
-      <button type="button" data-src="clients">Client book</button>
+    <div class="group">
+      <span class="grouplabel" id="grouplabel2">Business</span>
+      <div class="sources" id="sources2">
+        <button type="button" data-src="clients">Client book</button>
+      </div>
     </div>
   </div>
 
@@ -375,7 +388,7 @@ footer b{color:var(--body);font-weight:600}
       <label for="from">From</label><input type="date" id="from">
       <label for="to">To</label><input type="date" id="to">
     </span>
-    <label class="check"><input type="checkbox" id="joined" checked> Skip days before someone's first entry</label>
+    <label class="check" id="joinedwrap"><input type="checkbox" id="joined" checked> Skip days before someone's first entry</label>
     <span class="spacer"></span>
     <span class="fresh" id="fresh"></span>
     <button class="pill ghost" id="refresh" type="button">Refresh</button>
@@ -1065,6 +1078,7 @@ function markSource(){
   $('monthwrap').hidden = mode !== 'scorecard';
   $('dates').hidden     = !daily || MODE !== 'custom';
   $('exempt').hidden    = !daily;
+  $('joinedwrap').hidden = mode === 'clients';
 }
 
 function markMode(){
