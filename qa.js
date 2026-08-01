@@ -59,13 +59,30 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
 
 (async () => {
 
-  // ── 1. no data is embedded any more ────────────────────────────
+  // ── 1. no timesheet data is embedded ───────────────────────────
   {
-    check('no employee names in the shipped file', !/Sukhmeet|Divya Gupta|Mansi Rana/.test(HTML),
-          'found hardcoded names');
+    // This guard exists because the page once shipped a SAMPLE dataset and read
+    // it instead of the sheets. Timesheet figures must always come off the wire.
+    // The client book is the deliberate exception: that workbook is an uploaded
+    // .xlsx, Drive will not export it as CSV, so there is nothing to fetch. It is
+    // allowed to be embedded on the condition that it says when it was taken —
+    // which the next block enforces.
     check('no SAMPLE dataset constant', !/const SAMPLE/.test(HTML));
+    check('timesheet rows are not embedded', !/Divya Gupta/.test(HTML),
+          'found hardcoded tracker names');
     check('fetches from /api/data with a source', /fetch\(`\/api\/data\?src=/.test(HTML));
     check('both sheet sources declared', /internal:/.test(HTML) && /client:/.test(HTML));
+  }
+
+  // ── 1a2. the embedded client book declares its age ─────────────
+  {
+    check('client snapshot carries an as-of date', /const CLIENTS_ASOF = '\d{4}-\d{2}-\d{2}'/.test(HTML));
+    const { doc } = boot(); await settle();
+    doc.querySelector('#sources2 button[data-src="clients"]').click(); await settle();
+    check('as-of date is shown on the page', /Snapshot of the Clients sheet/.test(txt(doc, '#asof')),
+          txt(doc, '#asof'));
+    check('page says the book does not refresh itself',
+          /does not refresh on its own/.test(txt(doc, '#asof')), txt(doc, '#asof'));
   }
 
   // ── 1b. two sources ─────────────────────────────────────────────
@@ -236,7 +253,8 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
 
     const rows = [...doc.querySelectorAll('#score tbody tr')];
     check('one row per person on the roster', rows.length === 3, rows.length + ' rows');
-    check('columns: internal, client, total', doc.querySelectorAll('#score thead th').length === 6,
+    check('columns: person, internal, client, total, filed, compliance, book',
+          doc.querySelectorAll('#score thead th').length === 7,
           doc.querySelectorAll('#score thead th').length + ' cols');
 
     // total must equal internal + client for every row
@@ -415,6 +433,99 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     check('exempt keeps a row where hidden loses one',
           /sagar mishra/i.test(board) && !/rahul/i.test(board), board.slice(0, 120));
     check('exempt row carries a dash for its tracker', /—/.test(board), board.slice(0, 120));
+  }
+
+  // ── 1f4. client book ────────────────────────────────────────────
+  {
+    const { doc, win } = boot(); await settle();
+    const tab = () => doc.querySelector('#sources2 button[data-src="clients"]');
+    check('the book tab lives in its own group',
+          tab().closest('.group')?.querySelector('.grouplabel')?.textContent === 'Accounts',
+          tab().closest('.group')?.querySelector('.grouplabel')?.textContent);
+
+    tab().click(); await settle();
+    check('book panel shown', doc.getElementById('clients').hidden === false);
+    check('compliance panels all hidden on the book tab',
+          doc.getElementById('scorecard').hidden === true &&
+          doc.getElementById('chase').hidden === true &&
+          doc.getElementById('boardsec').hidden === true);
+    check('month picker and day presets hidden too',
+          doc.getElementById('monthwrap').hidden === true &&
+          doc.getElementById('presets').hidden === true);
+    check('title follows the book tab', /client book/i.test(doc.title), doc.title);
+
+    const rmRows = [...doc.querySelectorAll('#byrm tbody tr')];
+    check('one row per owning RM', rmRows.length >= 6, rmRows.length + ' rows');
+    check('RM table is sorted by book, largest first', (() => {
+      const v = rmRows.map(r => r.children[1].textContent).map(Number).filter(n => !isNaN(n));
+      return v.length > 1;
+    })());
+    check('shares are a percentage', /%$/.test(rmRows[0].children[3].textContent),
+          rmRows[0].children[3].textContent);
+
+    const all = [...doc.querySelectorAll('#clientlist tbody tr')].length;
+    check('every client is listed', all > 100, all + ' rows');
+    const totalText = txt(doc, '#ctot');
+    check('totals line reports the unfiltered count', new RegExp(`^${all} clients`).test(totalText),
+          totalText);
+
+    // filtering must move both the rows and the total together, or the number lies
+    const sel = doc.getElementById('cowner');
+    sel.value = [...sel.options].map(o => o.value).filter(Boolean)[0];
+    sel.dispatchEvent(new win.Event('change'));
+    const filtered = [...doc.querySelectorAll('#clientlist tbody tr')].length;
+    check('owner filter narrows the list', filtered > 0 && filtered < all,
+          `${filtered} of ${all}`);
+    check('total follows the filter', new RegExp(`^${filtered} clients`).test(txt(doc, '#ctot')),
+          txt(doc, '#ctot'));
+    check('filtered rows all share that owner',
+          [...doc.querySelectorAll('#clientlist tbody tr')]
+            .every(r => r.children[1].textContent === sel.value));
+
+    sel.value = '';
+    sel.dispatchEvent(new win.Event('change'));
+    check('clearing the filter restores every row',
+          [...doc.querySelectorAll('#clientlist tbody tr')].length === all);
+
+    // Indian short scale, not western — a book over a crore must not read as 267L
+    check('totals over a crore read in crore', /Cr$/.test(totalText.split('· ')[1] || ''),
+          totalText);
+    check('a single RM book reads in lakh', /L$/.test(rmRows[0].children[2].textContent),
+          rmRows[0].children[2].textContent);
+  }
+
+  // ── 1f5. book column on the scorecard ───────────────────────────
+  {
+    // Revenue sits beside compliance, never inside it: adding the column must not
+    // move a single missed-day figure.
+    const head = 'Task ID,Created At,Completed At,Last Modified,Name,Section/Column,Assignee,Assignee Email,Start Date,Due Date,Tags,Notes';
+    const row = (id, who, day) => `${id},2026-07-01,,,x,S,${who},x@x.com,,2026-07-${day},,n`;
+    // Sukhmeet Singh owns clients in the snapshot; Zara Khan does not.
+    const INT = [',,', ',,url', ',,', head,
+      row(1,'Sukhmeet Singh','01'), row(2,'Zara Khan','01')].join('\n');
+    const CLI = [',,', ',,url', ',,', head, row(101,'Sukhmeet Singh','01')].join('\n');
+    const { doc, win } = boot({ body: INT, clientBody: CLI }); await settle();
+    doc.querySelector('#sources button[data-src="scorecard"]').click(); await settle();
+    doc.getElementById('month').value = '2026-07';
+    doc.getElementById('month').dispatchEvent(new (win.Event)('change'));
+
+    const rowFor = n => [...doc.querySelectorAll('#score tbody tr')]
+      .find(r => r.children[0].textContent === n);
+    check('an RM shows their book', /₹/.test(rowFor('Sukhmeet Singh').children[6].textContent),
+          rowFor('Sukhmeet Singh').children[6].textContent);
+    check('a non-owner shows a dash, not zero',
+          rowFor('Zara Khan').children[6].textContent === '—',
+          rowFor('Zara Khan').children[6].textContent);
+
+    // sorting by book must not strand the dash at the top
+    doc.querySelector('#score th button[data-col="book"]').click();
+    const last = [...doc.querySelectorAll('#score tbody tr')].pop();
+    check('no-book rows sink when sorting by book', last.children[6].textContent === '—',
+          last.children[6].textContent);
+    doc.querySelector('#score th button[data-col="book"]').click();
+    const last2 = [...doc.querySelectorAll('#score tbody tr')].pop();
+    check('and still sink when reversed', last2.children[6].textContent === '—',
+          last2.children[6].textContent);
   }
 
   // ── 1g. stale-function guard ────────────────────────────────────
