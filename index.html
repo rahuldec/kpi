@@ -429,11 +429,21 @@ const MONTH_KEY = 'kpi.month';
    If this grows past a handful of names, or you start needing joiner and
    leaver dates, move it to a roster sheet instead so it can be maintained in
    Google Sheets without a deploy.                                          */
+/* On the team, but not expected to file to a given tracker. They keep their row;
+   that tracker's cell shows a dash and is left out of its counts. */
 const EXEMPT = {
   internal: [],
   client:   ['sagar mishra', 'sumaiya khan']
 };
 const isExempt = (name, src) => EXEMPT[src].includes(name.toLowerCase());
+
+/* Not part of the CS team being measured at all — a name that turns up in a sheet
+   because they were tagged on a task, not because they owe daily entries. Dropped
+   before the roster is built, so they have no row anywhere and no effect on any
+   total. Different from EXEMPT above: that is "on the team, not this tracker".
+   Match is on the full display name, lowercased, as Asana writes it. */
+const HIDDEN = ['rahul'];
+const isHidden = name => HIDDEN.includes(name.trim().toLowerCase());
 
 const SOURCE_KEY = 'kpi.source';
 let SOURCE = 'internal';
@@ -996,7 +1006,11 @@ async function load(){
         'Upload the current api/data.js to the repository. To confirm, open /api/data?src=internal ' +
         'and /api/data?src=client — right now they return identical content.');
     }
-    DATA = {internal, client};
+    /* Drop hidden people once, here, rather than at each place that counts.
+       Every downstream total — entry counts, turnout, the board, the scorecard —
+       then reads the same set of rows, so none of them can disagree. */
+    DATA = {internal: internal.filter(r => !isHidden(r.name)),
+            client:   client.filter(r => !isHidden(r.name))};
     buildRoster();
     showActive();
   }catch(err){

@@ -370,6 +370,53 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
           `${csvNames.join('|')} vs ${names().join('|')}`);
   }
 
+  // ── 1f3. hidden people ──────────────────────────────────────────
+  {
+    // Someone in HIDDEN is not on the team being measured. They must leave no
+    // trace: no row, no entry counted, no effect on turnout — unlike an EXEMPT
+    // person, who keeps a row and shows a dash.
+    const head = 'Task ID,Created At,Completed At,Last Modified,Name,Section/Column,Assignee,Assignee Email,Start Date,Due Date,Tags,Notes';
+    const row = (id, who, day) => `${id},2026-07-01,,,x,S,${who},x@x.com,,2026-07-${day},,n`;
+    const INT = [',,', ',,url', ',,', head,
+      row(1,'Zara Khan','01'), row(2,'Rahul','01'), row(3,'Rahul','02')].join('\n');
+    const CLI = [',,', ',,url', ',,', head,
+      row(101,'Zara Khan','01'), row(102,'Rahul','01')].join('\n');
+    const { doc, win } = boot({ body: INT, clientBody: CLI }); await settle();
+
+    check('hidden person has no row on the daily board',
+          !/rahul/i.test(doc.getElementById('board').textContent));
+    check('hidden person is not in the chase list',
+          !/rahul/i.test(doc.getElementById('chase').textContent));
+    check('hidden person is not named as exempt',
+          !/rahul/i.test(doc.getElementById('exempt').textContent),
+          txt(doc, '#exempt'));
+    check('people count excludes them', /· 1 people/.test(txt(doc, '#fresh')), txt(doc, '#fresh'));
+    check('entry count excludes their rows', /^1 of 2 entries/.test(txt(doc, '#fresh')),
+          txt(doc, '#fresh'));
+
+    doc.querySelector('#sources button[data-src="scorecard"]').click(); await settle();
+    doc.getElementById('month').value = '2026-07';
+    doc.getElementById('month').dispatchEvent(new (win.Event)('change'));
+    check('hidden person has no scorecard row',
+          !/rahul/i.test(doc.getElementById('score').textContent));
+    check('scorecard shows only the real person',
+          doc.querySelectorAll('#score tbody tr').length === 1,
+          String(doc.querySelectorAll('#score tbody tr').length));
+
+    // and an exempt person is still treated the other way — row kept, dash shown
+    const INT2 = [',,', ',,url', ',,', head,
+      row(1,'Zara Khan','01'), row(2,'Sagar Mishra','01'), row(3,'Rahul','01')].join('\n');
+    const CLI2 = [',,', ',,url', ',,', head, row(101,'Zara Khan','01')].join('\n');
+    const b2 = boot({ body: INT2, clientBody: CLI2 }); await settle();
+    b2.doc.querySelector('#sources button[data-src="scorecard"]').click(); await settle();
+    b2.doc.getElementById('month').value = '2026-07';
+    b2.doc.getElementById('month').dispatchEvent(new (b2.win.Event)('change'));
+    const board = b2.doc.getElementById('score').textContent;
+    check('exempt keeps a row where hidden loses one',
+          /sagar mishra/i.test(board) && !/rahul/i.test(board), board.slice(0, 120));
+    check('exempt row carries a dash for its tracker', /—/.test(board), board.slice(0, 120));
+  }
+
   // ── 1g. stale-function guard ────────────────────────────────────
   {
     // an old api/data.js ignores ?src= and serves one sheet for both

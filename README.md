@@ -43,6 +43,19 @@ in the `EXEMPT` block at the top of the `<script>` in `index.html`:
       client:   ['sagar mishra', 'sumaiya khan']
     };
 
+### Hiding someone entirely
+
+`EXEMPT` keeps a person's row and shows a dash for the tracker they are not expected
+to file to. `HIDDEN`, just below it, is for someone who is not part of the CS team
+being measured at all — a name that turns up in a sheet because they were tagged on a
+task. They are dropped as the sheets load, so they have no row anywhere and no effect
+on any count.
+
+    const HIDDEN = ['rahul'];
+
+Match is on the full display name as Asana writes it, lowercased. If the sheet says
+`Rahul Sharma`, the entry has to read `rahul sharma`.
+
 Lowercase names. To change it: on GitHub open `index.html`, click the pencil, edit,
 commit — live in about a minute. Exempt people are dropped from every count on that
 tab and named in a line beneath the panels, so the exclusion is never silent. If one
@@ -192,11 +205,11 @@ entries loaded and when.
     node qa.js
     TZ=Asia/Kolkata node qa.js
 
-149 assertions with the network mocked: parsing (spacer rows above the header, quoted
+158 assertions with the network mocked: parsing (spacer rows above the header, quoted
 fields containing commas and newlines, blank assignees, case-variant names), every
 failure path (sheet not shared, network down, unparseable content), the date-window
 rules, cross-checks between the three places misses are counted, escaping of sheet
-content, the branding and embedded logo, the page title and metric grouping, the monthly scorecard and its CSV export, the coverage warning firing only for a month that really is outside the data, scorecard sorting (every column, both directions, exempt cells sinking, CSV matching the screen), the remembered view mode, range, tab and sort order, the source switch, the combined roster, per-tracker exemptions, the three view modes and their persistence, Sunday handling in Today/Yesterday,
+content, the branding and embedded logo, the page title and metric grouping, the monthly scorecard and its CSV export, the coverage warning firing only for a month that really is outside the data, scorecard sorting (every column, both directions, exempt cells sinking, CSV matching the screen), the remembered view mode, range, tab and sort order, hidden people leaving no trace in any count while exempt people keep their row, the source switch, the combined roster, per-tracker exemptions, the three view modes and their persistence, Sunday handling in Today/Yesterday,
 inverted date ranges, and timezone independence. Run them after any change to the parser — the
 Asana form fields are expected to change once back-dated entries are blocked.
 
