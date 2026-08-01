@@ -163,6 +163,36 @@ weak row against none, and averaging them together hides which one you are looki
 Only the six RMs own clients; everyone else shows a dash, and those rows sink to the
 bottom whichever way the column is sorted rather than reading as zero.
 
+### Teams
+
+Each of the six RMs runs a team, and the book they carry is worked by that team
+rather than by the RM alone. `PODS` near the top of `index.html` holds the mapping:
+
+    const PODS = {
+      'Sukhmeet Singh': ['Gobind', 'Sumaiya'],
+      ...
+    };
+
+These were given directly and supersede the `Team` sheet in the workbook, which had
+drifted — it had Divya under Amit rather than Mansi, Sumaiya under Sukhmeet, and no
+team at all for Sagar.
+
+Members can be written first-name-only, as the org chart writes them. They are
+resolved against the roster: an exact match wins, otherwise a unique first name.
+Anything that fails — a name nobody matches, or a first name two people share — is
+**named on the page** under the team table rather than dropped. A pod chart that
+quietly loses someone is worse than none, because the total it produces still looks
+complete.
+
+The table is driven by the team list, not by the client book, so a team that owns no
+clients still gets a row with dashes rather than disappearing — Sagar's team files
+timesheets whether or not it bills. Ankush Rana is the reverse: he owns 14 clients
+with no team recorded, and his row says so.
+
+The **Team** column on the scorecard shows which pod each person belongs to; sorting
+by it groups a lead with their own people, lead first, which is how a review actually
+runs.
+
 ### This one is a snapshot, not a feed
 
 The other two sources are fetched live. This one is compiled into `index.html`:
@@ -235,11 +265,11 @@ entries loaded and when.
     node qa.js
     TZ=Asia/Kolkata node qa.js
 
-190 assertions with the network mocked: parsing (spacer rows above the header, quoted
+207 assertions with the network mocked: parsing (spacer rows above the header, quoted
 fields containing commas and newlines, blank assignees, case-variant names), every
 failure path (sheet not shared, network down, unparseable content), the date-window
 rules, cross-checks between the three places misses are counted, escaping of sheet
-content, the branding and embedded logo, the page title and metric grouping, the monthly scorecard and its CSV export, the coverage warning firing only for a month that really is outside the data, scorecard sorting (every column, both directions, exempt cells sinking, CSV matching the screen), the remembered view mode, range, tab and sort order, hidden people leaving no trace in any count while exempt people keep their row, the client book tab and its filters, the book column sitting beside compliance without altering it, lakh/crore formatting, and a sweep over every tab checking that what should be hidden is hidden in computed style rather than merely flagged, the source switch, the combined roster, per-tracker exemptions, the three view modes and their persistence, Sunday handling in Today/Yesterday,
+content, the branding and embedded logo, the page title and metric grouping, the monthly scorecard and its CSV export, the coverage warning firing only for a month that really is outside the data, scorecard sorting (every column, both directions, exempt cells sinking, CSV matching the screen), the remembered view mode, range, tab and sort order, hidden people leaving no trace in any count while exempt people keep their row, the client book tab and its filters, the book column sitting beside compliance without altering it, lakh/crore formatting, pod resolution from first names with every failure reported on the page, and a sweep over every tab checking that what should be hidden is hidden in computed style rather than merely flagged, the source switch, the combined roster, per-tracker exemptions, the three view modes and their persistence, Sunday handling in Today/Yesterday,
 inverted date ranges, and timezone independence. Run them after any change to the parser — the
 Asana form fields are expected to change once back-dated entries are blocked.
 

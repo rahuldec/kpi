@@ -71,7 +71,16 @@ h1{
    the tests below assert on computed style, not on the property. */
 [hidden]{display:none !important}
 
-/* ── client book ──────────────────────────────────────────────────────────── */
+/* ── client book ─
+   A pod's members sit under the lead's name rather than in their own column:
+   they are context for the row, not a value to compare across rows. */
+.pod{display:block;font-size:12.5px;color:var(--faint);margin-top:3px;line-height:1.45}
+.podgaps{
+  font-size:13.5px;line-height:1.5;color:var(--miss);margin:18px 0 0;
+  padding:12px 14px;background:#FDF3F1;border-radius:9px;
+}
+.podgaps b{font-weight:600}
+─────────────────────────────────────────────────────────── */
 .clientfilter{
   display:flex;gap:22px;align-items:center;flex-wrap:wrap;margin:0 0 18px;
   font-size:14px;color:var(--faint);
@@ -410,8 +419,9 @@ footer b{color:var(--body);font-weight:600}
 
   <section id="clients" hidden>
     <div class="card">
-      <h3>Revenue by RM</h3>
+      <h3>Book by team</h3>
       <table class="board" id="byrm"></table>
+      <p class="podgaps" id="podgaps" hidden></p>
     </div>
     <div class="card">
       <h3>Every client</h3>
@@ -493,12 +503,82 @@ const BOOK = (() => {
   return m;
 })();
 const bookOf = name => BOOK.get(String(name).trim().toLowerCase()) || null;
+
+/* Pod lookups are built once the roster exists, because resolving a first name
+   from the org chart to a full name needs to know who is on the roster. Three
+   outputs:
+   POD_OF   roster name -> lead they report to (a lead maps to themselves)
+   POD_TEAM lead -> resolved roster names under them
+   POD_GAPS anything that did not line up, shown on the page rather than swallowed */
+let POD_OF = new Map(), POD_TEAM = new Map(), POD_GAPS = [];
+
+function buildPods(){
+  POD_OF = new Map(); POD_TEAM = new Map(); POD_GAPS = [];
+  const roster = [...ROSTER.values()].map(p => p.name);
+  const byFirst = new Map();
+  for (const n of roster){
+    const f = n.trim().split(/\s+/)[0].toLowerCase();
+    byFirst.set(f, (byFirst.get(f) || []).concat(n));
+  }
+  const resolve = raw => {
+    const want = raw.trim().toLowerCase();
+    const exact = roster.find(n => n.toLowerCase() === want);
+    if (exact) return {name: exact};
+    const hits = byFirst.get(want.split(/\s+/)[0]) || [];
+    if (hits.length === 1) return {name: hits[0]};
+    /* Two people share a first name, or nobody matches. Either way, guessing is
+       worse than saying so — a wrong pod quietly moves revenue onto the wrong row. */
+    return {gap: hits.length > 1
+      ? `"${raw}" could be ${hits.join(' or ')}`
+      : `"${raw}" is not on the roster`};
+  };
+
+  for (const [lead, members] of Object.entries(PODS)){
+    const r = resolve(lead);
+    if (r.gap){ POD_GAPS.push(`Lead ${r.gap}`); continue; }
+    const team = [];
+    for (const m of members){
+      const x = resolve(m);
+      if (x.gap) POD_GAPS.push(`${r.name}'s team: ${x.gap}`);
+      else { team.push(x.name); POD_OF.set(x.name, r.name); }
+    }
+    POD_OF.set(r.name, r.name);
+    POD_TEAM.set(r.name, team);
+  }
+  for (const n of roster)
+    if (!POD_OF.has(n)) POD_GAPS.push(`${n} is in no pod`);
+}
+const podBook = lead => bookOf(lead);
 /* Indian short scale: crore above 1,00,00,000, lakh above 1,00,000, plain below.
    A whole-number result drops its ".0" so a column of these stays scannable. */
 const inr = n => '\u20B9' + (
   n >= 1e7 ? (n / 1e7).toFixed(2).replace(/\.00$/, '') + ' Cr'
 : n >= 1e5 ? (n / 1e5).toFixed(1).replace(/\.0$/, '') + 'L'
 : n.toLocaleString('en-IN'));
+
+/* ---------------- pods ------------------------------------------------------
+   Each lead runs a team, and the book a lead carries is worked by that team, not
+   by the lead alone. Given directly by the user on 1 Aug 2026 — this supersedes
+   the Team sheet in the workbook, which had drifted.
+
+   Not every team carries a book: Sagar's team owns no clients in the Clients
+   sheet, and it is still listed with a dash. A team that exists but bills nothing
+   is a fact worth showing, not a row to drop.
+
+   Members are written as the Team sheet writes them, first name only. They are
+   matched against the roster below, and anything that fails to match is named on
+   the page rather than dropped, so a rename in Asana cannot silently empty a pod.
+
+   One gap left visible on purpose: Ankush Rana owns clients but has no team. */
+const PODS = {
+  'Mansi Rana':    ['Vansh', 'Divya'],
+  'Sukhmeet Singh':['Gobind', 'Sapna', 'Bhavey Saluja'],
+  'Sultan Malik':  ['Lokesh', 'Amar Kumar Pandit'],
+  'Sagar Mishra':  ['Mehak', 'Akshat'],
+  'Kashish Goel':  ['Anjali', 'Tanvi'],
+  'Amit Kumar':    ['Priya'],
+  'Ankush Rana':   []
+};
 
 const SOURCES = {
   internal:  {label: 'CS Internal Team Calls Tracker', noun: 'internal calls'},
@@ -747,7 +827,11 @@ const SORT_COLS = {
      It sits alongside so the two can be read together — a weak row against a big
      book is a different problem from a weak row against none. Only the six RMs
      own clients; everyone else gets null, which sinks rather than reading as 0. */
-  book:     {label:'Book',            get: r => bookOf(r.name) ? bookOf(r.name).revenue : null, dir:'desc'}
+  book:     {label:'Book',            get: r => bookOf(r.name) ? bookOf(r.name).revenue : null, dir:'desc'},
+  /* Sorting by team groups a lead with their own people, which is how a review is
+     actually run — you go pod by pod, not down a single ranked list. Within a pod
+     the lead sorts first, then their team by name. */
+  pod:      {label:'Team',            get: r => POD_OF.get(r.name) || null,              dir:'asc'}
 };
 let SORT = {col:'missed', dir:'desc'};
 
@@ -763,6 +847,11 @@ function sortScore(rows){
       ? a.name.localeCompare(b.name) : (x === null ? 1 : -1);
     if (x < y) return -sign;
     if (x > y) return sign;
+    if (SORT.col === 'pod'){
+      // inside a pod: the lead first, then the rest by name
+      const la = POD_OF.get(a.name) === a.name, lb = POD_OF.get(b.name) === b.name;
+      if (la !== lb) return la ? -1 : 1;
+    }
     return a.name.localeCompare(b.name);   // stable, and readable when values tie
   });
 }
@@ -806,22 +895,49 @@ function scoreRows(){
 let CFILTER = {owner: '', type: ''};
 
 function renderByRm(){
-  const rows = [...BOOK.values()].sort((a,b) => b.revenue - a.revenue);
+  /* Driven by the team list, not by the client book: a team that owns no clients
+     still exists and still files timesheets, so it gets a row with a dash rather
+     than being absent. Leads are matched to the roster the same way members are,
+     so an unresolvable lead is reported instead of silently vanishing. */
+  const rows = [...POD_TEAM.keys()].map(lead => {
+    const b = bookOf(lead);
+    return {name: lead, clients: b ? b.clients : 0, revenue: b ? b.revenue : 0,
+            heads: (POD_TEAM.get(lead) || []).length + 1};
+  }).sort((a,b) => b.revenue - a.revenue || a.name.localeCompare(b.name));
   const total = rows.reduce((n,r) => n + r.revenue, 0);
-  let t = `<thead><tr><th>RM</th><th class="num">Clients</th>` +
-          `<th class="num">Book</th><th class="num">Share</th></tr></thead><tbody>`;
+  let t = `<thead><tr><th>Team</th><th class="num">People</th><th class="num">Clients</th>` +
+          `<th class="num">Book</th><th class="num">Per head</th>` +
+          `<th class="num">Share</th></tr></thead><tbody>`;
   for (const r of rows){
-    const pct = total ? Math.round(r.revenue / total * 100) : 0;
-    t += `<tr><td>${esc(r.name)}</td><td class="num">${r.clients}</td>` +
-         `<td class="num">${esc(inr(r.revenue))}</td>` +
-         `<td class="num">${pct}%</td></tr>`;
+    const team = POD_TEAM.get(r.name) || [];
+    const has = r.revenue > 0;
+    t += `<tr><td>${esc(r.name)}` +
+         (team.length
+           ? `<span class="pod">with ${esc(team.join(', '))}</span>`
+           : `<span class="pod">no team recorded</span>`) +
+         `</td>` +
+         `<td class="num">${r.heads}</td>` +
+         `<td class="num">${has ? r.clients : '—'}</td>` +
+         `<td class="num">${has ? esc(inr(r.revenue)) : '—'}</td>` +
+         `<td class="num">${has ? esc(inr(Math.round(r.revenue / r.heads))) : '—'}</td>` +
+         `<td class="num">${has && total ? Math.round(r.revenue / total * 100) + '%' : '—'}</td>` +
+         `</tr>`;
   }
   const un = CLIENTS.filter(c => !c.o);
   if (un.length)
-    t += `<tr><td>Unassigned</td><td class="num">${un.length}</td>` +
+    t += `<tr><td>Unassigned</td><td class="num">—</td><td class="num">${un.length}</td>` +
          `<td class="num">${esc(inr(un.reduce((n,c) => n + (c.r||0), 0)))}</td>` +
-         `<td class="num">—</td></tr>`;
+         `<td class="num">—</td><td class="num">—</td></tr>`;
   $('byrm').innerHTML = t + '</tbody>';
+
+  /* Say what did not line up. A pod chart that quietly loses a person is worse
+     than no pod chart, because the number it produces still looks complete. */
+  $('podgaps').hidden = !POD_GAPS.length;
+  if (POD_GAPS.length)
+    $('podgaps').innerHTML =
+      `<b>Not everyone is placed.</b> ${POD_GAPS.map(esc).join('. ')}. ` +
+      `Edit <code>PODS</code> in index.html to fix this — until then these people ` +
+      `are counted in compliance but sit outside every team total.`;
 }
 
 function renderClientList(){
@@ -880,6 +996,7 @@ function renderScorecard(){
       <td class="dim">${r.filed}/${r.expected}</td>
       <td>${Math.round(r.rate*100)}%<span class="bar"><i style="width:${Math.round(r.rate*100)}%"></i></span></td>
       <td class="num dim">${bookOf(r.name) ? esc(inr(bookOf(r.name).revenue)) : '—'}</td>
+      <td class="dim">${esc(POD_OF.get(r.name) || '—')}</td>
     </tr>`;
   }
   $('score').innerHTML = t + '</tbody>';
@@ -906,7 +1023,7 @@ function renderScorecard(){
 function downloadCsv(){
   const {ym, rows} = scoreRows();
   const head = ['Person','Internal missed','Client missed','Total missed','Filed','Expected',
-                'Compliance %','Clients owned','Book (INR)'];
+                'Compliance %','Clients owned','Book (INR)','Team'];
   const esc2 = v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g,'""') + '"' : String(v);
   const lines = [head.join(',')].concat(rows.map(r => [
     r.name,
@@ -915,7 +1032,8 @@ function downloadCsv(){
     r.missed, r.filed, r.expected, Math.round(r.rate*100),
     // raw rupees, not the abbreviated display form — a spreadsheet needs to add these up
     bookOf(r.name) ? bookOf(r.name).clients : '',
-    bookOf(r.name) ? bookOf(r.name).revenue : ''
+    bookOf(r.name) ? bookOf(r.name).revenue : '',
+    POD_OF.get(r.name) || ''
   ].map(esc2).join(',')));
   const blob = new Blob([lines.join('\n')], {type:'text/csv;charset=utf-8'});
   const a = document.createElement('a');
@@ -1192,6 +1310,7 @@ async function load(){
     DATA = {internal: internal.filter(r => !isHidden(r.name)),
             client:   client.filter(r => !isHidden(r.name))};
     buildRoster();
+    buildPods();
     showActive();
   }catch(err){
     failed(String((err && err.message) || err),

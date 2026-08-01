@@ -51,6 +51,22 @@ function boot({ body = SHEET, clientBody = CLIENT_DEFAULT, status = 200, reject 
   return { dom, doc: dom.window.document, win: dom.window, errs, calls };
 }
 
+/* A roster wide enough for the team tables to resolve. Leads plus one or two of
+   their people each, spelled as the trackers spell them. */
+const TEAM_PEOPLE = [
+  'Mansi Rana','Vansh Saini','Divya Gupta',
+  'Sukhmeet Singh','Gobind Monga','Sapna','Bhavey Saluja',
+  'Sultan Malik','Lokesh Kumar','Amar Kumar Pandit',
+  'Sagar Mishra','Mehak Garg','Akshat Jain',
+  'Kashish Goel','Anjali Verma','Tanvi Gupta',
+  'Amit Kumar','Priya',
+  'Ankush Rana'
+];
+const TEAM_HEAD = 'Task ID,Created At,Completed At,Last Modified,Name,Section/Column,Assignee,Assignee Email,Start Date,Due Date,Tags,Notes';
+const teamSheet = (people = TEAM_PEOPLE, off = 0) =>
+  [',,', ',,url', ',,', TEAM_HEAD].concat(people.map((p, i) =>
+    `${off + i + 1},2026-07-01,,,x,S,${p},x@x.com,,2026-07-01,,n`)).join('\n');
+
 const settle = () => new Promise(r => setTimeout(r, 30));
 const txt = (doc, s) => (doc.querySelector(s)?.textContent || '').replace(/\s+/g, ' ').trim();
 /* `.hidden` being true is not the same as being off the screen: a class with an
@@ -262,8 +278,8 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
 
     const rows = [...doc.querySelectorAll('#score tbody tr')];
     check('one row per person on the roster', rows.length === 3, rows.length + ' rows');
-    check('columns: person, internal, client, total, filed, compliance, book',
-          doc.querySelectorAll('#score thead th').length === 7,
+    check('columns: person, internal, client, total, filed, compliance, book, team',
+          doc.querySelectorAll('#score thead th').length === 8,
           doc.querySelectorAll('#score thead th').length + ' cols');
 
     // total must equal internal + client for every row
@@ -446,7 +462,8 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
 
   // ── 1f4. client book ────────────────────────────────────────────
   {
-    const { doc, win } = boot(); await settle();
+    const { doc, win } = boot({ body: teamSheet(), clientBody: teamSheet(TEAM_PEOPLE, 500) });
+    await settle();
     const tab = () => doc.querySelector('#sources2 button[data-src="clients"]');
     check('the book tab lives in its own group',
           tab().closest('.group')?.querySelector('.grouplabel')?.textContent === 'Business',
@@ -470,13 +487,20 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     check('title follows the book tab', /client book/i.test(doc.title), doc.title);
 
     const rmRows = [...doc.querySelectorAll('#byrm tbody tr')];
-    check('one row per owning RM', rmRows.length >= 6, rmRows.length + ' rows');
-    check('RM table is sorted by book, largest first', (() => {
-      const v = rmRows.map(r => r.children[1].textContent).map(Number).filter(n => !isNaN(n));
+    check('one row per team, including teams with no book',
+          rmRows.length >= 7, rmRows.length + ' rows');
+    check('a team that owns no clients is still listed',
+          /Sagar Mishra/.test(doc.getElementById('byrm').textContent));
+    check('that team shows a dash rather than zero revenue', (() => {
+      const r = rmRows.find(x => /Sagar Mishra/.test(x.children[0].textContent));
+      return r && r.children[3].textContent === '—';
+    })());
+    check('team table is sorted by book, largest first', (() => {
+      const v = rmRows.map(r => r.children[2].textContent).map(Number).filter(n => !isNaN(n));
       return v.length > 1;
     })());
-    check('shares are a percentage', /%$/.test(rmRows[0].children[3].textContent),
-          rmRows[0].children[3].textContent);
+    check('shares are a percentage', /%$/.test(rmRows[0].children[5].textContent),
+          rmRows[0].children[5].textContent);
 
     const all = [...doc.querySelectorAll('#clientlist tbody tr')].length;
     check('every client is listed', all > 100, all + ' rows');
@@ -505,8 +529,8 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     // Indian short scale, not western — a book over a crore must not read as 267L
     check('totals over a crore read in crore', /Cr$/.test(totalText.split('· ')[1] || ''),
           totalText);
-    check('a single RM book reads in lakh', /L$/.test(rmRows[0].children[2].textContent),
-          rmRows[0].children[2].textContent);
+    check('a single team book reads in lakh', /L$/.test(rmRows[0].children[3].textContent),
+          rmRows[0].children[3].textContent);
   }
 
   // ── 1f5. book column on the scorecard ───────────────────────────
@@ -575,6 +599,78 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     check('daily view hides the month picker, scorecard and book',
           !dy.includes('#monthwrap') && !dy.includes('#scorecard') && !dy.includes('#clients'),
           dy.join());
+  }
+
+  // ── 1f7. pods ───────────────────────────────────────────────────
+  {
+    const head = 'Task ID,Created At,Completed At,Last Modified,Name,Section/Column,Assignee,Assignee Email,Start Date,Due Date,Tags,Notes';
+    const row = (id, who) => `${id},2026-07-01,,,x,S,${who},x@x.com,,2026-07-01,,n`;
+    // A lead, two of their people written first-name-only in PODS, and a stranger.
+    const people = ['Sukhmeet Singh','Gobind Monga','Sapna','Nobody Here'];
+    const INT = [',,', ',,url', ',,', head].concat(people.map((p,i) => row(i+1, p))).join('\n');
+    const CLI = [',,', ',,url', ',,', head, row(101,'Sukhmeet Singh')].join('\n');
+    const { doc, win } = boot({ body: INT, clientBody: CLI }); await settle();
+
+    doc.querySelector('#sources2 button[data-src="clients"]').click(); await settle();
+    const teamRow = [...doc.querySelectorAll('#byrm tbody tr')]
+      .find(r => /Sukhmeet Singh/.test(r.children[0].textContent));
+    check('a first name in PODS resolves to the roster name',
+          /Gobind Monga/.test(teamRow.children[0].textContent),
+          teamRow.children[0].textContent);
+    // Bhavey Saluja is in PODS but absent from this fixture, so the team resolves
+    // to two of three: lead + Gobind + Sapna.
+    check('head count includes the lead', teamRow.children[1].textContent === '3',
+          teamRow.children[1].textContent);
+    check('a member missing from the roster is reported, not counted',
+          /Bhavey Saluja/.test(txt(doc, '#podgaps')), txt(doc, '#podgaps'));
+    check('per head divides the book by the whole team',
+          /L$|Cr$/.test(teamRow.children[4].textContent), teamRow.children[4].textContent);
+    check('per head is smaller than the book',
+          teamRow.children[4].textContent !== teamRow.children[3].textContent);
+
+    // an unplaceable person must be named, not silently dropped
+    check('gaps notice is shown', shown(doc, '#podgaps'));
+    check('the stranger is named in the notice', /Nobody Here/.test(txt(doc, '#podgaps')),
+          txt(doc, '#podgaps'));
+    check('a lead absent from the roster gets no row',
+          !/Shobhit/.test(doc.getElementById('byrm').textContent));
+
+    // team column on the scorecard
+    doc.querySelector('#sources button[data-src="scorecard"]').click(); await settle();
+    doc.getElementById('month').value = '2026-07';
+    doc.getElementById('month').dispatchEvent(new (win.Event)('change'));
+    const rowFor = n => [...doc.querySelectorAll('#score tbody tr')]
+      .find(r => r.children[0].textContent === n);
+    check('a team member shows their lead',
+          rowFor('Gobind Monga').children[7].textContent === 'Sukhmeet Singh',
+          rowFor('Gobind Monga').children[7].textContent);
+    check('a second member of the same team shows the same lead',
+          rowFor('Sapna').children[7].textContent === 'Sukhmeet Singh',
+          rowFor('Sapna').children[7].textContent);
+    check('a lead shows themselves',
+          rowFor('Sukhmeet Singh').children[7].textContent === 'Sukhmeet Singh',
+          rowFor('Sukhmeet Singh').children[7].textContent);
+    check('someone in no pod shows a dash',
+          rowFor('Nobody Here').children[7].textContent === '—',
+          rowFor('Nobody Here').children[7].textContent);
+
+    // sorting by team keeps a pod together with its lead at the top
+    doc.querySelector('#score th button[data-col="pod"]').click();
+    const order = [...doc.querySelectorAll('#score tbody tr')].map(r => r.children[0].textContent);
+    const pod = order.filter(n => n !== 'Nobody Here');
+    check('a pod sorts as one block with the lead first',
+          pod[0] === 'Sukhmeet Singh', order.join(' | '));
+    check('the unplaced person does not break into the pod',
+          Math.abs(order.indexOf('Sukhmeet Singh') - order.indexOf('Gobind Monga')) <= 2,
+          order.join(' | '));
+
+    // revenue and pods must not have moved a compliance figure
+    check('missed days are untouched by pod grouping',
+          [...doc.querySelectorAll('#score tbody tr')].every(r => {
+            // an exempt tracker shows a dash; it contributes nothing, not NaN
+            const n = i => r.children[i].textContent === '—' ? 0 : Number(r.children[i].textContent);
+            return n(3) === n(1) + n(2);
+          }));
   }
 
   // ── 1g. stale-function guard ────────────────────────────────────
