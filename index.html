@@ -1469,6 +1469,40 @@ function renderMeter(){
 /* ---------------- client book ---------------- */
 let CFILTER = {owner: '', type: ''};
 
+/* Sorting the client list. Same shape as the scorecard's, and the same rule about
+   blanks: a client with no billing figure is not a client billing zero, so it
+   sinks whichever way the column points rather than crowning an "ascending" sort. */
+const CSORT_KEY = 'kpi.clientSort';
+const SIZE_RANK = {large: 3, medium: 2, small: 1};
+const CSORT_COLS = {
+  n: {label: 'Client',     get: c => c.n.toLowerCase(),                 dir: 'asc'},
+  o: {label: 'Owner',      get: c => c.o ? c.o.toLowerCase() : null,    dir: 'asc'},
+  t: {label: 'Type',       get: c => c.t ? c.t.toLowerCase() : null,    dir: 'asc'},
+  /* Size is a band, not a word. Alphabetical would put Large above Small above
+     Medium, which is neither order anyone means. */
+  c: {label: 'Size',       get: c => SIZE_RANK[String(c.c).toLowerCase()] || null, dir: 'desc'},
+  r: {label: 'Billing FY', get: c => c.r,                               dir: 'desc'},
+  e: {label: 'Escalations',get: c => {
+        const all = escFor(c.n);
+        // open outrank resolved, and no escalation at all is not a zero to sort on
+        return all.length ? all.filter(x => !x.closed).length * 1000 + all.length : null;
+      }, dir: 'desc'}
+};
+let CSORT = {col: 'r', dir: 'desc'};
+
+function sortClients(rows){
+  const {get} = CSORT_COLS[CSORT.col] || CSORT_COLS.r;
+  const sign = CSORT.dir === 'asc' ? 1 : -1;
+  return rows.sort((a, b) => {
+    const x = get(a), y = get(b);
+    if (x === null || y === null || x === undefined || y === undefined)
+      return (x == null && y == null) ? a.n.localeCompare(b.n) : (x == null ? 1 : -1);
+    if (x < y) return -sign;
+    if (x > y) return sign;
+    return a.n.localeCompare(b.n);
+  });
+}
+
 function renderByRm(){
   /* Driven by the team list, not by the client book: a team that owns no clients
      still exists and still files timesheets, so it gets a row with a dash rather
@@ -1544,14 +1578,23 @@ function renderByRm(){
 }
 
 function renderClientList(){
-  const shown = CLIENTS.filter(c =>
+  const shown = sortClients(CLIENTS.filter(c =>
     (!CFILTER.owner || c.o === CFILTER.owner) &&
-    (!CFILTER.type  || c.t === CFILTER.type));
+    (!CFILTER.type  || c.t === CFILTER.type)));
   const sum = shown.reduce((n,c) => n + (c.r||0), 0);
   $('ctot').textContent = `${shown.length} client${shown.length===1?'':'s'} · ${inr(sum)}`;
 
-  let t = `<thead><tr><th>Client</th><th>Owner</th><th>Type</th>` +
-          `<th>Size</th><th class="num">Billing FY</th></tr></thead><tbody>`;
+  const cth = (col, cls) => {
+    const on = CSORT.col === col;
+    const arrow = on ? (CSORT.dir === 'asc' ? '\u25B2' : '\u25BC') : '\u25BC';
+    return `<th${cls ? ` class="${cls}"` : ''}` +
+           `${on ? ` aria-sort="${CSORT.dir === 'asc' ? 'ascending' : 'descending'}"` : ''}>` +
+           `<button type="button" data-ccol="${col}" ` +
+           `title="Sort by ${esc(CSORT_COLS[col].label.toLowerCase())}">` +
+           `${esc(CSORT_COLS[col].label)}<i aria-hidden="true">${arrow}</i></button></th>`;
+  };
+  let t = '<thead><tr>' + cth('n') + cth('o') + cth('t') + cth('c') +
+          cth('r', 'num') + cth('e', 'num') + '</tr></thead><tbody>';
   for (const c of shown){
     const all = escFor(c.n), open = all.filter(e => !e.closed);
     /* Only an open escalation earns the red rule down the row. A closed one is
@@ -1563,13 +1606,14 @@ function renderClientList(){
       : all.length
         ? `<span class="esc shut" title="${esc(all.map(e => e.title || e.client).join('; '))}">` +
           `${all.length} resolved</span>`
-        : '';
+        : '<span class="dim">—</span>';
     t += `<tr${open.length ? ' class="flagged"' : ''}>` +
-         `<td>${esc(c.n)}${badge}</td><td>${esc(c.o || '—')}</td>` +
+         `<td>${esc(c.n)}</td><td>${esc(c.o || '—')}</td>` +
          `<td>${esc(c.t || '—')}</td><td>${esc(c.c || '—')}</td>` +
-         `<td class="num">${c.r == null ? '—' : esc(inr(c.r))}</td></tr>`;
+         `<td class="num">${c.r == null ? '—' : esc(inr(c.r))}</td>` +
+         `<td class="num">${badge}</td></tr>`;
   }
-  if (!shown.length) t += `<tr><td colspan="5">No clients match that filter.</td></tr>`;
+  if (!shown.length) t += `<tr><td colspan="6">No clients match that filter.</td></tr>`;
   $('clientlist').innerHTML = t + '</tbody>';
 }
 
@@ -2063,6 +2107,15 @@ for (const g of ['sources','sources2','sources3'])
     markSource();
     showActive();   // both sheets are already in memory; no refetch needed
   });
+$('clientlist').addEventListener('click', e => {
+  const b = e.target.closest('button[data-ccol]'); if (!b) return;
+  const col = b.dataset.ccol;
+  CSORT = CSORT.col === col
+    ? {col, dir: CSORT.dir === 'asc' ? 'desc' : 'asc'}
+    : {col, dir: CSORT_COLS[col].dir};
+  writeStore(CSORT_KEY, JSON.stringify(CSORT));
+  renderClientList();
+});
 $('cowner').addEventListener('change', e => { CFILTER.owner = e.target.value; renderClientList(); });
 $('ctype').addEventListener('change',  e => { CFILTER.type  = e.target.value; renderClientList(); });
 $('meters').addEventListener('click', e => {
@@ -2100,6 +2153,10 @@ try {
   if (Array.isArray(saved) && saved.every(m => /^\d{4}-\d{2}$/.test(m))) MONTHS = saved.sort();
 } catch (e) {}
 if (!MONTHS.length) MONTHS = [thisMonth()];
+try {
+  const saved = JSON.parse(readStore(CSORT_KEY) || 'null');
+  if (saved && CSORT_COLS[saved.col] && (saved.dir === 'asc' || saved.dir === 'desc')) CSORT = saved;
+} catch (e) {}
 TARGET_SCALED = readStore(TARGET_KEY) === '1';
 $('scaletarget').checked = TARGET_SCALED;
 try {

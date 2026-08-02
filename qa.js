@@ -1324,6 +1324,80 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     })());
   }
 
+  // ── 1f17. sorting the client list ───────────────────────────────
+  {
+    const { doc, win } = boot(); await settle();
+    doc.querySelector('#sources2 button[data-src="clients"]').click(); await settle();
+    const rows = () => [...doc.querySelectorAll('#clientlist tbody tr')];
+    const col = (i) => rows().map(r => r.children[i].textContent.trim());
+    const hit = c => doc.querySelector(`#clientlist th button[data-ccol="${c}"]`).click();
+    const num = s => Number(String(s).replace(/[^0-9.]/g, ''));
+
+    check('every client column has a sort button',
+          doc.querySelectorAll('#clientlist th button[data-ccol]').length === 6,
+          String(doc.querySelectorAll('#clientlist th button[data-ccol]').length));
+    // Compare the underlying figures, not the abbreviated display — "₹70,000"
+    // and "₹13.7L" do not compare as written.
+    const byName = new Map(JSON.parse(win.eval('JSON.stringify(CLIENTS.map(c=>[c.n,c.r]))')));
+    check('default is billing, largest first', (() => {
+      const v = col(0).map(n => byName.get(n)).filter(x => x != null);
+      return v.every((x, i) => i === 0 || v[i-1] >= x);
+    })(), col(4).slice(0, 4).join());
+    check('one column marked sorted by default',
+          doc.querySelectorAll('#clientlist th[aria-sort]').length === 1);
+
+    hit('n');
+    const az = ns => [...ns].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+    check('client sorts A to Z', col(0).join('|') === az(col(0)).join('|'),
+          col(0).slice(0, 3).join());
+    hit('n');
+    check('clicking again reverses it',
+          col(0).join('|') === az(col(0)).reverse().join('|'), col(0).slice(0, 3).join());
+    check('still only one column marked',
+          doc.querySelectorAll('#clientlist th[aria-sort]').length === 1);
+
+    // Size is a band, not a word: Large > Medium > Small, never alphabetical
+    hit('c');
+    const sizes = col(3).filter(x => x !== '—');
+    check('size sorts by band, largest first', sizes[0] === 'Large', sizes.slice(0, 3).join());
+    check('and does not sort alphabetically',
+          sizes.join('|') !== [...sizes].sort().reverse().join('|'), sizes.slice(0, 3).join());
+    hit('c');
+    check('reversed, smallest first',
+          col(3).filter(x => x !== '—')[0] === 'Small',
+          col(3).slice(0, 3).join());
+    check('unsized clients sink either way', (() => {
+      const v = col(3);
+      const firstDash = v.indexOf('—');
+      return firstDash === -1 || v.slice(firstDash).every(x => x === '—');
+    })(), col(3).slice(-3).join());
+
+    // escalations: open outrank resolved, and no escalation is not a zero
+    hit('e');
+    const esc = col(5);
+    check('open escalations sort to the top', /open/.test(esc[0]), esc.slice(0, 3).join(' | '));
+    check('resolved rank below open', (() => {
+      const lastOpen = esc.map(x => /open/.test(x)).lastIndexOf(true);
+      const firstShut = esc.findIndex(x => /resolved/.test(x));
+      return firstShut === -1 || firstShut > lastOpen;
+    })(), esc.slice(0, 4).join(' | '));
+    check('clients with no escalation sink to the bottom',
+          esc[esc.length - 1] === '—', esc.slice(-2).join(' | '));
+
+    check('sort choice is remembered',
+          JSON.parse(win.localStorage.getItem('kpi.clientSort')).col === 'e',
+          win.localStorage.getItem('kpi.clientSort'));
+
+    // sorting and filtering must compose
+    const sel = doc.getElementById('cowner');
+    sel.value = [...sel.options].map(o => o.value).filter(Boolean)[0];
+    sel.dispatchEvent(new win.Event('change'));
+    check('the sort survives a filter change', /open|resolved|—/.test(col(5)[0]));
+    check('the filter still narrows the list', rows().length < 148, rows().length + ' rows');
+    check('and the total follows', new RegExp(`^${rows().length} clients`).test(txt(doc, '#ctot')),
+          txt(doc, '#ctot'));
+  }
+
   // ── 1g. stale-function guard ────────────────────────────────────
   {
     // an old api/data.js ignores ?src= and serves one sheet for both

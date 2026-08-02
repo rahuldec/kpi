@@ -216,8 +216,18 @@ Both dials use the same no-rounding-across-100 rule as the book table.
 ## Client book
 
 The **Business -> Client book** tab shows who owns what: revenue by RM with each one's
-share of the total, then every client with its owner, type, size band and billing for
-the financial year, filterable by owner and by institution type.
+share of the total, then every client with its owner, type, size band, billing for the
+financial year and escalation status, filterable by owner and by institution type.
+
+Every column of the client list sorts — click a header, click again to reverse, and
+the choice is remembered. Two of them need more than an alphabetical compare:
+
+- **Size** is a band, not a word. It sorts Large > Medium > Small; alphabetically
+  that would read Large, Medium, Small on the way down and Large, Medium, Small on
+  the way up, which is neither order anyone means.
+- **Escalations** ranks open above resolved above none. A client with no escalation
+  is not a client with zero, so those sink whichever way the column points — the same
+  rule the scorecard uses for exempt cells.
 
 The scorecard also carries a **Book** column, so a person's compliance and the revenue
 behind them can be read on one line. Revenue is deliberately *not* folded into the
@@ -401,7 +411,7 @@ entries loaded and when.
     node qa.js
     TZ=Asia/Kolkata node qa.js
 
-343 assertions with the network mocked: parsing (spacer rows above the header, quoted
+360 assertions with the network mocked: parsing (spacer rows above the header, quoted
 fields containing commas and newlines, blank assignees, case-variant names), every
 failure path (sheet not shared, network down, unparseable content), the date-window
 rules, cross-checks between the three places misses are counted, escaping of sheet
