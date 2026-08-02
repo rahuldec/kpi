@@ -28,7 +28,7 @@ const SOURCES = {
                  gid: process.env.SHEET_GID        || '' },
   client:      { id: process.env.CLIENT_SHEET_ID || '1oUHAjf6zAiHdLd11jvqerbXC0adx5XDsqlfLoRNOSCY',
                  gid: process.env.CLIENT_SHEET_GID || '' },
-  escalations: { id: process.env.ESC_SHEET_ID    || '1tG1O8K1IdtyiVXzfqdcqmXKQfB_26ajIBMoVamuTBfw',
+  escalations: { id: process.env.ESC_SHEET_ID    || '1Y1S-jDHFyUe3IJw-B3X8CgM9JFnRwl_L7fkNtzgVEAw',
                  gid: process.env.ESC_SHEET_GID   || '',
                  // This export has no Due Date on most rows, so the tracker test
                  // would reject the right tab. Match on what it does have.
