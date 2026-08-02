@@ -190,14 +190,16 @@ nothing open read "None open", with any earlier ones noted quietly. If the
 escalation sheet fails, the line reads "not loaded" rather than zero, so no team is
 wrongly marked clean.
 
-    const METER_EXCLUDE = ['Sagar Mishra'];
+    const NO_BOOK_TEAMS = ['Sagar Mishra'];
 
-Teams listed there are kept off this view. The meter reads compliance *against*
-business, and a team with no client book has no business half to read — a 0% dial
-says "failed" when the truth is "not applicable". They stay everywhere else: the
-client book still lists them, and their people are still scored on the scorecard and
-the daily boards. The note above the cards says who is excluded, why, and how many
-people that leaves out of these figures.
+Teams listed there carry no client book, so they are not measured on business at all
+— left off both the **Business** tab and the **KPI meter**. A ₹0 against a ₹50L
+target reads as "failed ₹50L of business" when the truth is "was never carrying a
+book", and on the meter a 0% dial says "failed" when it should say "not applicable".
+
+They are untouched everywhere compliance is measured: the scorecard and the daily
+boards score their people exactly like everyone else. Both views say who is left out
+and why, so the totals are not read as covering the whole team.
 
 Each card has an **(i)** button. It opens under that card and answers the question
 the number provokes — the rule in one sentence, then the arithmetic for that team,
@@ -245,10 +247,8 @@ Anything that fails — a name nobody matches, or a first name two people share 
 quietly loses someone is worse than none, because the total it produces still looks
 complete.
 
-The table is driven by the team list, not by the client book, so a team that owns no
-clients still gets a row with dashes rather than disappearing — Sagar's team files
-timesheets whether or not it bills. Ankush Rana is the reverse: he owns 14 clients
-with no team recorded, and his row says so.
+Ankush Rana owns clients with no team recorded, and his row says so rather than
+hiding it.
 
 The **Team** column on the scorecard shows which pod each person belongs to; sorting
 by it groups a lead with their own people, lead first, which is how a review actually

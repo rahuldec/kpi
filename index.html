@@ -743,13 +743,15 @@ const targetFor = heads => TARGET_SCALED
   ? TARGET_FULL_TEAM * heads / TARGET_TEAM_SIZE
   : TARGET_FULL_TEAM;
 
-/* Teams kept off the KPI meter. The meter reads compliance against business, and
-   a team with no client book has no business half to read — a 0% dial there says
-   "failed" when the truth is "not applicable". They stay on every other view:
-   the client book still lists them, and their people are still scored on the
-   scorecard and the daily boards like everyone else. */
-const METER_EXCLUDE = ['Sagar Mishra'];
-const offMeter = lead => METER_EXCLUDE.some(n => n.toLowerCase() === String(lead).toLowerCase());
+/* Teams that carry no client book, and so are not measured on business at all.
+   A ₹0 against a ₹50L target reads as "failed ₹50L of business" when the truth is
+   "was never carrying a book" — so these teams are left off both the Business tab
+   and the KPI meter rather than shown as a row of dashes and a −₹50L shortfall.
+
+   They are untouched everywhere compliance is measured: the scorecard and the
+   daily boards score their people exactly like everyone else. */
+const NO_BOOK_TEAMS = ['Sagar Mishra'];
+const noBook = lead => NO_BOOK_TEAMS.some(n => n.toLowerCase() === String(lead).toLowerCase());
 
 const PODS = {
   'Mansi Rana':    ['Vansh', 'Divya'],
@@ -1258,7 +1260,7 @@ function meterRows(){
   const {ym, rows} = scoreRows();
   const byLead = new Map();
   for (const lead of POD_TEAM.keys())
-    if (!offMeter(lead))
+    if (!noBook(lead))
       byLead.set(lead, {lead, team: POD_TEAM.get(lead) || [],
                         expected: 0, filed: 0, people: 0, members: []});
 
@@ -1267,7 +1269,7 @@ function meterRows(){
     const lead = POD_OF.get(r.name);
     /* Someone on an excluded team is not "unplaced" — they have a team, it just
        is not measured here. Counting them as loose would read as a data problem. */
-    if (lead && offMeter(lead)){ excluded++; continue; }
+    if (lead && noBook(lead)){ excluded++; continue; }
     if (!lead || !byLead.has(lead)){ loose++; continue; }
     const e = byLead.get(lead);
     e.expected += r.expected; e.filed += r.filed; e.people++;
@@ -1454,8 +1456,8 @@ function renderMeter(){
     `against ${TARGET_SCALED ? 'a target scaled to team size' : `<b>${esc(inr(TARGET_FULL_TEAM))} per team</b>`}. ` +
     `The two are shown side by side, not blended: a team can be filing perfectly and ` +
     `still be short on business, and one number would hide which.` +
-    (excluded ? ` ${esc(METER_EXCLUDE.join(', '))}` +
-                `${METER_EXCLUDE.length === 1 ? "'s team is" : " teams are"} not shown here — ` +
+    (excluded ? ` ${esc(NO_BOOK_TEAMS.join(', '))}` +
+                `${NO_BOOK_TEAMS.length === 1 ? "'s team is" : " teams are"} not shown here — ` +
                 `no client book to measure against — so ${excluded} ` +
                 `${excluded === 1 ? 'person is' : 'people are'} left out of these figures ` +
                 `while still counting on the scorecard.` : '') +
@@ -1472,7 +1474,7 @@ function renderByRm(){
      still exists and still files timesheets, so it gets a row with a dash rather
      than being absent. Leads are matched to the roster the same way members are,
      so an unresolvable lead is reported instead of silently vanishing. */
-  const rows = [...POD_TEAM.keys()].map(lead => {
+  const rows = [...POD_TEAM.keys()].filter(lead => !noBook(lead)).map(lead => {
     const b = bookOf(lead);
     return {name: lead, clients: b ? b.clients : 0, revenue: b ? b.revenue : 0,
             heads: (POD_TEAM.get(lead) || []).length + 1};
@@ -1515,14 +1517,21 @@ function renderByRm(){
      column with no stated basis is the kind that gets quoted out of context. */
   const heads = rows.reduce((n,r) => n + r.heads, 0);
   const owed  = rows.reduce((n,r) => n + targetFor(r.heads), 0);
-  $('targetnote').innerHTML = TARGET_SCALED
+  const off = NO_BOOK_TEAMS.filter(n => POD_TEAM.has(n));
+  const offNote = off.length
+    ? ` ${esc(off.join(', '))}${off.length === 1 ? "'s team carries" : ' teams carry'} no client ` +
+      `book and ${off.length === 1 ? 'is' : 'are'} not listed — a ₹0 against the target would ` +
+      `read as a shortfall rather than as nothing to measure.`
+    : '';
+  $('targetnote').innerHTML = (TARGET_SCALED
     ? `A full team is one RM and two assistants carrying <b>${esc(inr(TARGET_FULL_TEAM))}</b>, ` +
       `so each team is measured against <b>${esc(inr(TARGET_FULL_TEAM / TARGET_TEAM_SIZE))} ` +
       `per person</b> — ${rows.length} teams, ${heads} people, ${esc(inr(Math.round(owed)))} owed ` +
       `against ${esc(inr(total))} on the book.`
     : `Every team is measured against the same <b>${esc(inr(TARGET_FULL_TEAM))}</b>, whatever ` +
       `its size — ${rows.length} teams, ${esc(inr(Math.round(owed)))} owed against ` +
-      `${esc(inr(total))} on the book. Understaffed teams are held to a full team's number.`;
+      `${esc(inr(total))} on the book. Understaffed teams are held to a full team's number.`) +
+    offNote;
 
   /* Say what did not line up. A pod chart that quietly loses a person is worse
      than no pod chart, because the number it produces still looks complete. */
@@ -1879,7 +1888,7 @@ function setDefaultRange(){
 function showActive(){
   if (SOURCE === 'meter'){
     showContent();
-    $('fresh').textContent = `${POD_TEAM.size - METER_EXCLUDE.length} teams`;
+    $('fresh').textContent = `${POD_TEAM.size - NO_BOOK_TEAMS.length} teams`;
     renderMeter();
     return;
   }

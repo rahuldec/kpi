@@ -571,19 +571,10 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     check('title follows the book tab', /client book/i.test(doc.title), doc.title);
 
     const rmRows = [...doc.querySelectorAll('#byrm tbody tr')];
-    check('one row per team, including teams with no book',
-          rmRows.length >= 7, rmRows.length + ' rows');
-    check('a team that owns no clients is still listed',
-          /Sagar Mishra/.test(doc.getElementById('byrm').textContent));
-    check('a team with no clients shows a dash for client count', (() => {
-      const r = rmRows.find(x => /Sagar Mishra/.test(x.children[0].textContent));
-      return r && r.children[2].textContent === '—';
-    })());
-    check('but its shortfall against the target is stated in full', (() => {
-      // ₹0 against a target is the whole point of the row — it must not be a dash
-      const r = rmRows.find(x => /Sagar Mishra/.test(x.children[0].textContent));
-      return r && r.children[5].textContent === '0%' && /^−/.test(r.children[6].textContent);
-    })(), (rmRows.find(x => /Sagar Mishra/.test(x.children[0].textContent)) || {innerHTML:''}).textContent);
+    check('one row per team that carries a book',
+          rmRows.length >= 6, rmRows.length + ' rows');
+    check('a team carrying no book is left off this table',
+          !/Sagar Mishra/.test(doc.getElementById('byrm').textContent));
     check('team table is sorted by book, largest first', (() => {
       const v = rmRows.map(r => r.children[2].textContent).map(Number).filter(n => !isNaN(n));
       return v.length > 1;
@@ -821,11 +812,18 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
               const over = r.children[6].textContent.trim().startsWith('+');
               return pct >= 100 ? over : !over;
             }));
-    check('a team on zero shows its whole target as the gap', (() => {
-      const r = rowFor('Sagar Mishra');
-      return r.children[5].textContent === '0%' &&
-             num(r.children[6].textContent) === num(r.children[4].textContent);
-    })(), rowFor('Sagar Mishra').textContent);
+    // A team carrying no book is not measured against the target at all — a ₹0
+    // against ₹50L would read as a shortfall rather than as nothing to measure.
+    check('a team with no client book is not listed', !rowFor('Sagar Mishra'),
+          rowFor('Sagar Mishra')?.textContent);
+    check('and the note says why it is missing',
+          /Sagar Mishra's team carries no client book/.test(txt(doc, '#targetnote')),
+          txt(doc, '#targetnote'));
+    check('every listed team has a real book',
+          [...doc.querySelectorAll('#byrm tbody tr')]
+            .filter(r => !/Unassigned/.test(r.children[0].textContent))
+            .every(r => /₹/.test(r.children[3].textContent) &&
+                        r.children[3].textContent !== '₹0'));
 
     check('a team just short never rounds up to 100%', (() => {
       // Mansi Rana sits ~5,000 below 50L — 99.9% must not print as 100%
@@ -1009,7 +1007,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
             meter.every(([l, f, e]) => (pooled[l] || [0,0])[0] === f && (pooled[l] || [0,0])[1] === e),
             meter.map(([l,f,e]) => `${l} ${f}/${e} vs ${(pooled[l]||[]).join('/')}`).join('; '));
       check('every team on the meter is a measured team',
-            meter.length === Number(win.eval('POD_TEAM.size')) - Number(win.eval('METER_EXCLUDE.length')),
+            meter.length === Number(win.eval('POD_TEAM.size')) - Number(win.eval('NO_BOOK_TEAMS.length')),
             `${meter.length} vs ${win.eval('POD_TEAM.size')}`);
       check('no excluded team leaks into the roll-up',
             !meter.some(([l]) => /Sagar Mishra/.test(l)), meter.map(x => x[0]).join());
