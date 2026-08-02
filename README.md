@@ -164,6 +164,14 @@ the same control bar.
 
 Business is the standing book against the target.
 
+Below the two dials, each card carries an **escalation line**: how many are open on
+that team's clients, and which clients they are — a count alone just moves the
+question along. It is deliberately not a third dial. A count of live problems has no
+denominator, and a progress bar would invite reading "2 of 5" into it. Teams with
+nothing open read "None open", with any earlier ones noted quietly. If the
+escalation sheet fails, the line reads "not loaded" rather than zero, so no team is
+wrongly marked clean.
+
     const METER_EXCLUDE = ['Sagar Mishra'];
 
 Teams listed there are kept off this view. The meter reads compliance *against*
@@ -372,7 +380,7 @@ entries loaded and when.
     node qa.js
     TZ=Asia/Kolkata node qa.js
 
-306 assertions with the network mocked: parsing (spacer rows above the header, quoted
+319 assertions with the network mocked: parsing (spacer rows above the header, quoted
 fields containing commas and newlines, blank assignees, case-variant names), every
 failure path (sheet not shared, network down, unparseable content), the date-window
 rules, cross-checks between the three places misses are counted, escaping of sheet

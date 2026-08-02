@@ -137,6 +137,20 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
 .how .none{color:var(--body)}
 .how .tk{display:inline-block;min-width:64px;color:var(--faint);font-weight:500}
 
+/* Escalations on a team card. Not a dial: a count of live problems has no
+   denominator, and a progress bar would invite reading "2 of 5" into it. */
+.escline{
+  display:flex;align-items:baseline;gap:9px;margin:2px 0 0;
+  padding-top:12px;border-top:1px solid var(--hair);
+}
+.escline .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.07em;
+  color:var(--faint);width:88px;flex:none}
+.escline .n{font-size:15px;font-weight:600;letter-spacing:-.012em}
+.escline.hot .n{color:var(--miss)}
+.escline.cool .n{color:var(--faint);font-weight:500}
+.escwho{font-size:12.5px;line-height:1.45;color:var(--miss);margin:5px 0 0 97px}
+.escwho.cool{color:var(--faint)}
+
 /* ── client book ─
    A pod's members sit under the lead's name rather than in their own column:
    they are context for the row, not a value to compare across rows. */
@@ -939,6 +953,19 @@ function buildEscalations(){
 const escFor = name => ESC_BY_CLIENT.get(name) || [];
 const openEsc = name => escFor(name).filter(e => !e.closed);
 
+/* Rolled up the only way that makes sense on a team card: an escalation is
+   against a client, and a client is owned by a lead. Returns the client rows so
+   the card can name them — "2 open" alone just moves the question along. */
+function escForTeam(lead){
+  const out = [];
+  for (const c of CLIENTS){
+    if (c.o !== lead) continue;
+    const all = escFor(c.n);
+    if (all.length) out.push({client: c.n, all, open: all.filter(e => !e.closed)});
+  }
+  return out;
+}
+
 /* ---------------- analysis ---------------- */
 function analyse(rows,from,to,joined){
   const days=range(from,to,true), dayset=new Set(days);
@@ -1160,8 +1187,10 @@ function meterRows(){
     const book = bookOf(e.lead);
     const revenue = book ? book.revenue : 0;
     const target = targetFor(e.team.length + 1);
+    const esc = escForTeam(e.lead);
     return {
-      ...e, revenue, target,
+      ...e, revenue, target, esc,
+      escOpen: esc.filter(x => x.open.length),
       compliance: e.expected ? e.filed / e.expected : null,
       business: target ? revenue / target : 0
     };
@@ -1192,6 +1221,8 @@ function howHtml(r){
     `<b>${r.expected - r.filed} missed</b> — ` +
     `${r.expected ? Math.round(r.filed / r.expected * 100) : 0}%.</p>`;
 
+  h += escDetail(r);
+
   if (!r.members.length) return h + `<p class="none">Nobody on this team has any expected days.</p>`;
 
   h += `<h5>Days missed</h5>`;
@@ -1212,6 +1243,49 @@ function howHtml(r){
 }
 
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+/* The escalations behind the count on the card. Open ones first and named; closed
+   ones summarised, because a resolved escalation is context rather than a task. */
+function escDetail(r){
+  if (ESC_ERROR || !r.esc.length) return '';
+  const when = d => {
+    if (!d) return '';
+    const [y, m, day] = d.split('-');
+    return ` — raised ${Number(day)} ${MONTHS_SHORT[Number(m) - 1]} ${y}`;
+  };
+  let h = `<h5>Escalations</h5>`;
+  const open = r.esc.filter(x => x.open.length);
+  for (const x of open){
+    h += `<p class="who2">${esc(x.client)}</p>`;
+    for (const e of x.open)
+      h += `<p class="dates">${esc(e.title || 'escalation')}${esc(when(e.raised))}` +
+           (e.owner ? ` · ${esc(e.owner)}` : '') + `</p>`;
+  }
+  const shut = r.esc.reduce((n, x) => n + (x.all.length - x.open.length), 0);
+  if (shut)
+    h += `<p class="${open.length ? 'dates none' : 'none'}">${shut} resolved earlier ` +
+         `on ${esc(r.esc.filter(x => x.all.length > x.open.length).map(x => x.client).join(', '))}.</p>`;
+  if (!open.length && !shut) return '';
+  return h;
+}
+
+function escLine(r){
+  if (ESC_ERROR)
+    return `<div class="escline cool"><span class="lbl">Escalations</span>` +
+           `<span class="n">—</span></div>` +
+           `<p class="escwho cool">not loaded</p>`;
+
+  const open = r.escOpen.reduce((n, x) => n + x.open.length, 0);
+  const past = r.esc.reduce((n, x) => n + x.all.length, 0) - open;
+  if (!open)
+    return `<div class="escline cool"><span class="lbl">Escalations</span>` +
+           `<span class="n">None open</span></div>` +
+           (past ? `<p class="escwho cool">${past} resolved earlier</p>` : '');
+
+  return `<div class="escline hot"><span class="lbl">Escalations</span>` +
+         `<span class="n">${open} open</span></div>` +
+         `<p class="escwho">${esc(r.escOpen.map(x => x.client).join(', '))}</p>`;
+}
 
 function renderMeter(){
   const {ym, rows, loose, excluded} = meterRows();
@@ -1256,6 +1330,7 @@ function renderMeter(){
            r.expected ? `${r.filed}/${r.expected} entries` : 'nothing expected', compMet) +
       dial('Business', r.business,
            `${inr(r.revenue)} of ${inr(Math.round(r.target))}`, bizMet) +
+      escLine(r) +
       `<div class="how" id="how${i}" hidden>${howHtml(r)}</div>` +
       `</div>`;
   }).join('');

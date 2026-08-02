@@ -1173,6 +1173,62 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     check('the scorecard still computes', doc.querySelectorAll('#score tbody tr').length > 0);
   }
 
+  // ── 1f14. escalations on the team cards ─────────────────────────
+  {
+    const { doc, win } = boot({ body: teamSheet(), clientBody: teamSheet(TEAM_PEOPLE, 500) });
+    await settle();
+    doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
+    doc.getElementById('month').value = '2026-07';
+    doc.getElementById('month').dispatchEvent(new (win.Event)('change'));
+
+    const cards = [...doc.querySelectorAll('.mcard')];
+    const card = n => cards.find(c => new RegExp(n).test(c.querySelector('h4').textContent));
+    check('every card carries an escalation line',
+          cards.every(c => c.querySelector('.escline')));
+    check('escalations are not drawn as a dial — a count has no denominator',
+          cards.every(c => c.querySelectorAll('.track').length === 2));
+
+    // Budha College Karnal and Vedashree School are Sukhmeet's and Kashish's in
+    // the embedded book; the fixture opens one on each.
+    const sk = card('Sukhmeet Singh');
+    check('a team with an open escalation says so',
+          /open/.test(sk.querySelector('.escline .n').textContent),
+          sk.querySelector('.escline .n').textContent);
+    check('and it is marked hot', sk.querySelector('.escline').classList.contains('hot'));
+    check('the affected client is named, not just counted',
+          /Budha College Karnal/.test(sk.querySelector('.escwho')?.textContent || ''),
+          sk.querySelector('.escwho')?.textContent);
+
+    const clean = cards.find(c => /None open/.test(c.querySelector('.escline').textContent));
+    check('a team with nothing open reads "None open"', !!clean);
+    check('and is not marked hot', !clean.classList.contains('hot'));
+
+    // an escalation only reaches the team that owns the client
+    const escd = cards.filter(c => c.querySelector('.escline.hot'));
+    check('escalations reach only the owning team', escd.length < cards.length,
+          `${escd.length} of ${cards.length} teams flagged`);
+
+    // the (i) panel must detail what the line summarises
+    sk.querySelector('button.info').click();
+    const how = sk.querySelector('.how').textContent.replace(/\s+/g, ' ');
+    check('the panel lists the escalation', /Escalations/.test(how) &&
+          /Budha College Karnal/.test(how), how.slice(0, 160));
+    check('with the date it was raised', /raised \d+ \w{3} \d{4}/.test(how), how.slice(0, 200));
+
+    // and a failure must not take the cards down
+    const b2 = boot({ body: teamSheet(), clientBody: teamSheet(TEAM_PEOPLE, 500),
+                      escBody: 'nonsense\n1' });
+    await settle();
+    b2.doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
+    check('a broken escalation sheet still renders the cards',
+          b2.doc.querySelectorAll('.mcard').length > 0);
+    check('and the line says so rather than reading zero',
+          /not loaded/.test(b2.doc.querySelector('.escwho')?.textContent || ''),
+          b2.doc.querySelector('.escwho')?.textContent);
+    check('no team is wrongly marked clean',
+          ![...b2.doc.querySelectorAll('.escline')].some(l => /None open/.test(l.textContent)));
+  }
+
   // ── 1g. stale-function guard ────────────────────────────────────
   {
     // an old api/data.js ignores ?src= and serves one sheet for both
