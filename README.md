@@ -287,9 +287,12 @@ guess puts a red flag on an innocent client, so unmatched names are **listed on 
 page** and resolved by hand in `ESC_ALIAS`:
 
     const ESC_ALIAS = {
-      'GNAV Kurukshetra':   'Gita Niketan Awasiya KKR',
       'Sirsa MSG Glorious': 'Shah Satnam Sirsa'
     };
+
+Prefer renaming in the sheets over adding an entry here — an alias is a second
+place the truth lives. When a rename makes an alias redundant, remove it: one left
+pointing at a client that no longer exists flags nothing at all.
 
 An alias pointing at a client that is not in the book is worse than no alias — it
 looks resolved and flags nothing — so that is reported in the same place.
