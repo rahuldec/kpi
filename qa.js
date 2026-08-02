@@ -110,6 +110,31 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
           /does not refresh on its own/.test(txt(doc, '#asof')), txt(doc, '#asof'));
   }
 
+  // ── 1a3. the snapshot holds clients, not scratch ───────────────
+  {
+    // The source sheet has notes and internal tracker rows below the numbered
+    // client block. They came in once because the extraction filtered on "has a
+    // name" rather than "is numbered"; these pin the shape of what belongs.
+    const m = HTML.match(/const CLIENTS = (\[.*?\]);/s);
+    check('client snapshot parses', !!m);
+    const rows = JSON.parse(m[1]);
+    check('every entry has a name', rows.every(r => r.n && r.n.trim().length > 1));
+    check('no internal tracker rows', !rows.some(r => /daily work track/i.test(r.n)),
+          (rows.find(r => /daily work track/i.test(r.n)) || {}).n);
+    check('no row is a bare duplicate prefix of another', (() => {
+      const names = rows.map(r => r.n.toLowerCase());
+      return !names.some((n, i) => names.some((o, j) =>
+        i !== j && o !== n && o.startsWith(n + ' ') && !rows[i].o));
+    })(), 'an unowned row shadows a longer named one');
+    check('no duplicate client names',
+          new Set(rows.map(r => r.n.toLowerCase())).size === rows.length);
+    check('every owner is a known lead', (() => {
+      const leads = (HTML.match(/const PODS = \{(.*?)\};/s)[1].match(/'([^']+)':/g) || [])
+        .map(x => x.slice(1, -2));
+      return rows.every(r => !r.o || leads.includes(r.o));
+    })());
+  }
+
   // ── 1b. two sources ─────────────────────────────────────────────
   {
     const { doc, calls } = boot(); await settle();

@@ -198,7 +198,14 @@ runs.
 The other two sources are fetched live. This one is compiled into `index.html`:
 
     const CLIENTS_ASOF = '2026-08-01';
-    const CLIENTS = [ ... ];
+    const CLIENTS = [ ... ];   // 148 rows
+
+Only *numbered* rows from the sheet are taken. Below the client block there is
+scratch — two internal "Daily work track" rows, a stray duplicate, and prospect notes
+sitting in the wrong columns — and none of it carries a `Sr No.`. Filtering on the
+client name alone pulls that in and inflates the total. The test suite checks the
+embedded rows for exactly those shapes, so a future re-extraction cannot quietly
+reintroduce them.
 
 That is not a preference. "CS Team Plan.xlsx" is an *uploaded* .xlsx, and Drive only
 exports Docs-editor files as CSV, so there is nothing for `api/data.js` to fetch. The
@@ -265,7 +272,7 @@ entries loaded and when.
     node qa.js
     TZ=Asia/Kolkata node qa.js
 
-207 assertions with the network mocked: parsing (spacer rows above the header, quoted
+213 assertions with the network mocked: parsing (spacer rows above the header, quoted
 fields containing commas and newlines, blank assignees, case-variant names), every
 failure path (sheet not shared, network down, unparseable content), the date-window
 rules, cross-checks between the three places misses are counted, escaping of sheet
