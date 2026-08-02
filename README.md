@@ -164,6 +164,13 @@ the same control bar.
 
 Business is the standing book against the target.
 
+Each card has an **(i)** button. It opens under that card and answers the question
+the number provokes — the rule in one sentence, then the arithmetic for that team,
+then **every date each member missed**, split by tracker. The counts and the dates
+come from the same `scoreRows()` call that drew the dial, so the explanation cannot
+disagree with the figure it explains. One panel opens at a time: several expanded
+cards push the rest off screen and the grid stops being comparable.
+
 **The two are not blended into one score.** Compliance is this month's behaviour,
 business is the standing book; a team can be filing perfectly and still be far short
 on revenue, and a single averaged figure hides exactly the case worth looking at.
@@ -313,11 +320,11 @@ entries loaded and when.
     node qa.js
     TZ=Asia/Kolkata node qa.js
 
-259 assertions with the network mocked: parsing (spacer rows above the header, quoted
+278 assertions with the network mocked: parsing (spacer rows above the header, quoted
 fields containing commas and newlines, blank assignees, case-variant names), every
 failure path (sheet not shared, network down, unparseable content), the date-window
 rules, cross-checks between the three places misses are counted, escaping of sheet
-content, the branding and embedded logo, the page title and metric grouping, the monthly scorecard and its CSV export, the coverage warning firing only for a month that really is outside the data, scorecard sorting (every column, both directions, exempt cells sinking, CSV matching the screen), the remembered view mode, range, tab and sort order, hidden people leaving no trace in any count while exempt people keep their row, the client book tab and its filters, the book column sitting beside compliance without altering it, lakh/crore formatting, pod resolution from first names with every failure reported on the page, the KPI meter (both dials, degenerate rosters, and an invariant that meter compliance equals the pooled scorecard rows team by team), static hygiene (no duplicate ids, no dangling $() references, nothing declared and never used), and a sweep over every tab checking that what should be hidden is hidden in computed style rather than merely flagged, the source switch, the combined roster, per-tracker exemptions, the three view modes and their persistence, Sunday handling in Today/Yesterday,
+content, the branding and embedded logo, the page title and metric grouping, the monthly scorecard and its CSV export, the coverage warning firing only for a month that really is outside the data, scorecard sorting (every column, both directions, exempt cells sinking, CSV matching the screen), the remembered view mode, range, tab and sort order, hidden people leaving no trace in any count while exempt people keep their row, the client book tab and its filters, the book column sitting beside compliance without altering it, lakh/crore formatting, pod resolution from first names with every failure reported on the page, the KPI meter (both dials, degenerate rosters, and an invariant that meter compliance equals the pooled scorecard rows team by team), static hygiene (no duplicate ids, no dangling $() references, nothing declared and never used), the (i) panel agreeing with its dial down to the date count, and a sweep over every tab checking that what should be hidden is hidden in computed style rather than merely flagged, the source switch, the combined roster, per-tracker exemptions, the three view modes and their persistence, Sunday handling in Today/Yesterday,
 inverted date ranges, and timezone independence. Run them after any change to the parser — the
 Asana form fields are expected to change once back-dated entries are blocked.
 

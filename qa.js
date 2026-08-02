@@ -469,9 +469,9 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     const head = 'Task ID,Created At,Completed At,Last Modified,Name,Section/Column,Assignee,Assignee Email,Start Date,Due Date,Tags,Notes';
     const row = (id, who, day) => `${id},2026-07-01,,,x,S,${who},x@x.com,,2026-07-${day},,n`;
     const INT = [',,', ',,url', ',,', head,
-      row(1,'Zara Khan','01'), row(2,'Rahul','01'), row(3,'Rahul','02')].join('\n');
+      row(1,'Zara Khan','01'), row(2,'Rahul Sharma','01'), row(3,'Rahul Sharma','02')].join('\n');
     const CLI = [',,', ',,url', ',,', head,
-      row(101,'Zara Khan','01'), row(102,'Rahul','01')].join('\n');
+      row(101,'Zara Khan','01'), row(102,'Rahul Sharma','01')].join('\n');
     const { doc, win } = boot({ body: INT, clientBody: CLI }); await settle();
 
     check('hidden person has no row on the daily board',
@@ -496,7 +496,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
 
     // and an exempt person is still treated the other way — row kept, dash shown
     const INT2 = [',,', ',,url', ',,', head,
-      row(1,'Zara Khan','01'), row(2,'Sagar Mishra','01'), row(3,'Rahul','01')].join('\n');
+      row(1,'Zara Khan','01'), row(2,'Sagar Mishra','01'), row(3,'Rahul Sharma','01')].join('\n');
     const CLI2 = [',,', ',,url', ',,', head, row(101,'Zara Khan','01')].join('\n');
     const b2 = boot({ body: INT2, clientBody: CLI2 }); await settle();
     b2.doc.querySelector('#sources button[data-src="scorecard"]').click(); await settle();
@@ -966,6 +966,87 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
             meter.length === Number(win.eval('POD_TEAM.size')),
             `${meter.length} vs ${win.eval('POD_TEAM.size')}`);
     }
+  }
+
+  // ── 1f11. the "how is this worked out" panel ────────────────────
+  {
+    const rows = []; let id = 1;
+    const skip = {'Sultan Malik':[3,10], 'Lokesh Kumar':[6], 'Amar Kumar Pandit':[]};
+    const people = ['Sultan Malik','Lokesh Kumar','Amar Kumar Pandit','Amit Kumar','Priya'];
+    people.forEach(p => {
+      for (let d = 1; d <= 20; d++){
+        if (new Date(2026, 6, d).getDay() === 0) continue;
+        if ((skip[p] || []).includes(d)) continue;
+        rows.push(`${id++},2026-07-01,,,x,S,${p},x@x.com,,2026-07-${String(d).padStart(2,'0')},,n`);
+      }
+    });
+    const INT = [',,', ',,url', ',,', TEAM_HEAD].concat(rows).join('\n');
+    const CLI = INT.replace(/\n(\d+),/g, (m, d) => '\n' + (Number(d) + 900) + ',');
+    const { doc, win } = boot({ body: INT, clientBody: CLI }); await settle();
+    doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
+    doc.getElementById('month').value = '2026-07';
+    doc.getElementById('month').dispatchEvent(new (win.Event)('change'));
+
+    const cards = [...doc.querySelectorAll('.mcard')];
+    check('every card has an info button',
+          cards.every(c => c.querySelector('button.info')));
+    check('panels start closed', cards.every(c => c.querySelector('.how').hidden));
+    check('buttons report their state',
+          cards.every(c => c.querySelector('button.info').getAttribute('aria-expanded') === 'false'));
+
+    const card = n => cards.find(c => new RegExp(n).test(c.querySelector('h4').textContent));
+    const sultan = card('Sultan Malik');
+    sultan.querySelector('button.info').click();
+    check('clicking opens the panel', !sultan.querySelector('.how').hidden);
+    check('and flips aria-expanded',
+          sultan.querySelector('button.info').getAttribute('aria-expanded') === 'true');
+
+    const how = sultan.querySelector('.how').textContent.replace(/\s+/g, ' ');
+    check('it states the rule', /one expected entry per tracker/.test(how), how.slice(0, 90));
+    check('it names the Sunday and Saturday treatment',
+          /Sundays excluded/.test(how) && /Saturdays counted/.test(how));
+    check('it lists every member of the team',
+          /Sultan Malik/.test(how) && /Lokesh Kumar/.test(how) && /Amar Kumar Pandit/.test(how));
+    check('it gives actual dates', /\d+ Jul/.test(how), how.slice(-80));
+    check('it separates the two trackers',
+          /internal calls/.test(how) && /client calls/.test(how));
+
+    // the explanation must not be able to disagree with the dial it explains
+    const dialSub = sultan.querySelectorAll('.sub')[0].textContent;   // "N/M entries"
+    const m = dialSub.match(/(\d+)\/(\d+)/);
+    check('the panel arithmetic matches the dial',
+          new RegExp(`${m[2]} expected`).test(how) && new RegExp(`${m[1]} filed`).test(how),
+          `${dialSub} vs ${how.match(/\d+ expected, \d+ filed, \d+ missed/)}`);
+    check('missed equals expected minus filed in the text', (() => {
+      const t = how.match(/(\d+) expected, (\d+) filed, (\d+) missed/);
+      return Number(t[3]) === Number(t[1]) - Number(t[2]);
+    })(), how.match(/\d+ expected, \d+ filed, \d+ missed/));
+    check('the dates listed match the missed count', (() => {
+      const t = Number(how.match(/(\d+) missed/)[1]);
+      const listed = (sultan.querySelector('.how').textContent.match(/\d+ [A-Z][a-z]{2}/g) || []).length;
+      return listed === t;
+    })());
+
+    // only one open at a time, or the grid stops being comparable
+    card('Amit Kumar').querySelector('button.info').click();
+    check('opening another closes the first', sultan.querySelector('.how').hidden);
+    check('and resets the first button',
+          sultan.querySelector('button.info').getAttribute('aria-expanded') === 'false');
+    check('the second is open', !card('Amit Kumar').querySelector('.how').hidden);
+    card('Amit Kumar').querySelector('button.info').click();
+    check('clicking the same button closes it', card('Amit Kumar').querySelector('.how').hidden);
+
+    // the panel must follow the joined toggle, like the dial does
+    doc.getElementById('joined').checked = false;
+    doc.getElementById('joined').dispatchEvent(new (win.Event)('change'));
+    const after = [...doc.querySelectorAll('.mcard')]
+      .find(c => /Sultan Malik/.test(c.querySelector('h4').textContent));
+    check('re-rendering closes any open panel',
+          [...doc.querySelectorAll('.how')].every(h => h.hidden));
+    after.querySelector('button.info').click();
+    check('the panel drops the skip sentence when the toggle is off',
+          !/first ever entry are skipped/.test(after.querySelector('.how').textContent),
+          after.querySelector('.how').textContent.slice(0, 200));
   }
 
   // ── 1g. stale-function guard ────────────────────────────────────
