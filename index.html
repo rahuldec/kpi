@@ -669,6 +669,14 @@ const targetFor = heads => TARGET_SCALED
   ? TARGET_FULL_TEAM * heads / TARGET_TEAM_SIZE
   : TARGET_FULL_TEAM;
 
+/* Teams kept off the KPI meter. The meter reads compliance against business, and
+   a team with no client book has no business half to read — a 0% dial there says
+   "failed" when the truth is "not applicable". They stay on every other view:
+   the client book still lists them, and their people are still scored on the
+   scorecard and the daily boards like everyone else. */
+const METER_EXCLUDE = ['Sagar Mishra'];
+const offMeter = lead => METER_EXCLUDE.some(n => n.toLowerCase() === String(lead).toLowerCase());
+
 const PODS = {
   'Mansi Rana':    ['Vansh', 'Divya'],
   'Sukhmeet Singh':['Gobind', 'Sapna', 'Bhavey Saluja'],
@@ -1010,12 +1018,16 @@ function meterRows(){
   const {ym, rows} = scoreRows();
   const byLead = new Map();
   for (const lead of POD_TEAM.keys())
-    byLead.set(lead, {lead, team: POD_TEAM.get(lead) || [],
-                      expected: 0, filed: 0, people: 0, members: []});
+    if (!offMeter(lead))
+      byLead.set(lead, {lead, team: POD_TEAM.get(lead) || [],
+                        expected: 0, filed: 0, people: 0, members: []});
 
-  let loose = 0;
+  let loose = 0, excluded = 0;
   for (const r of rows){
     const lead = POD_OF.get(r.name);
+    /* Someone on an excluded team is not "unplaced" — they have a team, it just
+       is not measured here. Counting them as loose would read as a data problem. */
+    if (lead && offMeter(lead)){ excluded++; continue; }
     if (!lead || !byLead.has(lead)){ loose++; continue; }
     const e = byLead.get(lead);
     e.expected += r.expected; e.filed += r.filed; e.people++;
@@ -1033,7 +1045,7 @@ function meterRows(){
     };
   });
   out.sort((a,b) => b.business - a.business || a.lead.localeCompare(b.lead));
-  return {ym, rows: out, loose};
+  return {ym, rows: out, loose, excluded};
 }
 
 let OPEN_CARD = null;
@@ -1080,7 +1092,7 @@ function howHtml(r){
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 function renderMeter(){
-  const {ym, rows, loose} = meterRows();
+  const {ym, rows, loose, excluded} = meterRows();
   const pct = v => v === null ? null : Math.round(v * 100);
   /* Same rule as the book table: never round across the line, so a bar that has
      not reached the target cannot print as 100%. */
@@ -1134,6 +1146,11 @@ function renderMeter(){
     `against ${TARGET_SCALED ? 'a target scaled to team size' : `<b>${esc(inr(TARGET_FULL_TEAM))} per team</b>`}. ` +
     `The two are shown side by side, not blended: a team can be filing perfectly and ` +
     `still be short on business, and one number would hide which.` +
+    (excluded ? ` ${esc(METER_EXCLUDE.join(', '))}` +
+                `${METER_EXCLUDE.length === 1 ? "'s team is" : " teams are"} not shown here — ` +
+                `no client book to measure against — so ${excluded} ` +
+                `${excluded === 1 ? 'person is' : 'people are'} left out of these figures ` +
+                `while still counting on the scorecard.` : '') +
     (loose ? ` <b>${loose} ${loose === 1 ? 'person is' : 'people are'} in no team</b> and ` +
              `counted in neither` +
              (POD_GAPS.length ? `: ${POD_GAPS.map(esc).join('. ')}` : '') + `.` : '');
@@ -1513,7 +1530,7 @@ function setDefaultRange(){
 function showActive(){
   if (SOURCE === 'meter'){
     showContent();
-    $('fresh').textContent = `${POD_TEAM.size} teams`;
+    $('fresh').textContent = `${POD_TEAM.size - METER_EXCLUDE.length} teams`;
     renderMeter();
     return;
   }

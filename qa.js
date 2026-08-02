@@ -833,7 +833,18 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
           !shown(doc, '#scorecard') && !shown(doc, '#clients') && !shown(doc, '#chase'));
 
     const cards = [...doc.querySelectorAll('.mcard')];
-    check('one card per team', cards.length === 7, cards.length + ' cards');
+    // Sagar's team is deliberately kept off this view, so six of the seven show
+    check('one card per measured team', cards.length === 6, cards.length + ' cards');
+    check('the excluded team has no card',
+          !cards.some(c => /Sagar Mishra/.test(c.querySelector('h4').textContent)));
+    check('the note says why it is missing',
+          /Sagar Mishra's team is not shown here/.test(txt(doc, '#meterhint')),
+          txt(doc, '#meterhint'));
+    check('and says those people still count elsewhere',
+          /still counting on the scorecard/.test(txt(doc, '#meterhint')));
+    check('excluded people are not reported as unplaced',
+          !/Mehak|Akshat/.test((txt(doc, '#meterhint').match(/in no team.*/) || [''])[0]),
+          txt(doc, '#meterhint'));
     check('each card carries both dials',
           cards.every(c => c.querySelectorAll('.dial').length === 2));
     check('the dials are labelled compliance and business',
@@ -852,8 +863,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
           sub(card('Sukhmeet Singh'), 1));
     check('a team over target reads above 100%',
           parseInt(val(card('Sukhmeet Singh'), 1)) > 100, val(card('Sukhmeet Singh'), 1));
-    check('a team with no book reads 0%',
-          val(card('Sagar Mishra'), 1) === '0%', val(card('Sagar Mishra'), 1));
+
     check('a team just short never rounds to 100%',
           val(card('Mansi Rana'), 1) === '99%', val(card('Mansi Rana'), 1));
 
@@ -962,9 +972,11 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
       check('meter compliance equals the pooled scorecard rows, team by team',
             meter.every(([l, f, e]) => (pooled[l] || [0,0])[0] === f && (pooled[l] || [0,0])[1] === e),
             meter.map(([l,f,e]) => `${l} ${f}/${e} vs ${(pooled[l]||[]).join('/')}`).join('; '));
-      check('every team on the meter is a team in POD_TEAM',
-            meter.length === Number(win.eval('POD_TEAM.size')),
+      check('every team on the meter is a measured team',
+            meter.length === Number(win.eval('POD_TEAM.size')) - Number(win.eval('METER_EXCLUDE.length')),
             `${meter.length} vs ${win.eval('POD_TEAM.size')}`);
+      check('no excluded team leaks into the roll-up',
+            !meter.some(([l]) => /Sagar Mishra/.test(l)), meter.map(x => x[0]).join());
     }
   }
 

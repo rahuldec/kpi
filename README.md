@@ -164,6 +164,15 @@ the same control bar.
 
 Business is the standing book against the target.
 
+    const METER_EXCLUDE = ['Sagar Mishra'];
+
+Teams listed there are kept off this view. The meter reads compliance *against*
+business, and a team with no client book has no business half to read — a 0% dial
+says "failed" when the truth is "not applicable". They stay everywhere else: the
+client book still lists them, and their people are still scored on the scorecard and
+the daily boards. The note above the cards says who is excluded, why, and how many
+people that leaves out of these figures.
+
 Each card has an **(i)** button. It opens under that card and answers the question
 the number provokes — the rule in one sentence, then the arithmetic for that team,
 then **every date each member missed**, split by tracker. The counts and the dates
@@ -320,7 +329,7 @@ entries loaded and when.
     node qa.js
     TZ=Asia/Kolkata node qa.js
 
-278 assertions with the network mocked: parsing (spacer rows above the header, quoted
+282 assertions with the network mocked: parsing (spacer rows above the header, quoted
 fields containing commas and newlines, blank assignees, case-variant names), every
 failure path (sheet not shared, network down, unparseable content), the date-window
 rules, cross-checks between the three places misses are counted, escaping of sheet
