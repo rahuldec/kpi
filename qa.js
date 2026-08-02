@@ -48,7 +48,7 @@ const ESC_SHEET = [
 ].join('\n');
 
 function boot({ body = SHEET, clientBody = CLIENT_DEFAULT, escBody = ESC_SHEET,
-                status = 200, reject = false } = {}) {
+                status = 200, reject = false, store = null } = {}) {
   const errs = [], calls = [];
   // beforeParse installs the mock before the page's own <script> runs, so the
   // script executes normally and its top-level bindings stay reachable via eval.
@@ -60,6 +60,9 @@ function boot({ body = SHEET, clientBody = CLIENT_DEFAULT, escBody = ESC_SHEET,
     // Each JSDOM gets its own storage, so the cases below stay independent.
     url: 'https://kpi.test/',
     beforeParse(window) {
+      // Seed localStorage before the page script runs, so the restore path is
+      // exercised rather than simulated.
+      if (store) for (const [k, v] of Object.entries(store)) window.localStorage.setItem(k, v);
       window.fetch = (url) => {
         calls.push(url);
         if (reject) return Promise.reject(new Error('Failed to fetch'));
@@ -92,6 +95,16 @@ const TEAM_HEAD = 'Task ID,Created At,Completed At,Last Modified,Name,Section/Co
 const teamSheet = (people = TEAM_PEOPLE, off = 0) =>
   [',,', ',,url', ',,', TEAM_HEAD].concat(people.map((p, i) =>
     `${off + i + 1},2026-07-01,,,x,S,${p},x@x.com,,2026-07-01,,n`)).join('\n');
+
+/* Pick months the way the UI does — tick the boxes in the popover — rather than
+   poking a value onto a control that no longer exists. Accepts one month or many. */
+const pickMonths = (doc, ...months) => {
+  const boxes = [...doc.querySelectorAll('#monthlist input[type=checkbox]')];
+  for (const b of boxes) b.checked = months.includes(b.value);
+  const miss = months.filter(m => !boxes.some(b => b.value === m));
+  if (miss.length) throw new Error('month not offered by the picker: ' + miss.join());
+  boxes[0].dispatchEvent(new doc.defaultView.Event('change', {bubbles: true}));
+};
 
 const settle = () => new Promise(r => setTimeout(r, 30));
 const txt = (doc, s) => (doc.querySelector(s)?.textContent || '').replace(/\s+/g, ' ').trim();
@@ -346,8 +359,8 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
           doc.getElementById('monthwrap').hidden === false &&
           doc.getElementById('presets').hidden === true);
     check('month defaults to the current month',
-          doc.getElementById('month').value === isoLocal(new Date()).slice(0,7),
-          doc.getElementById('month').value);
+          txt(doc, '#monthbtn') === new Date().toLocaleDateString('en-GB',
+            {month:'long', year:'numeric'}), txt(doc, '#monthbtn'));
     check('headline changes for the scorecard', /Missed days/.test(txt(doc, '#h1')), txt(doc, '#h1'));
 
     const rows = [...doc.querySelectorAll('#score tbody tr')];
@@ -429,8 +442,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
 
     const { doc, win } = boot({ body: INT, clientBody: CLI }); await settle();
     doc.querySelector('#sources button[data-src="scorecard"]').click(); await settle();
-    doc.getElementById('month').value = '2026-07';
-    doc.getElementById('month').dispatchEvent(new (win.Event)('change'));
+    pickMonths(doc, '2026-07');
     const names = () => [...doc.querySelectorAll('#score tbody td:first-child')].map(e => e.textContent);
     const clientCells = () => [...doc.querySelectorAll('#score tbody tr')].map(r => r.children[2].textContent);
     const hit = col => doc.querySelector(`#score th button[data-col="${col}"]`).click();
@@ -512,8 +524,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
           txt(doc, '#fresh'));
 
     doc.querySelector('#sources button[data-src="scorecard"]').click(); await settle();
-    doc.getElementById('month').value = '2026-07';
-    doc.getElementById('month').dispatchEvent(new (win.Event)('change'));
+    pickMonths(doc, '2026-07');
     check('hidden person has no scorecard row',
           !/rahul/i.test(doc.getElementById('score').textContent));
     check('scorecard shows only the real person',
@@ -526,8 +537,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     const CLI2 = [',,', ',,url', ',,', head, row(101,'Zara Khan','01')].join('\n');
     const b2 = boot({ body: INT2, clientBody: CLI2 }); await settle();
     b2.doc.querySelector('#sources button[data-src="scorecard"]').click(); await settle();
-    b2.doc.getElementById('month').value = '2026-07';
-    b2.doc.getElementById('month').dispatchEvent(new (b2.win.Event)('change'));
+    pickMonths(b2.doc, '2026-07');
     const board = b2.doc.getElementById('score').textContent;
     check('exempt keeps a row where hidden loses one',
           /sagar mishra/i.test(board) && !/rahul/i.test(board), board.slice(0, 120));
@@ -624,8 +634,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     const CLI = [',,', ',,url', ',,', head, row(101,'Sukhmeet Singh','01')].join('\n');
     const { doc, win } = boot({ body: INT, clientBody: CLI }); await settle();
     doc.querySelector('#sources button[data-src="scorecard"]').click(); await settle();
-    doc.getElementById('month').value = '2026-07';
-    doc.getElementById('month').dispatchEvent(new (win.Event)('change'));
+    pickMonths(doc, '2026-07');
 
     const rowFor = n => [...doc.querySelectorAll('#score tbody tr')]
       .find(r => r.children[0].textContent === n);
@@ -724,8 +733,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
 
     // team column on the scorecard
     doc.querySelector('#sources button[data-src="scorecard"]').click(); await settle();
-    doc.getElementById('month').value = '2026-07';
-    doc.getElementById('month').dispatchEvent(new (win.Event)('change'));
+    pickMonths(doc, '2026-07');
     const rowFor = n => [...doc.querySelectorAll('#score tbody tr')]
       .find(r => r.children[0].textContent === n);
     check('a team member shows their lead',
@@ -850,8 +858,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
           tab.closest('.group')?.querySelector('.grouplabel')?.textContent === 'Overall',
           tab.closest('.group')?.querySelector('.grouplabel')?.textContent);
     tab.click(); await settle();
-    doc.getElementById('month').value = '2026-07';
-    doc.getElementById('month').dispatchEvent(new (win.Event)('change'));
+    pickMonths(doc, '2026-07');
 
     check('meter panel shown', shown(doc, '#meter'));
     check('the month picker is available here too', shown(doc, '#monthwrap'));
@@ -911,13 +918,20 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
           txt(doc, '#meterhint'));
 
     // the shared controls must drive this view, not just the scorecard
-    const before = val(card('Amit Kumar'), 0);
-    doc.getElementById('month').value = '2026-06';
-    doc.getElementById('month').dispatchEvent(new (win.Event)('change'));
+    pickMonths(doc, '2026-08');
     check('changing the month re-renders the meter',
-          /June 2026/.test(txt(doc, '#meterhint')), txt(doc, '#meterhint'));
-    doc.getElementById('month').value = '2026-07';
-    doc.getElementById('month').dispatchEvent(new (win.Event)('change'));
+          /August 2026/.test(txt(doc, '#meterhint')), txt(doc, '#meterhint'));
+
+    // several months at once
+    pickMonths(doc, '2026-07', '2026-08');
+    check('two months name both', /July and August 2026/.test(txt(doc, '#meterhint')),
+          txt(doc, '#meterhint'));
+    check('expected days grow with the selection', (() => {
+      const m = sub(card('Amit Kumar'), 0).match(/\d+\/(\d+)/);
+      return Number(m[1]) > 54;
+    })(), sub(card('Amit Kumar'), 0));
+
+    pickMonths(doc, '2026-07');
     const joined = doc.getElementById('joined');
     joined.checked = !joined.checked;
     joined.dispatchEvent(new (win.Event)('change'));
@@ -940,8 +954,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
       const { doc, win } = boot({ body: one(['Ankush Rana']), clientBody: oneB(['Ankush Rana']) });
       await settle();
       doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
-      doc.getElementById('month').value = '2026-07';
-      doc.getElementById('month').dispatchEvent(new (win.Event)('change'));
+      pickMonths(doc, '2026-07');
       check('a lead with no team still gets a card',
             doc.querySelectorAll('.mcard').length === 1,
             String(doc.querySelectorAll('.mcard').length));
@@ -952,8 +965,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
       const { doc, win } = boot({ body: one(['Zeta One','Zeta Two']), clientBody: oneB(['Zeta One']) });
       await settle();
       doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
-      doc.getElementById('month').value = '2026-07';
-      doc.getElementById('month').dispatchEvent(new (win.Event)('change'));
+      pickMonths(doc, '2026-07');
       check('no teams gives a message, not a blank grid',
             /No teams to show/.test(txt(doc, '#meters')), txt(doc, '#meters'));
       check('and it names the file to edit', /PODS/.test(txt(doc, '#meters')));
@@ -964,8 +976,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
       const { doc, win } = boot({ body: one(['Gobind Monga']), clientBody: oneB(['Gobind Monga']) });
       await settle();
       doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
-      doc.getElementById('month').value = '2026-07';
-      doc.getElementById('month').dispatchEvent(new (win.Event)('change'));
+      pickMonths(doc, '2026-07');
       check('a missing lead is explained on the meter, not left blank',
             /Sukhmeet Singh/.test(txt(doc, '#meters')), txt(doc, '#meters'));
     }
@@ -981,8 +992,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
       const CLI = INT.replace(/\n(\d+),/g, (m, d) => '\n' + (Number(d) + 900) + ',');
       const { doc, win } = boot({ body: INT, clientBody: CLI }); await settle();
       doc.querySelector('#sources button[data-src="scorecard"]').click(); await settle();
-      doc.getElementById('month').value = '2026-07';
-      doc.getElementById('month').dispatchEvent(new (win.Event)('change'));
+      pickMonths(doc, '2026-07');
 
       const meter = JSON.parse(win.eval(
         'JSON.stringify(meterRows().rows.map(r=>[r.lead,r.filed,r.expected]))'));
@@ -1022,8 +1032,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     const CLI = INT.replace(/\n(\d+),/g, (m, d) => '\n' + (Number(d) + 900) + ',');
     const { doc, win } = boot({ body: INT, clientBody: CLI }); await settle();
     doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
-    doc.getElementById('month').value = '2026-07';
-    doc.getElementById('month').dispatchEvent(new (win.Event)('change'));
+    pickMonths(doc, '2026-07');
 
     const cards = [...doc.querySelectorAll('.mcard')];
     check('every card has an info button',
@@ -1178,8 +1187,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     const { doc, win } = boot({ body: teamSheet(), clientBody: teamSheet(TEAM_PEOPLE, 500) });
     await settle();
     doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
-    doc.getElementById('month').value = '2026-07';
-    doc.getElementById('month').dispatchEvent(new (win.Event)('change'));
+    pickMonths(doc, '2026-07');
 
     const cards = [...doc.querySelectorAll('.mcard')];
     const card = n => cards.find(c => new RegExp(n).test(c.querySelector('h4').textContent));
@@ -1229,6 +1237,95 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
           ![...b2.doc.querySelectorAll('.escline')].some(l => /None open/.test(l.textContent)));
   }
 
+  // ── 1f15. the month picker ──────────────────────────────────────
+  {
+    const { doc, win } = boot({ body: teamSheet(), clientBody: teamSheet(TEAM_PEOPLE, 500) });
+    await settle();
+    doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
+
+    check('the picker is a button, not a bare month input',
+          !!doc.getElementById('monthbtn') && !doc.querySelector('input[type=month]'));
+    check('it starts closed', doc.getElementById('monthpop').hidden);
+    doc.getElementById('monthbtn').click();
+    check('clicking opens it', !doc.getElementById('monthpop').hidden);
+    check('and reports its state',
+          doc.getElementById('monthbtn').getAttribute('aria-expanded') === 'true');
+
+    // only months with data behind them
+    const offered = [...doc.querySelectorAll('#monthlist input')].map(i => i.value);
+    check('every offered month is within coverage or currently chosen',
+          offered.every(m => m >= '2026-07'), offered.join());
+    check('the current month is offered', offered.includes('2026-08'), offered.join());
+    check('a month with no data is not offered', !offered.includes('2026-03'), offered.join());
+
+    // one month behaves exactly as the old single picker did
+    pickMonths(doc, '2026-07');
+    check('one month reads as that month alone', txt(doc, '#monthbtn') === 'July 2026',
+          txt(doc, '#monthbtn'));
+    const oneMonth = Number(doc.querySelector('.mcard .sub').textContent.match(/\/(\d+)/)[1]);
+
+    // and a past month must not claim to be running
+    check('a finished month does not say "to date"',
+          !/to date/.test(txt(doc, '#meterhint')), txt(doc, '#meterhint'));
+    pickMonths(doc, '2026-08');
+    check('the current month does say "to date"',
+          /to date/.test(txt(doc, '#meterhint')), txt(doc, '#meterhint'));
+
+    // two months
+    pickMonths(doc, '2026-07', '2026-08');
+    check('two months are named in full', txt(doc, '#monthbtn') === 'July and August 2026',
+          txt(doc, '#monthbtn'));
+    const twoMonths = Number(doc.querySelector('.mcard .sub').textContent.match(/\/(\d+)/)[1]);
+    check('expected days are the sum of both months', twoMonths > oneMonth,
+          `${twoMonths} vs ${oneMonth}`);
+
+    // the quick picks
+    doc.querySelector('#monthpop button[data-pick="this"]').click();
+    check('"This month" selects exactly one', txt(doc, '#monthbtn') === 'August 2026',
+          txt(doc, '#monthbtn'));
+    doc.querySelector('#monthpop button[data-pick="all"]').click();
+    check('"All covered" selects every offered month',
+          [...doc.querySelectorAll('#monthlist input:checked')].length === offered.length);
+
+    // unticking everything must not produce a 0/0 dashboard
+    for (const b of doc.querySelectorAll('#monthlist input')) b.checked = false;
+    doc.querySelector('#monthlist input').dispatchEvent(new win.Event('change', {bubbles: true}));
+    check('an empty selection falls back to the current month rather than nothing',
+          txt(doc, '#monthbtn') === 'August 2026', txt(doc, '#monthbtn'));
+    check('and the cards still render', doc.querySelectorAll('.mcard').length > 0);
+
+    check('the choice is remembered',
+          JSON.parse(win.localStorage.getItem('kpi.months')).length === 1,
+          win.localStorage.getItem('kpi.months'));
+
+    // clicking away closes the popover
+    doc.getElementById('monthbtn').click();
+    doc.body.click();
+    check('clicking outside closes it', doc.getElementById('monthpop').hidden);
+  }
+
+  // ── 1f16. months carry across the two views that use them ───────
+  {
+    const { doc } = boot({ body: teamSheet(), clientBody: teamSheet(TEAM_PEOPLE, 500) });
+    await settle();
+    doc.querySelector('#sources button[data-src="scorecard"]').click(); await settle();
+    pickMonths(doc, '2026-07', '2026-08');
+    const scoreExpected = [...doc.querySelectorAll('#score tbody tr')]
+      .map(r => r.children[4].textContent);
+    doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
+    check('the meter inherits the scorecard selection',
+          txt(doc, '#monthbtn') === 'July and August 2026', txt(doc, '#monthbtn'));
+    check('and the two agree on the totals', (() => {
+      const meterTotal = JSON.parse(doc.defaultView.eval(
+        'JSON.stringify(meterRows().rows.reduce((n,r)=>n+r.expected,0))'));
+      const scoreTotal = scoreExpected.reduce((n, s) => n + Number(s.split('/')[1] || 0), 0);
+      return meterTotal > 0 && scoreTotal >= meterTotal;
+    })());
+    check('the CSV filename covers the whole span', (() => {
+      return /2026-07/.test(doc.defaultView.eval('scoreRows().months.join()'));
+    })());
+  }
+
   // ── 1g. stale-function guard ────────────────────────────────────
   {
     // an old api/data.js ignores ?src= and serves one sheet for both
@@ -1248,11 +1345,13 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
 
   // ── 1h. export-window coverage ──────────────────────────────────
   {
-    // a month that starts before the data begins must be flagged, not scored silently
-    const { doc } = boot(); await settle();
+    /* A month outside the export window can only be reached by restoring a choice
+       from a previous visit — the picker will not offer one otherwise. It must
+       still be listed and flagged rather than scored silently. */
+    const { doc } = boot({ store: {'kpi.months': '["2026-01"]'} }); await settle();
     doc.querySelector('#sources button[data-src="scorecard"]').click(); await settle();
-    doc.getElementById('month').value = '2026-01';
-    doc.getElementById('month').dispatchEvent(new (doc.defaultView.Event)('change'));
+    check('a restored month outside coverage is still listed',
+          [...doc.querySelectorAll('#monthlist input')].some(i => i.value === '2026-01'));
     check('month outside the data is flagged',
           /outside the data/i.test(txt(doc, '#coverwarn')), txt(doc, '#coverwarn'));
     check('warning names how far back the data reaches',
@@ -1262,8 +1361,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     // a fully covered month gets no warning
     const { doc } = boot(); await settle();
     doc.querySelector('#sources button[data-src="scorecard"]').click(); await settle();
-    doc.getElementById('month').value = '2026-08';
-    doc.getElementById('month').dispatchEvent(new (doc.defaultView.Event)('change'));
+    pickMonths(doc, '2026-08');
     check('covered month shows no warning', txt(doc, '#coverwarn') === '', txt(doc, '#coverwarn'));
   }
   {
@@ -1277,16 +1375,17 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     const BIG_C = BIG.replace(/\n(\d+),/g, (m, d) => '\n' + (Number(d) + 1000) + ',');
     const { doc } = boot({ body: BIG, clientBody: BIG_C }); await settle();
     doc.querySelector('#sources button[data-src="scorecard"]').click(); await settle();
-    doc.getElementById('month').value = '2026-07';
-    doc.getElementById('month').dispatchEvent(new (doc.defaultView.Event)('change'));
+    pickMonths(doc, '2026-07');
     check('capped sheet alone raises no warning', txt(doc, '#coverwarn') === '',
           txt(doc, '#coverwarn'));
-    doc.getElementById('month').value = '2026-01';
-    doc.getElementById('month').dispatchEvent(new (doc.defaultView.Event)('change'));
+
+    const b2 = boot({ body: BIG, clientBody: BIG_C, store: {'kpi.months': '["2026-01"]'} });
+    await settle();
+    b2.doc.querySelector('#sources button[data-src="scorecard"]').click(); await settle();
     check('capped sheet still flags a month outside the data',
-          /outside the data/i.test(txt(doc, '#coverwarn')), txt(doc, '#coverwarn'));
+          /outside the data/i.test(txt(b2.doc, '#coverwarn')), txt(b2.doc, '#coverwarn'));
     check('that warning says the export limit is why',
-          /export limit/i.test(txt(doc, '#coverwarn')), txt(doc, '#coverwarn'));
+          /export limit/i.test(txt(b2.doc, '#coverwarn')), txt(b2.doc, '#coverwarn'));
   }
   {
     // the scorecard carries no explanatory prose — the table is the whole story

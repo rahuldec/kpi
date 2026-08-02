@@ -88,6 +88,38 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
 .escnote b{color:var(--ink);font-weight:600}
 .escnote.warn{background:var(--page);color:var(--faint)}
 
+/* ── month picker ─────────────────────────────────────────────────────────────
+   A checkbox list rather than a single <input type=month>: a quarter, or two
+   months side by side, is a question people actually ask, and a range control
+   cannot express "June and August but not July". Only months the sheets cover
+   are offered — listing a month with no data behind it produces a confident 0%. */
+.monthbtn{
+  font:inherit;font-size:14px;color:var(--ink);background:var(--page);
+  border:0;border-radius:10px;padding:7px 12px;cursor:pointer;
+}
+.monthbtn:hover{color:var(--brand)}
+.monthbtn[aria-expanded=true]{background:var(--brand);color:#fff}
+.month{position:relative}
+.monthpop{
+  position:absolute;top:calc(100% + 8px);left:0;z-index:20;min-width:230px;
+  background:var(--card);border:1px solid var(--line);border-radius:12px;
+  padding:12px;box-shadow:0 10px 34px rgba(0,0,0,.13);
+}
+.monthquick{display:flex;gap:6px;margin:0 0 10px;padding-bottom:10px;
+  border-bottom:1px solid var(--hair)}
+.monthquick button{
+  font:inherit;font-size:12px;color:var(--body);background:var(--page);
+  border:0;border-radius:7px;padding:5px 9px;cursor:pointer;
+}
+.monthquick button:hover{background:var(--brand);color:#fff}
+.monthlist{max-height:260px;overflow:auto;display:flex;flex-direction:column;gap:1px}
+.monthlist label{
+  display:flex;align-items:center;gap:9px;font-size:14px;color:var(--ink);
+  padding:5px 6px;border-radius:7px;cursor:pointer;
+}
+.monthlist label:hover{background:var(--page)}
+.monthlist .part{margin-left:auto;font-size:11px;color:var(--miss)}
+
 /* ── KPI meter ─────────────────────────────────────────────────────────────
    One card per team, two dials on each. They sit side by side rather than being
    averaged into a single figure: compliance is this month's behaviour, business
@@ -483,7 +515,17 @@ footer b{color:var(--body);font-weight:600}
       <button type="button" data-mode="custom">Date range</button>
     </span>
     <span class="month" id="monthwrap" hidden>
-      <label for="month">Month</label><input type="month" id="month">
+      <label id="monthlabel">Months</label>
+      <button type="button" class="monthbtn" id="monthbtn" aria-expanded="false"
+              aria-haspopup="true">July 2026</button>
+      <div class="monthpop" id="monthpop" hidden>
+        <div class="monthquick">
+          <button type="button" data-pick="this">This month</button>
+          <button type="button" data-pick="last3">Last 3</button>
+          <button type="button" data-pick="all">All covered</button>
+        </div>
+        <div class="monthlist" id="monthlist"></div>
+      </div>
     </span>
     <span class="dates" id="dates" hidden>
       <label for="from">From</label><input type="date" id="from">
@@ -727,7 +769,56 @@ const SOURCES = {
   meter:     {label: 'CS team KPI meter',              noun: 'calls'}
 };
 const TRACKERS = ['internal','client'];
-const MONTH_KEY = 'kpi.month';
+const MONTH_KEY = 'kpi.months';
+/* Selected months, 'YYYY-MM', always sorted ascending. One entry is the common
+   case and behaves exactly as the old single picker did. */
+let MONTHS = [];
+
+const ymAdd = (ym, n) => {
+  const [y, m] = ym.split('-').map(Number);
+  const d = new Date(y, m - 1 + n, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+};
+const thisMonth = () => iso(new Date()).slice(0, 7);
+
+/* Months worth offering: from the earliest month either sheet reaches, up to the
+   current one. Beyond that there is nothing behind the figure. */
+function coveredMonths(){
+  const froms = TRACKERS.map(t => COVER[t] && COVER[t].from).filter(Boolean);
+  const first = froms.length ? froms.sort()[0].slice(0, 7) : thisMonth();
+  const out = [];
+  for (let m = thisMonth(); m >= first; m = ymAdd(m, -1)) out.push(m);
+  /* A month restored from a previous visit can have since aged out of the export
+     window. It is still listed — otherwise it would be silently scored with no way
+     to see or untick it — and the coverage warning explains what happened. */
+  for (const m of MONTHS) if (!out.includes(m)) out.push(m);
+  return out.sort().reverse();
+}
+
+/* A month is only partly covered if a sheet starts inside it — the same export
+   cap the scorecard warns about, surfaced early so it can be seen while choosing. */
+function partial(ym){
+  return TRACKERS.some(t => {
+    const c = COVER[t];
+    return c && c.from && c.from.slice(0, 7) === ym && !c.from.endsWith('-01');
+  });
+}
+
+const monthName = ym => {
+  const [y, m] = ym.split('-').map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString('en-GB', {month: 'long', year: 'numeric'});
+};
+
+/* "July 2026" for one, "June and July 2026" for two, "3 months: May to July 2026"
+   beyond that — a list of six month names is not a label anyone reads. */
+function monthsLabel(){
+  if (!MONTHS.length) return 'None';
+  if (MONTHS.length === 1) return monthName(MONTHS[0]);
+  if (MONTHS.length === 2)
+    return `${monthName(MONTHS[0]).replace(/ \d{4}$/, '')} and ${monthName(MONTHS[1])}`;
+  return `${MONTHS.length} months: ${monthName(MONTHS[0]).replace(/ \d{4}$/, '')} to ` +
+         `${monthName(MONTHS[MONTHS.length - 1])}`;
+}
 const TARGET_KEY = 'kpi.scaleTarget';
 /* ---- who is not expected to file where ----------------------------------
    Everyone on the roster is expected to file to BOTH trackers unless listed
@@ -1116,8 +1207,11 @@ function sortScore(rows){
 }
 
 function scoreRows(){
-  const ym = $('month').value || iso(new Date()).slice(0,7);
-  const days = monthDays(ym);
+  const months = MONTHS.length ? MONTHS : [thisMonth()];
+  const ym = months[0];
+  /* Every selected month's working days, pooled. Sorted so the missed-date lists
+     in the (i) panel read in order across a multi-month selection. */
+  const days = months.flatMap(monthDays).sort();
   const joined = $('joined').checked;
   const today = iso(new Date());
   // Do not score days that have not happened yet.
@@ -1151,7 +1245,7 @@ function scoreRows(){
     row.rate = row.expected ? row.filed / row.expected : 1;
     out.push(row);
   }
-  return {ym, days, live, rows: sortScore(out)};
+  return {ym, months, days, live, rows: sortScore(out)};
 }
 
 /* ---------------- KPI meter ----------------
@@ -1160,11 +1254,6 @@ function scoreRows(){
    a team's number is its members' filed entries over their expected ones, not an
    average of their percentages, which would let one member with three expected
    days weigh as much as one with fifty. */
-const monthLabel = ym => {
-  const [y, m] = ym.split('-').map(Number);
-  return new Date(y, m - 1, 1).toLocaleDateString('en-GB', {month: 'long', year: 'numeric'});
-};
-
 function meterRows(){
   const {ym, rows} = scoreRows();
   const byLead = new Map();
@@ -1289,6 +1378,25 @@ function escLine(r){
          `<p class="escwho">${esc(r.escOpen.map(x => x.client).join(', '))}</p>`;
 }
 
+function renderMonthPicker(){
+  const months = coveredMonths();
+  $('monthlist').innerHTML = months.map(m =>
+    `<label><input type="checkbox" value="${esc(m)}"${MONTHS.includes(m) ? ' checked' : ''}>` +
+    `${esc(monthName(m))}${partial(m) ? '<span class="part">part only</span>' : ''}</label>`
+  ).join('');
+  $('monthbtn').textContent = monthsLabel();
+}
+
+function setMonths(list){
+  /* Always sorted and de-duplicated, and never empty — an empty selection would
+     render every dial as 0/0 and read as a catastrophe rather than as no choice. */
+  const clean = [...new Set(list)].filter(Boolean).sort();
+  MONTHS = clean.length ? clean : [thisMonth()];
+  writeStore(MONTH_KEY, JSON.stringify(MONTHS));
+  renderMonthPicker();
+  if (SOURCE === 'meter') renderMeter(); else renderScorecard();
+}
+
 function renderMeter(){
   const {ym, rows, loose, excluded} = meterRows();
   const pct = v => v === null ? null : Math.round(v * 100);
@@ -1338,8 +1446,9 @@ function renderMeter(){
   }).join('');
   OPEN_CARD = null;
 
+  const running = MONTHS.includes(thisMonth());
   $('meterhint').innerHTML =
-    `Compliance is ${esc(monthLabel(ym))} to date — entries filed ` +
+    `Compliance is ${esc(monthsLabel())}${running ? ' to date' : ''} — entries filed ` +
     `against entries expected, summed across the team rather than averaged, so a ` +
     `member with fifty expected days counts for fifty. Business is the standing book ` +
     `against ${TARGET_SCALED ? 'a target scaled to team size' : `<b>${esc(inr(TARGET_FULL_TEAM))} per team</b>`}. ` +
@@ -1500,7 +1609,7 @@ function renderClients(){
 }
 
 function renderScorecard(){
-  const {ym, days, live, rows} = scoreRows();
+  const {months, days, live, rows} = scoreRows();
   const cell = v => v === null
     ? '<td class="dim">—</td>'
     : `<td class="${v.missed ? 'bad' : 'dim'}">${v.missed}</td>`;
@@ -1527,25 +1636,24 @@ function renderScorecard(){
 
   // Warn rather than report confident nonsense for a month the export no longer covers.
   const rf = reliableFrom();
-  const monthStart = ym + '-01';
+  const monthStart = months[0] + '-01';        // the earliest month selected
   const capped = TRACKERS.some(t => COVER[t] && COVER[t].capped);
   $('coverwarn').innerHTML = (rf && monthStart < rf)
-    ? `<strong>Part of this month is outside the data.</strong> The sheets only reach back to
+    ? `<strong>Part of this selection is outside the data.</strong> The sheets only reach back to
        ${esc(pretty(rf))}${capped ? ' — they are at the export limit, so older entries have been dropped by the sync' : ''}.
        Days before that are counted as missed here, but the entries may simply have aged out.
-       Treat this month as incomplete.`
+       Treat ${months.length > 1 ? 'these figures' : 'this month'} as incomplete.`
     : '';
 
   const totMissed = rows.reduce((s,r)=>s+r.missed,0);
   const totExp = rows.reduce((s,r)=>s+r.expected,0);
-  const label = D(ym+'-01').toLocaleDateString('en-GB',{month:'long',year:'numeric'});
   $('scorenote').textContent =
-    `${label} · ${live.length} of ${days.length} working days elapsed · ` +
+    `${monthsLabel()} · ${live.length} of ${days.length} working days elapsed · ` +
     `${totMissed} missed of ${totExp} expected entries`;
 }
 
 function downloadCsv(){
-  const {ym, rows} = scoreRows();
+  const {months, rows} = scoreRows();
   const head = ['Person','Internal missed','Client missed','Total missed','Filed','Expected',
                 'Compliance %','Clients owned','Book (INR)','Team'];
   const esc2 = v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g,'""') + '"' : String(v);
@@ -1562,7 +1670,10 @@ function downloadCsv(){
   const blob = new Blob([lines.join('\n')], {type:'text/csv;charset=utf-8'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `cs-team-missed-days-${ym}.csv`;
+  /* Name the span, not just the first month — two files called ...-2026-07.csv
+     that cover different selections is a filing problem waiting to happen. */
+  a.download = `cs-team-missed-days-${months[0]}` +
+               (months.length > 1 ? `_to_${months[months.length - 1]}` : '') + '.csv';
   document.body.appendChild(a); a.click();
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
 }
@@ -1865,6 +1976,10 @@ async function load(){
     }
     buildEscalations();
 
+    /* Only now is COVER populated, so only now can the picker know which months
+       have data behind them. Rendering it earlier offers months that produce a
+       confident 0%. */
+    renderMonthPicker();
     showActive();
   }catch(err){
     failed(String((err && err.message) || err),
@@ -1891,12 +2006,31 @@ $('joined').addEventListener('change', () =>
   SOURCE === 'meter'     ? renderMeter()
 : SOURCE === 'scorecard' ? renderScorecard()
 :                          render());
-$('month').addEventListener('change', () => {
-  writeStore(MONTH_KEY, $('month').value);
-  /* The month picker is shared by the two views that use it. Re-render whichever
-     is on screen rather than assuming the scorecard — binding it to one view is
-     how the other silently ignores the control sitting right above it. */
-  if (SOURCE === 'meter') renderMeter(); else renderScorecard();
+/* The month picker is shared by the two views that use it. setMonths re-renders
+   whichever is on screen — binding to one view is how the other silently ignores
+   the control sitting right above it. */
+$('monthbtn').addEventListener('click', () => {
+  const open = $('monthpop').hidden;
+  $('monthpop').hidden = !open;
+  $('monthbtn').setAttribute('aria-expanded', String(open));
+});
+$('monthpop').addEventListener('change', e => {
+  if (e.target.type !== 'checkbox') return;
+  const picked = [...$('monthlist').querySelectorAll('input:checked')].map(i => i.value);
+  setMonths(picked);
+});
+$('monthpop').addEventListener('click', e => {
+  const b = e.target.closest('button[data-pick]'); if (!b) return;
+  const all = coveredMonths();
+  setMonths(b.dataset.pick === 'this'  ? [thisMonth()]
+          : b.dataset.pick === 'last3' ? all.slice(0, 3)
+          :                              all);
+});
+document.addEventListener('click', e => {
+  if ($('monthpop').hidden) return;
+  if (e.target.closest('#monthpop') || e.target.closest('#monthbtn')) return;
+  $('monthpop').hidden = true;
+  $('monthbtn').setAttribute('aria-expanded', 'false');
 });
 $('csv').addEventListener('click', downloadCsv);
 $('score').addEventListener('click', e => {
@@ -1952,7 +2086,11 @@ $('refresh').addEventListener('click', load);
 
 const savedSrc = readStore(SOURCE_KEY);
 SOURCE = SOURCES[savedSrc] ? savedSrc : 'internal';
-$('month').value = readStore(MONTH_KEY) || iso(new Date()).slice(0,7);
+try {
+  const saved = JSON.parse(readStore(MONTH_KEY) || 'null');
+  if (Array.isArray(saved) && saved.every(m => /^\d{4}-\d{2}$/.test(m))) MONTHS = saved.sort();
+} catch (e) {}
+if (!MONTHS.length) MONTHS = [thisMonth()];
 TARGET_SCALED = readStore(TARGET_KEY) === '1';
 $('scaletarget').checked = TARGET_SCALED;
 try {

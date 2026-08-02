@@ -155,6 +155,24 @@ one on screen, so a spreadsheet can total it.
 **Overall -> KPI meter** puts the two halves on one screen: a card per team with a
 compliance dial and a business dial.
 
+### Choosing months
+
+The month control is a checkbox list, not a single `<input type="month">`. A quarter,
+or two months side by side, is a question people actually ask, and a range control
+cannot express "June and August but not July". Quick picks cover **This month**,
+**Last 3** and **All covered**. The Scorecard and the KPI meter share the selection,
+and it is remembered.
+
+Only months the sheets actually reach are offered — listing a month with no data
+behind it produces a confident 0%. The one exception is a month restored from a
+previous visit that has since aged out of the export window: it stays listed so it
+can be seen and unticked, and the coverage warning explains what happened.
+
+The wording follows the selection. A finished month reads "July 2026"; the current
+one reads "August 2026 to date". Two months read "July and August 2026"; more than
+two collapse to "4 months: May to August 2026". The CSV filename carries the whole
+span rather than just the first month.
+
 Compliance is rolled up from the same `scoreRows()` the scorecard uses, so the two
 views cannot disagree. It is a **pooled ratio** — the team's filed entries over its
 expected ones — not an average of its members' percentages, which would let someone
@@ -383,7 +401,7 @@ entries loaded and when.
     node qa.js
     TZ=Asia/Kolkata node qa.js
 
-319 assertions with the network mocked: parsing (spacer rows above the header, quoted
+343 assertions with the network mocked: parsing (spacer rows above the header, quoted
 fields containing commas and newlines, blank assignees, case-variant names), every
 failure path (sheet not shared, network down, unparseable content), the date-window
 rules, cross-checks between the three places misses are counted, escaping of sheet
