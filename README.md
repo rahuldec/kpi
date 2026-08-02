@@ -250,6 +250,49 @@ buried in a formula. The choice is remembered.
 Percentages never round across 100: a team ₹5,070 short of ₹50L shows 99%, not a
 100% sitting beside a negative gap.
 
+### Escalations
+
+A third sheet — the **Client Escalations** Asana project — is fetched live and used
+to flag clients in the list. Unlike the workbook this one is a native Google Sheet,
+so `api/data.js` reads it as `?src=escalations`. It is identified by a different
+signature (`Projects` + `Parent task`) because most of its rows have no due date.
+
+Only top-level rows are escalations. They carry Section/Column "Clients"; the rows
+beneath carry a `Parent task` and are the individual complaints inside one. Counting
+those would report Budha as eighteen escalations rather than one.
+
+The client is named in `Projects`, which lists every Asana project a task belongs
+to — always "Client Escalations", plus usually the client's own project. Where the
+client has no project of its own, the task Name is used instead.
+
+**Open escalations flag the row** with a red rule and a badge. Closed ones get a
+quiet outline badge and no flag: a client with a history of them is a different
+conversation from one on fire right now.
+
+#### Names that do not match
+
+The escalation project and the client book are typed by different people, so exact
+equality catches only some. Normalised containment catches the rest safely —
+"Vedashree" to "Vedashree School", "GVM Girls College" to "GVM Girls College
+Sonipat". It stops there: an acronym or a reordered name is a guess, and a wrong
+guess puts a red flag on an innocent client, so unmatched names are **listed on the
+page** and resolved by hand in `ESC_ALIAS`:
+
+    const ESC_ALIAS = {
+      'GNAV Kurukshetra':   'Gita Niketan Awasiya KKR',
+      'Sirsa MSG Glorious': 'Shah Satnam Sirsa'
+    };
+
+An alias pointing at a client that is not in the book is worse than no alias — it
+looks resolved and flags nothing — so that is reported in the same place.
+
+#### It cannot break the page
+
+Escalations are an enrichment, not a foundation. If the sheet is not shared or its
+shape changes, the compliance figures are still correct and still render — the
+failure is reported above the client list and nothing is flagged. Tests cover this
+explicitly.
+
 ### This one is a snapshot, not a feed
 
 The other two sources are fetched live. This one is compiled into `index.html`:
@@ -329,7 +372,7 @@ entries loaded and when.
     node qa.js
     TZ=Asia/Kolkata node qa.js
 
-282 assertions with the network mocked: parsing (spacer rows above the header, quoted
+306 assertions with the network mocked: parsing (spacer rows above the header, quoted
 fields containing commas and newlines, blank assignees, case-variant names), every
 failure path (sheet not shared, network down, unparseable content), the date-window
 rules, cross-checks between the three places misses are counted, escaping of sheet

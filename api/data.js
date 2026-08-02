@@ -16,16 +16,26 @@
 // contents. Set SHEET_GID in Vercel -> Settings -> Environment Variables to skip
 // the search if you ever want to pin it.
 
-// Two trackers, same Asana export shape, different sheets. Selected with
-// ?src=internal or ?src=client; anything else falls back to internal.
+// Three Asana exports, same shape, different sheets. Selected with ?src=;
+// anything unrecognised falls back to internal.
+//
+// The two trackers are per-person daily timesheets. The escalations sheet is a
+// different animal: one row per client escalation, keyed by the client rather
+// than by a person. It shares the export shape, so the same tab-hunt works, but
+// it is identified by a different column — see `signature` below.
 const SOURCES = {
-  internal: { id: process.env.SHEET_ID        || '1tzsf5iWijfIT8AfXTJZUbrGzH5OkNb-6xMO3EZ59cdo',
-              gid: process.env.SHEET_GID        || '' },
-  client:   { id: process.env.CLIENT_SHEET_ID || '1oUHAjf6zAiHdLd11jvqerbXC0adx5XDsqlfLoRNOSCY',
-              gid: process.env.CLIENT_SHEET_GID || '' }
+  internal:    { id: process.env.SHEET_ID        || '1tzsf5iWijfIT8AfXTJZUbrGzH5OkNb-6xMO3EZ59cdo',
+                 gid: process.env.SHEET_GID        || '' },
+  client:      { id: process.env.CLIENT_SHEET_ID || '1oUHAjf6zAiHdLd11jvqerbXC0adx5XDsqlfLoRNOSCY',
+                 gid: process.env.CLIENT_SHEET_GID || '' },
+  escalations: { id: process.env.ESC_SHEET_ID    || '1K5YCwQAEm0wQ6qrw57V6sGKNhSuPOQ18GW-kcC_L6e0',
+                 gid: process.env.ESC_SHEET_GID   || '',
+                 // This export has no Due Date on most rows, so the tracker test
+                 // would reject the right tab. Match on what it does have.
+                 signature: csv => /projects/i.test(csv) && /parent task/i.test(csv) }
 };
 
-const looksLikeTheExport = csv => /due date/i.test(csv) && /assignee/i.test(csv);
+const trackerSignature = csv => /due date/i.test(csv) && /assignee/i.test(csv);
 const isLoginPage = body => body.trimStart().startsWith('<');
 
 async function grab(base, gid) {
@@ -58,6 +68,7 @@ module.exports = async (req, res) => {
   const source = SOURCES[src] || SOURCES.internal;
   const SHEET_ID = source.id;
   const PINNED_GID = source.gid;
+  const looksLikeTheExport = source.signature || trackerSignature;
   const BASE = `https://docs.google.com/spreadsheets/d/${SHEET_ID}`;
 
   const send = hit => {
@@ -80,7 +91,7 @@ module.exports = async (req, res) => {
       attempted.push({ gid: PINNED_GID, ok: hit.ok, status: hit.status || 200 });
       if (hit.ok && looksLikeTheExport(hit.body)) return send(hit);
       if (hit.ok) return fail(
-        `SHEET_GID is set to ${PINNED_GID}, but that tab has no "Due Date" column.`,
+        `A gid is pinned for "${src}" (${PINNED_GID}), but that tab does not look like the export.`,
         'Remove the SHEET_GID environment variable to let the function find the right tab itself.');
     }
 
@@ -106,7 +117,7 @@ module.exports = async (req, res) => {
     }
 
     return fail(
-      'None of the tabs in this spreadsheet have both a "Due Date" and an "Assignee" column.',
+      'No tab in this spreadsheet looks like the expected Asana export.',
       'Check that the Asana export is still writing to this sheet.');
 
   } catch (err) {

@@ -23,7 +23,32 @@ const SHEET = [
 
 const CLIENT_DEFAULT = SHEET.replace(/\n(\d),/g, (m, d) => '\n' + (Number(d) + 100) + ',');
 
-function boot({ body = SHEET, clientBody = CLIENT_DEFAULT, status = 200, reject = false } = {}) {
+/* The escalations export: top-level rows carry Section/Column "Clients" and list
+   the client's own Asana project alongside "Client Escalations"; sub-tasks carry
+   a Parent task instead and must never be counted as escalations of their own.
+   Names here are real entries in the embedded client book, so matching is
+   exercised rather than stubbed. */
+const ESC_HEAD = 'Task ID,Created At,Completed At,Last Modified,Name,Section/Column,Assignee,Assignee Email,Start Date,Due Date,Tags,Notes,Projects,Parent task';
+const ESC_SHEET = [
+  ',,', ',,https://app.asana.com/x', ',,',
+  ESC_HEAD,
+  // open — client named by its own project, exactly as the book spells it
+  '1,2026-05-20,,2026-07-26,GNAV,Clients,Gobind Monga,g@x.com,,,,,"Client Escalations,Budha College Karnal",',
+  // open — client project is a shortened form of the book name
+  '2,2026-05-22,,2026-06-27,MPM,Clients,Gobind Monga,g@x.com,,,,,"Vedashree,Client Escalations",',
+  // closed
+  '3,2026-02-09,2026-02-26,2026-02-26,GVM: Library,Clients,kashish Goel,k@x.com,,,,,"GVM Girls College,Client Escalations",',
+  // sub-tasks of the above — must not count
+  '4,2026-05-20,,2026-05-20,some fix,,,,,,,,,GNAV',
+  '5,2026-05-20,2026-06-02,2026-06-02,another fix,,,,,,,,,GNAV',
+  // no project of its own, and no client in the book by this name
+  // no project of its own, and deliberately nothing like it in the book, so it
+  // exercises the "reported, never guessed" path
+  '6,2026-07-08,,2026-07-27,Zzz Unknown Academy,Clients,Sukhmeet Singh,s@x.com,,,,,Client Escalations,'
+].join('\n');
+
+function boot({ body = SHEET, clientBody = CLIENT_DEFAULT, escBody = ESC_SHEET,
+                status = 200, reject = false } = {}) {
   const errs = [], calls = [];
   // beforeParse installs the mock before the page's own <script> runs, so the
   // script executes normally and its top-level bindings stay reachable via eval.
@@ -38,11 +63,12 @@ function boot({ body = SHEET, clientBody = CLIENT_DEFAULT, status = 200, reject 
       window.fetch = (url) => {
         calls.push(url);
         if (reject) return Promise.reject(new Error('Failed to fetch'));
-        const isClient = /src=client/.test(url);
+        const src = (url.match(/src=(\w+)/) || [])[1];
         return Promise.resolve({
           ok: status >= 200 && status < 300,
           status,
-          text: () => Promise.resolve(isClient ? clientBody : body)
+          text: () => Promise.resolve(
+            src === 'escalations' ? escBody : src === 'client' ? clientBody : body)
         });
       };
     }
@@ -1061,6 +1087,92 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
           after.querySelector('.how').textContent.slice(0, 200));
   }
 
+  // ── 1f12. escalations ───────────────────────────────────────────
+  {
+    const { doc, win } = boot(); await settle();
+    doc.querySelector('#sources2 button[data-src="clients"]').click(); await settle();
+
+    const esc = JSON.parse(win.eval('JSON.stringify(ESCALATIONS)'));
+    check('sub-tasks are not counted as escalations', esc.length === 4,
+          esc.length + ': ' + esc.map(e => e.client).join());
+    check('the client comes from Projects, not the task name',
+          esc.some(e => e.client === 'Budha College Karnal'), esc.map(e => e.client).join());
+    check('"Client Escalations" itself is never taken as the client',
+          !esc.some(e => /Client Escalations/i.test(e.client)));
+    check('a row with no project of its own falls back to the task name',
+          esc.some(e => e.client === 'Zzz Unknown Academy'), esc.map(e => e.client).join());
+    check('open and closed are distinguished',
+          esc.filter(e => !e.closed).length === 3 && esc.filter(e => e.closed).length === 1,
+          esc.map(e => `${e.client}:${e.closed || 'open'}`).join());
+
+    const rows = [...doc.querySelectorAll('#clientlist tbody tr')];
+    const rowFor = n => rows.find(r => r.children[0].textContent.startsWith(n));
+    check('an open escalation flags the row',
+          rowFor('Budha College Karnal').classList.contains('flagged'));
+    check('and carries an open badge',
+          /open/.test(rowFor('Budha College Karnal').querySelector('.esc')?.className || ''),
+          rowFor('Budha College Karnal').querySelector('.esc')?.outerHTML);
+    check('a shortened project name still matches the book',
+          rowFor('Vedashree')?.classList.contains('flagged'),
+          rowFor('Vedashree')?.outerHTML.slice(0, 90));
+    check('a closed escalation marks but does not flag', (() => {
+      const r = rowFor('GVM Girls College');
+      return r && !r.classList.contains('flagged') && /shut/.test(r.querySelector('.esc').className);
+    })(), rowFor('GVM Girls College')?.outerHTML.slice(0, 120));
+    check('clients with no escalation carry no badge',
+          rows.filter(r => !r.querySelector('.esc')).length > 100);
+
+    // an unmatchable name must be named, never guessed onto a similar client
+    const unmatched = JSON.parse(win.eval('JSON.stringify(ESC_UNMATCHED)'));
+    check('an unmatchable escalation is reported', unmatched.includes('Zzz Unknown Academy'),
+          unmatched.join());
+    check('and is not silently attached to a similar client',
+          !rows.some(r => /Academy/.test(r.children[0].textContent) &&
+                          r.classList.contains('flagged')));
+    check('the note names it and says where to fix it',
+          /Zzz Unknown Academy/.test(txt(doc, '#escnote')) && /ESC_ALIAS/.test(txt(doc, '#escnote')),
+          txt(doc, '#escnote'));
+
+    // every alias must point at a client that exists, or it resolves to nothing
+    check('every alias target is a real client',
+          !unmatched.some(u => /aliased to/.test(u)), unmatched.join());
+    check('a broken alias would be reported', (() => {
+      const targets = JSON.parse(win.eval('JSON.stringify(Object.values(ESC_ALIAS))'));
+      const book = JSON.parse(win.eval('JSON.stringify(CLIENTS.map(c=>c.n))'));
+      return targets.every(t => book.includes(t));
+    })(), win.eval('JSON.stringify(Object.values(ESC_ALIAS))'));
+    check('the note counts flagged clients', /clients flagged/.test(txt(doc, '#escnote')),
+          txt(doc, '#escnote'));
+
+    // filters must not lose the flags
+    const sel = doc.getElementById('cowner');
+    sel.value = 'Sukhmeet Singh';
+    sel.dispatchEvent(new win.Event('change'));
+    check('flags survive filtering', [...doc.querySelectorAll('#clientlist tbody tr')]
+            .every(r => !r.querySelector('.esc.open') || r.classList.contains('flagged')));
+  }
+
+  // ── 1f13. escalations must never break the page ─────────────────
+  {
+    // The compliance figures do not depend on this sheet, so a failure there has
+    // to degrade to "no flags" rather than an error screen.
+    const { doc, win } = boot({ escBody: 'total,nonsense\n1,2' }); await settle();
+    check('a malformed escalation sheet still renders the dashboard',
+          doc.getElementById('content').hidden === false);
+    doc.querySelector('#sources2 button[data-src="clients"]').click(); await settle();
+    check('the client list is intact',
+          doc.querySelectorAll('#clientlist tbody tr').length > 100);
+    check('no row is flagged', !doc.querySelector('#clientlist tr.flagged'));
+    check('the failure is stated, not hidden',
+          /could not be loaded/.test(txt(doc, '#escnote')), txt(doc, '#escnote'));
+    check('and it says the rest of the page is fine',
+          /rest of this page is unaffected/.test(txt(doc, '#escnote')));
+
+    // and the scorecard is untouched by any of it
+    doc.querySelector('#sources button[data-src="scorecard"]').click(); await settle();
+    check('the scorecard still computes', doc.querySelectorAll('#score tbody tr').length > 0);
+  }
+
   // ── 1g. stale-function guard ────────────────────────────────────
   {
     // an old api/data.js ignores ?src= and serves one sheet for both
@@ -1137,8 +1249,12 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
   {
     const { doc, errs, calls } = boot(); await settle();
     check('boots with no JS errors', errs.length === 0, errs.join(' | '));
-    check('called the data endpoint for both sheets', calls.length === 2 &&
+    check('called the data endpoint for all three sheets', calls.length === 3 &&
           calls.every(u => /^\/api\/data\?src=/.test(u)), calls.join());
+    check('the two trackers are fetched together, escalations after', (() => {
+      const src = calls.map(u => u.match(/src=(\w+)/)[1]);
+      return src[0] === 'internal' && src[1] === 'client' && src[2] === 'escalations';
+    })(), calls.join());
     check('cache-busted the request', /[?&]t=\d+/.test(calls[0] || ''), calls[0]);
     check('content revealed', doc.getElementById('content').hidden === false);
     check('state panel hidden', doc.getElementById('state').hidden === true);
@@ -1259,7 +1375,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
   {
     const { doc, calls } = boot(); await settle();
     doc.getElementById('refresh').click(); await settle();
-    check('refresh refetches both sheets', calls.length === 4, calls.length + ' calls');
+    check('refresh refetches every sheet', calls.length === 6, calls.length + ' calls');
   }
 
   // ── 7. internal consistency of the figures ─────────────────────
