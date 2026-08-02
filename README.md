@@ -16,8 +16,8 @@ it measures one thing, whether people filed what they owe, so it sits in a group
 labelled **Compliance**:
 
     CS Team KPI                                    <- fixed page title
-      Compliance                            Business      <- metric groups
-        [ Internal ][ Client ][ Scorecard ]    [ Client book ]
+      Compliance                          Business        Overall
+        [ Internal ][ Client ][ Scorecard ]  [ Client book ]  [ KPI meter ]
 
 The page title and the group label never change. The headline below the tabs does —
 it names the view you are in. A second family of metrics is a second `.group` block
@@ -150,6 +150,25 @@ who was never expected to file client calls.
 process you keep it in. It carries the raw rupee figure rather than the abbreviated
 one on screen, so a spreadsheet can total it.
 
+## KPI meter
+
+**Overall -> KPI meter** puts the two halves on one screen: a card per team with a
+compliance dial and a business dial.
+
+Compliance is rolled up from the same `scoreRows()` the scorecard uses, so the two
+views cannot disagree. It is a **pooled ratio** — the team's filed entries over its
+expected ones — not an average of its members' percentages, which would let someone
+with three expected days weigh as much as someone with fifty. It respects the month
+picker and the "skip days before someone's first entry" toggle, both of which sit in
+the same control bar.
+
+Business is the standing book against the target.
+
+**The two are not blended into one score.** Compliance is this month's behaviour,
+business is the standing book; a team can be filing perfectly and still be far short
+on revenue, and a single averaged figure hides exactly the case worth looking at.
+Both dials use the same no-rounding-across-100 rule as the book table.
+
 ## Client book
 
 The **Business -> Client book** tab shows who owns what: revenue by RM with each one's
@@ -192,6 +211,28 @@ with no team recorded, and his row says so.
 The **Team** column on the scorecard shows which pod each person belongs to; sorting
 by it groups a lead with their own people, lead first, which is how a review actually
 runs.
+
+### The target
+
+A full team is one RM and two assistants carrying **₹50 lakh**. That fixes both the
+shape and the number:
+
+    const TARGET_FULL_TEAM = 5000000;   // rupees
+    const TARGET_TEAM_SIZE = 3;         // one RM + two assistants
+
+Most teams are not that shape, so the target reads two ways and both are on the page
+behind one checkbox:
+
+| | Question it asks | Amit's two people on ₹37.5L |
+|---|---|---|
+| **Flat** (default) | is it carrying a full team's worth of business, understaffed or not? | 75% |
+| **Scaled** | is the team carrying its own staffing? — 50L x heads/3 | 112% |
+
+Neither is wrong and they disagree loudly, so it is a toggle rather than a decision
+buried in a formula. The choice is remembered.
+
+Percentages never round across 100: a team ₹5,070 short of ₹50L shows 99%, not a
+100% sitting beside a negative gap.
 
 ### This one is a snapshot, not a feed
 
@@ -272,11 +313,11 @@ entries loaded and when.
     node qa.js
     TZ=Asia/Kolkata node qa.js
 
-213 assertions with the network mocked: parsing (spacer rows above the header, quoted
+259 assertions with the network mocked: parsing (spacer rows above the header, quoted
 fields containing commas and newlines, blank assignees, case-variant names), every
 failure path (sheet not shared, network down, unparseable content), the date-window
 rules, cross-checks between the three places misses are counted, escaping of sheet
-content, the branding and embedded logo, the page title and metric grouping, the monthly scorecard and its CSV export, the coverage warning firing only for a month that really is outside the data, scorecard sorting (every column, both directions, exempt cells sinking, CSV matching the screen), the remembered view mode, range, tab and sort order, hidden people leaving no trace in any count while exempt people keep their row, the client book tab and its filters, the book column sitting beside compliance without altering it, lakh/crore formatting, pod resolution from first names with every failure reported on the page, and a sweep over every tab checking that what should be hidden is hidden in computed style rather than merely flagged, the source switch, the combined roster, per-tracker exemptions, the three view modes and their persistence, Sunday handling in Today/Yesterday,
+content, the branding and embedded logo, the page title and metric grouping, the monthly scorecard and its CSV export, the coverage warning firing only for a month that really is outside the data, scorecard sorting (every column, both directions, exempt cells sinking, CSV matching the screen), the remembered view mode, range, tab and sort order, hidden people leaving no trace in any count while exempt people keep their row, the client book tab and its filters, the book column sitting beside compliance without altering it, lakh/crore formatting, pod resolution from first names with every failure reported on the page, the KPI meter (both dials, degenerate rosters, and an invariant that meter compliance equals the pooled scorecard rows team by team), static hygiene (no duplicate ids, no dangling $() references, nothing declared and never used), and a sweep over every tab checking that what should be hidden is hidden in computed style rather than merely flagged, the source switch, the combined roster, per-tracker exemptions, the three view modes and their persistence, Sunday handling in Today/Yesterday,
 inverted date ranges, and timezone independence. Run them after any change to the parser — the
 Asana form fields are expected to change once back-dated entries are blocked.
 

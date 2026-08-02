@@ -84,6 +84,29 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
 
 (async () => {
 
+  // ── 0. static hygiene ───────────────────────────────────────────
+  {
+    // Cheap checks that catch the classes of rot a behavioural test never will.
+    const ids = [...HTML.matchAll(/id="([^"]+)"/g)].map(m => m[1]);
+    const dupes = ids.filter((v, i) => ids.indexOf(v) !== i);
+    check('no duplicate element ids', dupes.length === 0, dupes.join());
+
+    const refs = [...HTML.matchAll(/\$\('([^']+)'\)/g)].map(m => m[1]);
+    const dangling = [...new Set(refs)].filter(r => !ids.includes(r));
+    check('every $() reference has an element', dangling.length === 0, dangling.join());
+
+    const js = HTML.slice(HTML.indexOf('<script>') + 8, HTML.lastIndexOf('</script>'));
+    const declared = [...js.matchAll(/^(?:function|const|let)\s+([A-Za-z_][\w]*)/gm)].map(m => m[1]);
+    const unused = declared.filter(n =>
+      (js.match(new RegExp('\\b' + n + '\\b', 'g')) || []).length <= 1);
+    check('nothing is declared and never used', unused.length === 0, unused.join());
+
+    // every tab must reach a panel, and every panel must have a tab
+    const tabs = [...HTML.matchAll(/data-src="([^"]+)"/g)].map(m => m[1]);
+    check('every tab is a declared source',
+          tabs.every(t => new RegExp(`\\b${t}:\\s*\\{`).test(HTML)), tabs.join());
+  }
+
   // ── 1. no timesheet data is embedded ───────────────────────────
   {
     // This guard exists because the page once shipped a SAMPLE dataset and read
@@ -493,8 +516,8 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     check('the book tab lives in its own group',
           tab().closest('.group')?.querySelector('.grouplabel')?.textContent === 'Business',
           tab().closest('.group')?.querySelector('.grouplabel')?.textContent);
-    check('both groups sit on one row',
-          doc.querySelectorAll('.groups > .group').length === 2,
+    check('every group sits on one row',
+          doc.querySelectorAll('.groups > .group').length === 3,
           String(doc.querySelectorAll('.groups > .group').length));
 
     tab().click(); await settle();
@@ -516,10 +539,15 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
           rmRows.length >= 7, rmRows.length + ' rows');
     check('a team that owns no clients is still listed',
           /Sagar Mishra/.test(doc.getElementById('byrm').textContent));
-    check('that team shows a dash rather than zero revenue', (() => {
+    check('a team with no clients shows a dash for client count', (() => {
       const r = rmRows.find(x => /Sagar Mishra/.test(x.children[0].textContent));
-      return r && r.children[3].textContent === '—';
+      return r && r.children[2].textContent === '—';
     })());
+    check('but its shortfall against the target is stated in full', (() => {
+      // ₹0 against a target is the whole point of the row — it must not be a dash
+      const r = rmRows.find(x => /Sagar Mishra/.test(x.children[0].textContent));
+      return r && r.children[5].textContent === '0%' && /^−/.test(r.children[6].textContent);
+    })(), (rmRows.find(x => /Sagar Mishra/.test(x.children[0].textContent)) || {innerHTML:''}).textContent);
     check('team table is sorted by book, largest first', (() => {
       const v = rmRows.map(r => r.children[2].textContent).map(Number).filter(n => !isNaN(n));
       return v.length > 1;
@@ -598,7 +626,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     // walk every element the tab switch is supposed to hide, on every tab, and
     // check the computed style rather than the property.
     const HIDES = ['#presets','#monthwrap','#dates','#joinedwrap','#exempt',
-                   '#scorecard','#clients','#chase','#kpis','#gridsec','#boardsec','#stripsec'];
+                   '#scorecard','#clients','#meter','#chase','#kpis','#gridsec','#boardsec','#stripsec'];
     const { doc } = boot(); await settle();
     const visible = () => HIDES.filter(sel => shown(doc, sel));
 
@@ -616,14 +644,22 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
           sc.join());
     check('scorecard hides the client book', !sc.includes('#clients'), sc.join());
 
+    doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
+    const mt = visible();
+    check('the meter shows its panel, the month picker and the joined toggle',
+          mt.includes('#meter') && mt.includes('#monthwrap') && mt.includes('#joinedwrap'), mt.join());
+    check('the meter hides every other panel',
+          !mt.includes('#scorecard') && !mt.includes('#clients') && !mt.includes('#chase') &&
+          !mt.includes('#presets'), mt.join());
+
     doc.querySelector('#sources button[data-src="internal"]').click(); await settle();
     const dy = visible();
     check('daily view shows the presets and the daily panels',
           dy.includes('#presets') && dy.includes('#chase') && dy.includes('#boardsec'),
           dy.join());
-    check('daily view hides the month picker, scorecard and book',
-          !dy.includes('#monthwrap') && !dy.includes('#scorecard') && !dy.includes('#clients'),
-          dy.join());
+    check('daily view hides the month picker, scorecard, book and meter',
+          !dy.includes('#monthwrap') && !dy.includes('#scorecard') &&
+          !dy.includes('#clients') && !dy.includes('#meter'), dy.join());
   }
 
   // ── 1f7. pods ───────────────────────────────────────────────────
@@ -696,6 +732,240 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
             const n = i => r.children[i].textContent === '—' ? 0 : Number(r.children[i].textContent);
             return n(3) === n(1) + n(2);
           }));
+  }
+
+  // ── 1f8. the team target ────────────────────────────────────────
+  {
+    const { doc, win } = boot({ body: teamSheet(), clientBody: teamSheet(TEAM_PEOPLE, 500) });
+    await settle();
+    doc.querySelector('#sources2 button[data-src="clients"]').click(); await settle();
+    const rowFor = n => [...doc.querySelectorAll('#byrm tbody tr')]
+      .find(r => new RegExp(n).test(r.children[0].textContent));
+    const num = s => Number(String(s).replace(/[^0-9.]/g, ''));
+
+    check('the target defaults to a flat 50L', !doc.getElementById('scaletarget').checked);
+    check('every team is held to the same number by default',
+          [...doc.querySelectorAll('#byrm tbody tr')]
+            .filter(r => !/Unassigned/.test(r.children[0].textContent))
+            .every(r => /^₹50L$/.test(r.children[4].textContent)));
+    check('the note says the target is the same for every team',
+          /whatever its size/.test(txt(doc, '#targetnote')), txt(doc, '#targetnote'));
+
+    const twoPctFlat = num(rowFor('Amit Kumar').children[5].textContent);
+
+    // scaled is the option: a smaller team owes less, a larger team owes more
+    doc.getElementById('scaletarget').checked = true;
+    doc.getElementById('scaletarget').dispatchEvent(new win.Event('change'));
+    check('the note states the standard team when scaled',
+          /one RM and two assistants/.test(txt(doc, '#targetnote')), txt(doc, '#targetnote'));
+    check('the note gives the per-person figure', /per person/.test(txt(doc, '#targetnote')));
+    check('a standard team is measured against 50L either way',
+          /^₹50L$/.test(rowFor('Mansi Rana').children[4].textContent),
+          rowFor('Mansi Rana').children[4].textContent);
+    check('a two-person team owes less when scaled',
+          num(rowFor('Amit Kumar').children[4].textContent) < 50,
+          rowFor('Amit Kumar').children[4].textContent);
+    check('a four-person team owes more when scaled',
+          num(rowFor('Sukhmeet Singh').children[4].textContent) > 50,
+          rowFor('Sukhmeet Singh').children[4].textContent);
+    check('an understaffed team reads better scaled than flat',
+          num(rowFor('Amit Kumar').children[5].textContent) > twoPctFlat,
+          `${num(rowFor('Amit Kumar').children[5].textContent)} vs ${twoPctFlat}`);
+
+    check('the choice is remembered', win.localStorage.getItem('kpi.scaleTarget') === '1');
+    doc.getElementById('scaletarget').checked = false;
+    doc.getElementById('scaletarget').dispatchEvent(new win.Event('change'));
+
+    // the gap column must agree with the percentage, in both directions
+    doc.getElementById('scaletarget').checked = true;
+    doc.getElementById('scaletarget').dispatchEvent(new win.Event('change'));
+    check('gap and percentage never disagree',
+          [...doc.querySelectorAll('#byrm tbody tr')]
+            .filter(r => !/Unassigned/.test(r.children[0].textContent))
+            .every(r => {
+              const pct = num(r.children[5].textContent);
+              const over = r.children[6].textContent.trim().startsWith('+');
+              return pct >= 100 ? over : !over;
+            }));
+    check('a team on zero shows its whole target as the gap', (() => {
+      const r = rowFor('Sagar Mishra');
+      return r.children[5].textContent === '0%' &&
+             num(r.children[6].textContent) === num(r.children[4].textContent);
+    })(), rowFor('Sagar Mishra').textContent);
+
+    check('a team just short never rounds up to 100%', (() => {
+      // Mansi Rana sits ~5,000 below 50L — 99.9% must not print as 100%
+      const r = rowFor('Mansi Rana');
+      return r.children[5].textContent === '99%' && r.children[6].textContent.startsWith('−');
+    })(), rowFor('Mansi Rana').textContent);
+
+    // revenue targets must not have leaked into compliance
+    doc.querySelector('#sources button[data-src="scorecard"]').click(); await settle();
+    check('the scorecard has no target column',
+          !/target/i.test(doc.querySelector('#score thead').textContent),
+          doc.querySelector('#score thead').textContent);
+  }
+
+  // ── 1f9. the KPI meter ──────────────────────────────────────────
+  {
+    // Everyone files a different number of days so the compliance roll-up has
+    // something to get wrong.
+    const rows = []; let id = 1;
+    TEAM_PEOPLE.forEach((p, i) => {
+      for (let d = 1; d <= (i % 5) + 2; d++)
+        rows.push(`${id++},2026-07-01,,,x,S,${p},x@x.com,,2026-07-${String(d).padStart(2,'0')},,n`);
+    });
+    const INT = [',,', ',,url', ',,', TEAM_HEAD].concat(rows).join('\n');
+    const CLI = INT.replace(/\n(\d+),/g, (m, d) => '\n' + (Number(d) + 900) + ',');
+    const { doc, win } = boot({ body: INT, clientBody: CLI }); await settle();
+
+    const tab = doc.querySelector('#sources3 button[data-src="meter"]');
+    check('the meter has its own group',
+          tab.closest('.group')?.querySelector('.grouplabel')?.textContent === 'Overall',
+          tab.closest('.group')?.querySelector('.grouplabel')?.textContent);
+    tab.click(); await settle();
+    doc.getElementById('month').value = '2026-07';
+    doc.getElementById('month').dispatchEvent(new (win.Event)('change'));
+
+    check('meter panel shown', shown(doc, '#meter'));
+    check('the month picker is available here too', shown(doc, '#monthwrap'));
+    check('the compliance views are hidden',
+          !shown(doc, '#scorecard') && !shown(doc, '#clients') && !shown(doc, '#chase'));
+
+    const cards = [...doc.querySelectorAll('.mcard')];
+    check('one card per team', cards.length === 7, cards.length + ' cards');
+    check('each card carries both dials',
+          cards.every(c => c.querySelectorAll('.dial').length === 2));
+    check('the dials are labelled compliance and business',
+          cards.every(c => {
+            const l = [...c.querySelectorAll('.lbl')].map(x => x.textContent);
+            return l[0] === 'Compliance' && l[1] === 'Business';
+          }));
+
+    const card = n => cards.find(c => c.querySelector('h4').textContent === n);
+    const val = (c, i) => c.querySelectorAll('.val')[i].textContent;
+    const sub = (c, i) => c.querySelectorAll('.sub')[i].textContent;
+
+    // Business must agree with the book table, which is the same source
+    check('business is the book over the target',
+          /₹67.9L of ₹50L/.test(sub(card('Sukhmeet Singh'), 1)),
+          sub(card('Sukhmeet Singh'), 1));
+    check('a team over target reads above 100%',
+          parseInt(val(card('Sukhmeet Singh'), 1)) > 100, val(card('Sukhmeet Singh'), 1));
+    check('a team with no book reads 0%',
+          val(card('Sagar Mishra'), 1) === '0%', val(card('Sagar Mishra'), 1));
+    check('a team just short never rounds to 100%',
+          val(card('Mansi Rana'), 1) === '99%', val(card('Mansi Rana'), 1));
+
+    // Compliance must be a pooled ratio, not an average of member percentages
+    check('compliance shows filed over expected', /\d+\/\d+ entries/.test(sub(card('Amit Kumar'), 0)),
+          sub(card('Amit Kumar'), 0));
+    check('compliance matches the pooled ratio', (() => {
+      const m = sub(card('Amit Kumar'), 0).match(/(\d+)\/(\d+)/);
+      const expect = Math.min(99, Math.round(Number(m[1]) / Number(m[2]) * 100));
+      return parseInt(val(card('Amit Kumar'), 0)) === expect;
+    })(), sub(card('Amit Kumar'), 0) + ' -> ' + val(card('Amit Kumar'), 0));
+
+    // the two are never blended into one figure
+    check('no card shows a single combined score',
+          cards.every(c => c.querySelectorAll('.val').length === 2));
+    check('the note says why they are not blended',
+          /not blended/.test(txt(doc, '#meterhint')), txt(doc, '#meterhint'));
+    check('the note names the month in full', /July 2026/.test(txt(doc, '#meterhint')),
+          txt(doc, '#meterhint'));
+
+    // the shared controls must drive this view, not just the scorecard
+    const before = val(card('Amit Kumar'), 0);
+    doc.getElementById('month').value = '2026-06';
+    doc.getElementById('month').dispatchEvent(new (win.Event)('change'));
+    check('changing the month re-renders the meter',
+          /June 2026/.test(txt(doc, '#meterhint')), txt(doc, '#meterhint'));
+    doc.getElementById('month').value = '2026-07';
+    doc.getElementById('month').dispatchEvent(new (win.Event)('change'));
+    const joined = doc.getElementById('joined');
+    joined.checked = !joined.checked;
+    joined.dispatchEvent(new (win.Event)('change'));
+    check('the joined toggle re-renders the meter rather than the daily view',
+          doc.querySelectorAll('.mcard').length === cards.length && shown(doc, '#meter'));
+    check('and the figures respond to it',
+          typeof val([...doc.querySelectorAll('.mcard')].find(c =>
+            c.querySelector('h4').textContent === 'Amit Kumar'), 0) === 'string');
+  }
+
+  // ── 1f10. meter degenerate cases and cross-checks ───────────────
+  {
+    const one = p => [',,', ',,url', ',,', TEAM_HEAD]
+      .concat(p.map((x, i) => `${i + 1},2026-07-01,,,x,S,${x},x@x.com,,2026-07-01,,n`)).join('\n');
+    const oneB = p => [',,', ',,url', ',,', TEAM_HEAD]
+      .concat(p.map((x, i) => `${i + 901},2026-07-01,,,x,S,${x},x@x.com,,2026-07-01,,n`)).join('\n');
+
+    // a lead on their own is still a team of one
+    {
+      const { doc, win } = boot({ body: one(['Ankush Rana']), clientBody: oneB(['Ankush Rana']) });
+      await settle();
+      doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
+      doc.getElementById('month').value = '2026-07';
+      doc.getElementById('month').dispatchEvent(new (win.Event)('change'));
+      check('a lead with no team still gets a card',
+            doc.querySelectorAll('.mcard').length === 1,
+            String(doc.querySelectorAll('.mcard').length));
+    }
+
+    // nobody placed: an empty grid would read as a loading state, so it must explain
+    {
+      const { doc, win } = boot({ body: one(['Zeta One','Zeta Two']), clientBody: oneB(['Zeta One']) });
+      await settle();
+      doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
+      doc.getElementById('month').value = '2026-07';
+      doc.getElementById('month').dispatchEvent(new (win.Event)('change'));
+      check('no teams gives a message, not a blank grid',
+            /No teams to show/.test(txt(doc, '#meters')), txt(doc, '#meters'));
+      check('and it names the file to edit', /PODS/.test(txt(doc, '#meters')));
+    }
+
+    // lead missing from the roster: the reason must reach this view, not just the book
+    {
+      const { doc, win } = boot({ body: one(['Gobind Monga']), clientBody: oneB(['Gobind Monga']) });
+      await settle();
+      doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
+      doc.getElementById('month').value = '2026-07';
+      doc.getElementById('month').dispatchEvent(new (win.Event)('change'));
+      check('a missing lead is explained on the meter, not left blank',
+            /Sukhmeet Singh/.test(txt(doc, '#meters')), txt(doc, '#meters'));
+    }
+
+    // the invariant that matters: the meter and the scorecard cannot disagree
+    {
+      const rows = []; let id = 1;
+      TEAM_PEOPLE.forEach((p, i) => {
+        for (let d = 1; d <= (i % 6) + 2; d++)
+          rows.push(`${id++},2026-07-01,,,x,S,${p},x@x.com,,2026-07-${String(d).padStart(2,'0')},,n`);
+      });
+      const INT = [',,', ',,url', ',,', TEAM_HEAD].concat(rows).join('\n');
+      const CLI = INT.replace(/\n(\d+),/g, (m, d) => '\n' + (Number(d) + 900) + ',');
+      const { doc, win } = boot({ body: INT, clientBody: CLI }); await settle();
+      doc.querySelector('#sources button[data-src="scorecard"]').click(); await settle();
+      doc.getElementById('month').value = '2026-07';
+      doc.getElementById('month').dispatchEvent(new (win.Event)('change'));
+
+      const meter = JSON.parse(win.eval(
+        'JSON.stringify(meterRows().rows.map(r=>[r.lead,r.filed,r.expected]))'));
+      const score = JSON.parse(win.eval(
+        'JSON.stringify(scoreRows().rows.map(r=>[r.name,r.filed,r.expected]))'));
+      const leadOf = new Map(JSON.parse(win.eval('JSON.stringify([...POD_OF.entries()])')));
+      const pooled = {};
+      for (const [n, f, e] of score){
+        const l = leadOf.get(n); if (!l) continue;
+        pooled[l] = pooled[l] || [0, 0];
+        pooled[l][0] += f; pooled[l][1] += e;
+      }
+      check('meter compliance equals the pooled scorecard rows, team by team',
+            meter.every(([l, f, e]) => (pooled[l] || [0,0])[0] === f && (pooled[l] || [0,0])[1] === e),
+            meter.map(([l,f,e]) => `${l} ${f}/${e} vs ${(pooled[l]||[]).join('/')}`).join('; '));
+      check('every team on the meter is a team in POD_TEAM',
+            meter.length === Number(win.eval('POD_TEAM.size')),
+            `${meter.length} vs ${win.eval('POD_TEAM.size')}`);
+    }
   }
 
   // ── 1g. stale-function guard ────────────────────────────────────

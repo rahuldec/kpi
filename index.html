@@ -71,10 +71,35 @@ h1{
    the tests below assert on computed style, not on the property. */
 [hidden]{display:none !important}
 
+/* ── KPI meter ─────────────────────────────────────────────────────────────
+   One card per team, two dials on each. They sit side by side rather than being
+   averaged into a single figure: compliance is this month's behaviour, business
+   is the standing book, and a team can be strong on one and weak on the other.
+   Collapsing them would hide exactly the case worth looking at. */
+.meters{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+.mcard{border:1px solid var(--line);border-radius:13px;padding:16px 17px 15px}
+.mcard h4{font-size:16px;font-weight:600;letter-spacing:-.012em;color:var(--ink);margin:0 0 2px}
+.mcard .who{font-size:12.5px;color:var(--faint);margin:0 0 14px;line-height:1.45}
+.dial{display:flex;align-items:baseline;gap:9px;margin:0 0 4px}
+.dial .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);
+  width:88px;flex:none}
+.dial .val{font-size:19px;font-weight:600;letter-spacing:-.018em;font-variant-numeric:tabular-nums}
+.dial .sub{font-size:12.5px;color:var(--faint);margin-left:auto}
+.track{height:7px;border-radius:4px;background:var(--hair);overflow:hidden;margin:0 0 14px}
+.track i{display:block;height:100%;border-radius:4px;background:var(--brand)}
+.track.low i{background:var(--miss)}
+.track.met i{background:var(--deep)}
+.mcard .dial:last-of-type + .track{margin-bottom:0}
+
 /* ── client book ─
    A pod's members sit under the lead's name rather than in their own column:
    they are context for the row, not a value to compare across rows. */
 .pod{display:block;font-size:12.5px;color:var(--faint);margin-top:3px;line-height:1.45}
+.targetnote{font-size:14px;line-height:1.5;color:var(--body);margin:0 0 10px;max-width:60em}
+#scalewrap{display:inline-flex;align-items:center;gap:7px;font-size:13px;
+  color:var(--faint);margin:0 0 18px}
+.hit{color:var(--ink);font-weight:600}
+.short{color:var(--miss);font-weight:600}
 .podgaps{
   font-size:13.5px;line-height:1.5;color:var(--miss);margin:18px 0 0;
   padding:12px 14px;background:#FDF3F1;border-radius:9px;
@@ -378,6 +403,13 @@ footer b{color:var(--body);font-weight:600}
         <button type="button" data-src="clients">Client book</button>
       </div>
     </div>
+
+    <div class="group">
+      <span class="grouplabel">Overall</span>
+      <div class="sources" id="sources3">
+        <button type="button" data-src="meter">KPI meter</button>
+      </div>
+    </div>
   </div>
 
   <p class="eyebrow" id="eyebrow"></p>
@@ -417,9 +449,21 @@ footer b{color:var(--body);font-weight:600}
     </div>
   </section>
 
+  <section id="meter" hidden>
+    <div class="card">
+      <h3>Team KPI</h3>
+      <p class="hint" id="meterhint"></p>
+      <div class="meters" id="meters"></div>
+    </div>
+  </section>
+
   <section id="clients" hidden>
     <div class="card">
       <h3>Book by team</h3>
+      <p class="targetnote" id="targetnote"></p>
+      <label class="check" id="scalewrap">
+        <input type="checkbox" id="scaletarget" checked> Scale the target to team size
+      </label>
       <table class="board" id="byrm"></table>
       <p class="podgaps" id="podgaps" hidden></p>
     </div>
@@ -553,7 +597,6 @@ function buildPods(){
   for (const n of roster)
     if (!POD_OF.has(n)) POD_GAPS.push(`${n} is in no pod`);
 }
-const podBook = lead => bookOf(lead);
 /* Indian short scale: crore above 1,00,00,000, lakh above 1,00,000, plain below.
    A whole-number result drops its ".0" so a column of these stays scannable. */
 const inr = n => '\u20B9' + (
@@ -575,6 +618,28 @@ const inr = n => '\u20B9' + (
    the page rather than dropped, so a rename in Asana cannot silently empty a pod.
 
    One gap left visible on purpose: Ankush Rana owns clients but has no team. */
+/* ---------------- the target ------------------------------------------------
+   A full team is one RM and two assistants, and a full team should be carrying
+   ₹50 lakh. That fixes both the shape and the number.
+
+   Most teams are not that shape, which is why the target can be read two ways
+   and both are on the page behind one toggle:
+
+     scaled  target = 50L x heads/3.  A two-person team owes 33.3L, a four-person
+             team owes 66.7L. Asks whether a team is carrying its own staffing.
+     flat    target = 50L for everyone. Asks whether a team is carrying a full
+             team's worth of business, understaffed or not.
+
+   They disagree loudly and neither is wrong: Amit's two people on 37.5L read as
+   112% scaled and 75% flat. Which question is being asked has to be a choice, so
+   it is a toggle rather than a decision buried in a formula. */
+const TARGET_FULL_TEAM = 5000000;   // rupees
+const TARGET_TEAM_SIZE = 3;         // one RM + two assistants
+let TARGET_SCALED = false;
+const targetFor = heads => TARGET_SCALED
+  ? TARGET_FULL_TEAM * heads / TARGET_TEAM_SIZE
+  : TARGET_FULL_TEAM;
+
 const PODS = {
   'Mansi Rana':    ['Vansh', 'Divya'],
   'Sukhmeet Singh':['Gobind', 'Sapna', 'Bhavey Saluja'],
@@ -589,10 +654,12 @@ const SOURCES = {
   internal:  {label: 'CS Internal Team Calls Tracker', noun: 'internal calls'},
   client:    {label: 'CS Client Call Tracker',         noun: 'client calls'},
   scorecard: {label: 'CS Team — monthly scorecard',    noun: 'calls'},
-  clients:   {label: 'CS client book',                 noun: 'calls'}
+  clients:   {label: 'CS client book',                 noun: 'calls'},
+  meter:     {label: 'CS team KPI meter',              noun: 'calls'}
 };
 const TRACKERS = ['internal','client'];
 const MONTH_KEY = 'kpi.month';
+const TARGET_KEY = 'kpi.scaleTarget';
 /* ---- who is not expected to file where ----------------------------------
    Everyone on the roster is expected to file to BOTH trackers unless listed
    here. Names are matched in lowercase. To change this, edit the file on
@@ -657,7 +724,6 @@ const D=s=>new Date(s+'T00:00:00');
 const iso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const DOW=['Su','Mo','Tu','We','Th','Fr','Sa'];
-const diff=(a,b)=>Math.round((D(a)-D(b))/86400000);
 const pretty=s=>D(s).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
 const shortDate=s=>D(s).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
 function range(from,to,skipSun){
@@ -896,6 +962,100 @@ function scoreRows(){
   return {ym, days, live, rows: sortScore(out)};
 }
 
+/* ---------------- KPI meter ----------------
+   Compliance and business, per team, on one screen. Compliance is rolled up from
+   the same scoreRows() the scorecard uses, so the two views can never disagree —
+   a team's number is its members' filed entries over their expected ones, not an
+   average of their percentages, which would let one member with three expected
+   days weigh as much as one with fifty. */
+const monthLabel = ym => {
+  const [y, m] = ym.split('-').map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString('en-GB', {month: 'long', year: 'numeric'});
+};
+
+function meterRows(){
+  const {ym, rows} = scoreRows();
+  const byLead = new Map();
+  for (const lead of POD_TEAM.keys())
+    byLead.set(lead, {lead, team: POD_TEAM.get(lead) || [], expected: 0, filed: 0, people: 0});
+
+  let loose = 0;
+  for (const r of rows){
+    const lead = POD_OF.get(r.name);
+    if (!lead || !byLead.has(lead)){ loose++; continue; }
+    const e = byLead.get(lead);
+    e.expected += r.expected; e.filed += r.filed; e.people++;
+  }
+
+  const out = [...byLead.values()].map(e => {
+    const book = bookOf(e.lead);
+    const revenue = book ? book.revenue : 0;
+    const target = targetFor(e.team.length + 1);
+    return {
+      ...e, revenue, target,
+      compliance: e.expected ? e.filed / e.expected : null,
+      business: target ? revenue / target : 0
+    };
+  });
+  out.sort((a,b) => b.business - a.business || a.lead.localeCompare(b.lead));
+  return {ym, rows: out, loose};
+}
+
+function renderMeter(){
+  const {ym, rows, loose} = meterRows();
+  const pct = v => v === null ? null : Math.round(v * 100);
+  /* Same rule as the book table: never round across the line, so a bar that has
+     not reached the target cannot print as 100%. */
+  const cap = (v, met) => v === null ? null
+    : met ? Math.max(100, Math.round(v * 100)) : Math.min(99, Math.round(v * 100));
+
+  const dial = (label, value, sub, met) => {
+    const p = value === null ? null : cap(value, met);
+    const cls = p === null ? '' : met ? 'met' : (p < 60 ? 'low' : '');
+    return `<div class="dial"><span class="lbl">${esc(label)}</span>` +
+           `<span class="val">${p === null ? '—' : p + '%'}</span>` +
+           `<span class="sub">${esc(sub)}</span></div>` +
+           `<div class="track ${cls}"><i style="width:${Math.min(100, p || 0)}%"></i></div>`;
+  };
+
+  /* An empty grid is the worst thing this view can show: it looks like a loading
+     state rather than a result. Say what happened and why. */
+  if (!rows.length){
+    $('meters').innerHTML =
+      `<p class="podgaps" style="grid-column:1/-1">` +
+      `<b>No teams to show.</b> ` +
+      (POD_GAPS.length
+        ? `${POD_GAPS.map(esc).join('. ')}. Edit <code>PODS</code> in index.html.`
+        : `Nobody on the roster is in a team yet — add them to <code>PODS</code> in index.html.`) +
+      `</p>`;
+    $('meterhint').textContent = '';
+    return;
+  }
+
+  $('meters').innerHTML = rows.map(r => {
+    const compMet = r.compliance !== null && r.compliance >= 1;
+    const bizMet  = r.revenue >= r.target;
+    return `<div class="mcard"><h4>${esc(r.lead)}</h4>` +
+      `<p class="who">${r.team.length ? esc(r.team.join(', ')) : 'no team recorded'}</p>` +
+      dial('Compliance', r.compliance,
+           r.expected ? `${r.filed}/${r.expected} entries` : 'nothing expected', compMet) +
+      dial('Business', r.business,
+           `${inr(r.revenue)} of ${inr(Math.round(r.target))}`, bizMet) +
+      `</div>`;
+  }).join('');
+
+  $('meterhint').innerHTML =
+    `Compliance is ${esc(monthLabel(ym))} to date — entries filed ` +
+    `against entries expected, summed across the team rather than averaged, so a ` +
+    `member with fifty expected days counts for fifty. Business is the standing book ` +
+    `against ${TARGET_SCALED ? 'a target scaled to team size' : `<b>${esc(inr(TARGET_FULL_TEAM))} per team</b>`}. ` +
+    `The two are shown side by side, not blended: a team can be filing perfectly and ` +
+    `still be short on business, and one number would hide which.` +
+    (loose ? ` <b>${loose} ${loose === 1 ? 'person is' : 'people are'} in no team</b> and ` +
+             `counted in neither` +
+             (POD_GAPS.length ? `: ${POD_GAPS.map(esc).join('. ')}` : '') + `.` : '');
+}
+
 /* ---------------- client book ---------------- */
 let CFILTER = {owner: '', type: ''};
 
@@ -911,29 +1071,50 @@ function renderByRm(){
   }).sort((a,b) => b.revenue - a.revenue || a.name.localeCompare(b.name));
   const total = rows.reduce((n,r) => n + r.revenue, 0);
   let t = `<thead><tr><th>Team</th><th class="num">People</th><th class="num">Clients</th>` +
-          `<th class="num">Book</th><th class="num">Per head</th>` +
-          `<th class="num">Share</th></tr></thead><tbody>`;
+          `<th class="num">Book</th><th class="num">Target</th>` +
+          `<th class="num">vs target</th><th class="num">Gap</th></tr></thead><tbody>`;
   for (const r of rows){
     const team = POD_TEAM.get(r.name) || [];
-    const has = r.revenue > 0;
+    const tgt = targetFor(r.heads);
+    const gap = r.revenue - tgt;
+    /* Never round across the line. A team ₹5,070 short of ₹50L is 99.9%, and
+       showing "100%" beside a negative gap makes the table argue with itself —
+       so short of target caps at 99, and over caps up from 101. */
+    const raw = r.revenue / tgt * 100;
+    const pct = gap >= 0 ? Math.max(100, Math.round(raw)) : Math.min(99, Math.round(raw));
     t += `<tr><td>${esc(r.name)}` +
          (team.length
            ? `<span class="pod">with ${esc(team.join(', '))}</span>`
            : `<span class="pod">no team recorded</span>`) +
          `</td>` +
          `<td class="num">${r.heads}</td>` +
-         `<td class="num">${has ? r.clients : '—'}</td>` +
-         `<td class="num">${has ? esc(inr(r.revenue)) : '—'}</td>` +
-         `<td class="num">${has ? esc(inr(Math.round(r.revenue / r.heads))) : '—'}</td>` +
-         `<td class="num">${has && total ? Math.round(r.revenue / total * 100) + '%' : '—'}</td>` +
+         `<td class="num">${r.clients || '—'}</td>` +
+         `<td class="num">${esc(inr(r.revenue))}</td>` +
+         `<td class="num dim">${esc(inr(Math.round(tgt)))}</td>` +
+         `<td class="num ${pct >= 100 ? 'hit' : 'short'}">${pct}%</td>` +
+         `<td class="num ${gap >= 0 ? 'hit' : 'short'}">` +
+         `${gap >= 0 ? '+' : '\u2212'}${esc(inr(Math.abs(Math.round(gap))))}</td>` +
          `</tr>`;
   }
   const un = CLIENTS.filter(c => !c.o);
   if (un.length)
     t += `<tr><td>Unassigned</td><td class="num">—</td><td class="num">${un.length}</td>` +
          `<td class="num">${esc(inr(un.reduce((n,c) => n + (c.r||0), 0)))}</td>` +
-         `<td class="num">—</td><td class="num">—</td></tr>`;
+         `<td class="num">—</td><td class="num">—</td><td class="num">—</td></tr>`;
   $('byrm').innerHTML = t + '</tbody>';
+
+  /* Say plainly which of the two questions the numbers are answering — a target
+     column with no stated basis is the kind that gets quoted out of context. */
+  const heads = rows.reduce((n,r) => n + r.heads, 0);
+  const owed  = rows.reduce((n,r) => n + targetFor(r.heads), 0);
+  $('targetnote').innerHTML = TARGET_SCALED
+    ? `A full team is one RM and two assistants carrying <b>${esc(inr(TARGET_FULL_TEAM))}</b>, ` +
+      `so each team is measured against <b>${esc(inr(TARGET_FULL_TEAM / TARGET_TEAM_SIZE))} ` +
+      `per person</b> — ${rows.length} teams, ${heads} people, ${esc(inr(Math.round(owed)))} owed ` +
+      `against ${esc(inr(total))} on the book.`
+    : `Every team is measured against the same <b>${esc(inr(TARGET_FULL_TEAM))}</b>, whatever ` +
+      `its size — ${rows.length} teams, ${esc(inr(Math.round(owed)))} owed against ` +
+      `${esc(inr(total))} on the book. Understaffed teams are held to a full team's number.`;
 
   /* Say what did not line up. A pod chart that quietly loses a person is worse
      than no pod chart, because the number it produces still looks complete. */
@@ -1177,10 +1358,11 @@ const DAILY_PANELS = ['chase','kpis','gridsec','boardsec','stripsec'];
    `SOURCE === 'scorecard'`, so a fourth view is one more case, not a rewrite. */
 const modeOf = src => src === 'scorecard' ? 'scorecard'
                     : src === 'clients'   ? 'clients'
+                    : src === 'meter'     ? 'meter'
                     : 'daily';
 
 function markSource(){
-  for (const g of ['sources','sources2'])
+  for (const g of ['sources','sources2','sources3'])
     for (const b of $(g).children)
       b.setAttribute('aria-pressed', String(b.dataset.src === SOURCE));
   const mode = modeOf(SOURCE);
@@ -1196,12 +1378,14 @@ function markSource(){
   $('lede').hidden = !daily;
   $('scorecard').hidden = mode !== 'scorecard';
   $('clients').hidden   = mode !== 'clients';
+  $('meter').hidden     = mode !== 'meter';
   for (const id of DAILY_PANELS){ const el = $(id); if (el) el.hidden = !daily; }
   $('presets').hidden   = !daily;
-  $('monthwrap').hidden = mode !== 'scorecard';
+  $('monthwrap').hidden = mode !== 'scorecard' && mode !== 'meter';
   $('dates').hidden     = !daily || MODE !== 'custom';
   $('exempt').hidden    = !daily;
   $('joinedwrap').hidden = mode === 'clients';
+  $('h1').innerHTML = mode === 'meter' ? 'Compliance and <em>business</em>.' : $('h1').innerHTML;
 }
 
 function markMode(){
@@ -1244,6 +1428,12 @@ function setDefaultRange(){
 }
 
 function showActive(){
+  if (SOURCE === 'meter'){
+    showContent();
+    $('fresh').textContent = `${POD_TEAM.size} teams`;
+    renderMeter();
+    return;
+  }
   if (SOURCE === 'clients'){
     /* The book is a snapshot compiled into the page, so it needs no sheet and is
        ready before either tracker answers. Say when it was taken — a figure with
@@ -1336,10 +1526,18 @@ for (const id of ['from','to']){
     render();
   });
 }
-$('joined').addEventListener('change', () => SOURCE === 'scorecard' ? renderScorecard() : render());
+/* One handler, dispatching on the current view. Three views read this toggle and
+   a second listener for a new one is how they drift apart. */
+$('joined').addEventListener('change', () =>
+  SOURCE === 'meter'     ? renderMeter()
+: SOURCE === 'scorecard' ? renderScorecard()
+:                          render());
 $('month').addEventListener('change', () => {
   writeStore(MONTH_KEY, $('month').value);
-  renderScorecard();
+  /* The month picker is shared by the two views that use it. Re-render whichever
+     is on screen rather than assuming the scorecard — binding it to one view is
+     how the other silently ignores the control sitting right above it. */
+  if (SOURCE === 'meter') renderMeter(); else renderScorecard();
 });
 $('csv').addEventListener('click', downloadCsv);
 $('score').addEventListener('click', e => {
@@ -1355,7 +1553,7 @@ $('score').addEventListener('click', e => {
 });
 /* Every group's tabs share one handler — a new group needs its id here and
    nothing else. Binding per group is how a tab ends up silently inert. */
-for (const g of ['sources','sources2'])
+for (const g of ['sources','sources2','sources3'])
   $(g).addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b || b.dataset.src === SOURCE) return;
     SOURCE = b.dataset.src;
@@ -1365,6 +1563,11 @@ for (const g of ['sources','sources2'])
   });
 $('cowner').addEventListener('change', e => { CFILTER.owner = e.target.value; renderClientList(); });
 $('ctype').addEventListener('change',  e => { CFILTER.type  = e.target.value; renderClientList(); });
+$('scaletarget').addEventListener('change', e => {
+  TARGET_SCALED = e.target.checked;
+  writeStore(TARGET_KEY, TARGET_SCALED ? '1' : '0');
+  renderByRm();
+});
 $('presets').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   applyMode(b.dataset.mode, true);
@@ -1375,6 +1578,8 @@ $('refresh').addEventListener('click', load);
 const savedSrc = readStore(SOURCE_KEY);
 SOURCE = SOURCES[savedSrc] ? savedSrc : 'internal';
 $('month').value = readStore(MONTH_KEY) || iso(new Date()).slice(0,7);
+TARGET_SCALED = readStore(TARGET_KEY) === '1';
+$('scaletarget').checked = TARGET_SCALED;
 try {
   const saved = JSON.parse(readStore(SORT_KEY) || 'null');
   if (saved && SORT_COLS[saved.col] && (saved.dir === 'asc' || saved.dir === 'desc')) SORT = saved;
