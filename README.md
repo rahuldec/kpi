@@ -355,6 +355,23 @@ Two things follow from that, and both bite quietly:
   need a refresh or two to appear. The tab says so, so nobody concludes the feed is
   broken.
 
+### If a few minutes is too slow
+
+It is worth being precise about where the delay is, because most of the obvious
+fixes address the wrong layer. The page appends `&t=` to every call, so Vercel's
+edge cache never serves the book; `api/data.js` appends `_=` to its Google request,
+so nothing between Vercel and Google serves it either. What remains is inside
+Google: published output is regenerated on Google's own schedule, and no request
+shape reaches past that. **Publish-to-web cannot be made real-time.** If the sheet
+has to be current to the second, the transport has to change.
+
+The route that does give it: the workbook is shared *anyone with the link — Viewer*,
+so `api/data.js` can download the raw `.xlsx` bytes from Drive with no credentials
+and parse the Clients sheet server-side. That reads the live file with no
+publication and no publish cache in the way. The cost is a dependency — reading
+`.xlsx` means SheetJS, so this repo gains a `package.json` and an install step on
+deploy, where today it has neither. Worth it only if minutes genuinely hurt.
+
 Only *numbered* rows are taken. Below the client block there is scratch — two
 internal "Daily work track" rows, a stray duplicate, and prospect notes sitting in
 the wrong columns — and none of it carries a `Sr No.`. Filtering on the client name

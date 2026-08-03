@@ -2,6 +2,29 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "headers": [
     {
+      "comment": [
+        "The page must be revalidated on every load, not served from the browser's",
+        "own cache. Everything here lives in one HTML file — the client book parser,",
+        "the roster, the pods — so a browser holding an old copy of index.html is",
+        "holding an old copy of the entire dashboard. That looks exactly like stale",
+        "data from the sheet, which is the wrong place to go looking, and it hides",
+        "every deploy until someone happens to hard-reload.",
+        "no-cache does not mean do not store: the browser still keeps the file and",
+        "still asks whether it changed, so an unchanged page costs a 304 and no",
+        "download. Only /api is left alone — api/data.js sets its own caching."
+      ],
+      "source": "/",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/index.html",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, must-revalidate" }
+      ]
+    },
+    {
       "source": "/(.*)",
       "headers": [
         {

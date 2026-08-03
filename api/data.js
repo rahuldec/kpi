@@ -107,7 +107,20 @@ module.exports = async (req, res) => {
     /* 0. A published source is a fixed URL with the tab already chosen. There is
        no tab to hunt for and no gid to pin, so this returns before any of that. */
     if (source.url) {
-      const r = await fetch(source.url, { redirect: 'follow' });
+      /* The page varies its request to this function, so Vercel's edge never
+         serves a stale copy — but this leg used to request the exact same Google
+         URL every time, which is the one place a cached copy could still hide.
+         A throwaway parameter makes each request unique. Google ignores params it
+         does not know.
+
+         Be clear about what this can and cannot do. It rules out any cache
+         between here and Google. It does not touch the one *inside* Google:
+         published output is regenerated on Google's own schedule, a few minutes
+         behind the edit, and no request shape reaches past that. If the book has
+         to be current to the second, publishing is the wrong transport — see the
+         note on downloading the workbook directly in README. */
+      const url = source.url + (source.url.includes('?') ? '&' : '?') + '_=' + Date.now();
+      const r = await fetch(url, { redirect: 'follow', headers: { 'Cache-Control': 'no-cache' } });
       attempted.push({ url: source.url, ok: r.ok, status: r.status });
       if (!r.ok) return fail(
         `The published CSV for "${src}" returned ${r.status}.`,

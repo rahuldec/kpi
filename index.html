@@ -2084,7 +2084,15 @@ async function load(){
   $('refresh').disabled = true;
   try{
     // Both sheets, in parallel — the roster needs both regardless of which tab is open.
-    const [internal, client] = await Promise.all([fetchSource('internal'), fetchSource('client')]);
+    const trackers = Promise.all([fetchSource('internal'), fetchSource('client')]);
+    /* The book depends on neither tracker, so it goes out on the same leg rather
+       than waiting its turn — three requests in flight at once instead of two
+       and then one. Only the parsing has to wait, and that is free. Escalations
+       still cannot join them: it matches against the book, so it needs the book
+       to have landed first. Errors are captured rather than thrown so this
+       cannot reject while nothing is awaiting it yet. */
+    const bookPending = fetchRaw('book').then(parseBook, e => e instanceof Error ? e : new Error(String(e)));
+    const [internal, client] = await trackers;
     /* If both sources come back byte-identical, the function is ignoring ?src=
        and serving one sheet for both. That silently makes every person with no
        entries in the served sheet read as 0% on the other tab — a wrong answer
@@ -2113,7 +2121,8 @@ async function load(){
        something to fall back to — so the failure has to be loud on the client
        book itself, or the page would show a plausible, dated, wrong number. */
     try {
-      const book = parseBook(await fetchRaw('book'));
+      const book = await bookPending;
+      if (book instanceof Error) throw book;
       if (!book.length) throw new Error(
         'The published client book has a header but no numbered client rows.');
       CLIENTS = book;
