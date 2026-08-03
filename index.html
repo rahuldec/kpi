@@ -1651,14 +1651,12 @@ function renderByRm(){
       `${esc(inr(total))} on the book. Understaffed teams are held to a full team's number.`) +
     offNote;
 
-  /* Say what did not line up. A pod chart that quietly loses a person is worse
-     than no pod chart, because the number it produces still looks complete. */
-  $('podgaps').hidden = !POD_GAPS.length;
-  if (POD_GAPS.length)
-    $('podgaps').innerHTML =
-      `<b>Not everyone is placed.</b> ${POD_GAPS.map(esc).join('. ')}. ` +
-      `Edit <code>PODS</code> in index.html to fix this — until then these people ` +
-      `are counted in compliance but sit outside every team total.`;
+  /* The unplaced-people notice used to sit here. It is still reported, once, in
+     the KPI meter's hint line where the team totals it affects actually live —
+     repeating it on the client book put a red block on a tab that has nothing to
+     do with pods. Removed from here, not silenced. */
+  $('podgaps').hidden = true;
+  $('podgaps').innerHTML = '';
 }
 
 function renderClientList(){
@@ -1739,14 +1737,15 @@ function renderClients(){
   renderByRm();
   renderEscNote();
   renderClientList();
-  $('asof').textContent = BOOK_LIVE
-    ? `Read live from the published Clients tab of "CS Team Plan.xlsx" at ` +
-      `${new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'})}. ` +
-      `Google caches published sheets for a few minutes, so a very recent edit ` +
-      `may take one or two refreshes to appear.`
-    : `LIVE BOOK UNAVAILABLE — showing the snapshot compiled into this page, ` +
-      `taken ${pretty(CLIENTS_ASOF)}. Every figure below is as of that date and ` +
-      `may be out of date. Reason: ${BOOK_ERROR || 'not loaded'}`;
+  /* Nothing to say while it is working — "here is where the data came from" is
+     reassurance for whoever wired it up, not information for whoever reads it.
+     The failure is the opposite: the figures still render and still look
+     authoritative, so that case stays loud. */
+  $('asof').hidden = BOOK_LIVE;
+  $('asof').textContent = BOOK_LIVE ? '' :
+    `LIVE BOOK UNAVAILABLE — showing the snapshot compiled into this page, ` +
+    `taken ${pretty(CLIENTS_ASOF)}. Every figure below is as of that date and ` +
+    `may be out of date. Reason: ${BOOK_ERROR || 'not loaded'}`;
   $('asof').className = BOOK_LIVE ? '' : 'bad';
 }
 

@@ -200,18 +200,14 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
           /const CLIENTS_FALLBACK_ASOF = '\d{4}-\d{2}-\d{2}'/.test(HTML));
     const { doc } = boot(); await settle();
     doc.querySelector('#sources2 button[data-src="clients"]').click(); await settle();
-    check('a live book says it is live', /Read live from the published/.test(txt(doc, '#asof')),
-          txt(doc, '#asof'));
-    check('and warns that Google caches the publication',
-          /caches published sheets/.test(txt(doc, '#asof')), txt(doc, '#asof'));
-    check('a live book is not styled as a warning',
-          doc.getElementById('asof').className !== 'bad');
+    check('a live book says nothing at all', !shown(doc, '#asof'), txt(doc, '#asof'));
 
     /* The fallback is the dangerous state: the numbers still render and look
        exactly as authoritative as live ones. It has to announce itself. */
     const b = boot({ bookBody: 'nothing,useful\n1,2' }); await settle();
     b.doc.querySelector('#sources2 button[data-src="clients"]').click(); await settle();
     const note = txt(b.doc, '#asof');
+    check('a fallback book shows the notice at all', shown(b.doc, '#asof'));
     check('a fallback book says the live one is unavailable',
           /LIVE BOOK UNAVAILABLE/.test(note), note);
     check('the fallback gives the reason', /Client Name/.test(note), note);
@@ -806,17 +802,23 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     // to two of three: lead + Gobind + Sapna.
     check('head count includes the lead', teamRow.children[1].textContent === '3',
           teamRow.children[1].textContent);
-    check('a member missing from the roster is reported, not counted',
-          /Bhavey Saluja/.test(txt(doc, '#podgaps')), txt(doc, '#podgaps'));
+    /* The client book no longer carries the notice — the KPI meter's hint does,
+       because that is where the team totals it qualifies are shown. */
+    check('the client book carries no placement notice', !shown(doc, '#podgaps'));
+    check('a member missing from the roster is still reported, not counted',
+          /Bhavey Saluja/.test(win.eval('POD_GAPS.join(" | ")')),
+          win.eval('POD_GAPS.join(" | ")'));
     check('per head divides the book by the whole team',
           /L$|Cr$/.test(teamRow.children[4].textContent), teamRow.children[4].textContent);
     check('per head is smaller than the book',
           teamRow.children[4].textContent !== teamRow.children[3].textContent);
 
-    // an unplaceable person must be named, not silently dropped
-    check('gaps notice is shown', shown(doc, '#podgaps'));
-    check('the stranger is named in the notice', /Nobody Here/.test(txt(doc, '#podgaps')),
-          txt(doc, '#podgaps'));
+    // an unplaceable person must still be named somewhere, not silently dropped
+    check('the stranger is named in the meter hint', (() => {
+      doc.querySelector('#sources3 button[data-src="meter"]').click();
+      return /Nobody Here/.test(txt(doc, '#meterhint'));
+    })(), txt(doc, '#meterhint'));
+    doc.querySelector('#sources2 button[data-src="clients"]').click();
     check('a lead absent from the roster gets no row',
           !/Shobhit/.test(doc.getElementById('byrm').textContent));
 
