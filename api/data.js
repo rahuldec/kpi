@@ -16,13 +16,27 @@
 // contents. Set SHEET_GID in Vercel -> Settings -> Environment Variables to skip
 // the search if you ever want to pin it.
 
-// Three Asana exports, same shape, different sheets. Selected with ?src=;
-// anything unrecognised falls back to internal.
+// Four sheets behind three shapes. Selected with ?src=; anything unrecognised
+// falls back to internal.
 //
 // The two trackers are per-person daily timesheets. The escalations sheet is a
 // different animal: one row per client escalation, keyed by the client rather
 // than by a person. It shares the export shape, so the same tab-hunt works, but
 // it is identified by a different column — see `signature` below.
+//
+// The book is different again. "CS Team Plan" is an uploaded .xlsx, and Drive
+// only exports Docs-editor files, so /export?format=csv has nothing to serve for
+// it. File -> Share -> Publish to web sidesteps that: Google renders the chosen
+// tab as CSV at a /d/e/2PACX-.../pub URL regardless of the source format. A
+// published source carries a full `url` and skips the tab hunt entirely, since
+// the gid is already baked into the link.
+//
+// Two things to know about that link. It is a *publication*, separate from the
+// file's own sharing — unpublishing breaks this without changing any permission,
+// and re-publishing can mint a new token. And Google caches published output for
+// a few minutes, so a fresh edit is not always visible on the next reload. Set
+// BOOK_CSV_URL in Vercel -> Settings -> Environment Variables to repoint it
+// without a code change.
 const SOURCES = {
   internal:    { id: process.env.SHEET_ID        || '1tzsf5iWijfIT8AfXTJZUbrGzH5OkNb-6xMO3EZ59cdo',
                  gid: process.env.SHEET_GID        || '' },
@@ -32,7 +46,12 @@ const SOURCES = {
                  gid: process.env.ESC_SHEET_GID   || '',
                  // This export has no Due Date on most rows, so the tracker test
                  // would reject the right tab. Match on what it does have.
-                 signature: csv => /projects/i.test(csv) && /parent task/i.test(csv) }
+                 signature: csv => /projects/i.test(csv) && /parent task/i.test(csv) },
+  book:        { url: process.env.BOOK_CSV_URL ||
+                   'https://docs.google.com/spreadsheets/d/e/2PACX-1vRJduuwLQYkHFCDbGo1J-kGu8gN' +
+                   'WH3CX7dD8vVekiztMWxuiJIY1wptsW4eGgO5wg/pub?gid=667331627&single=true&output=csv',
+                 // Neither a tracker nor an escalation export — one row per client.
+                 signature: csv => /client name/i.test(csv) && /total billing/i.test(csv) }
 };
 
 const trackerSignature = csv => /due date/i.test(csv) && /assignee/i.test(csv);
@@ -85,6 +104,26 @@ module.exports = async (req, res) => {
     res.status(502).json({ error, hint, source: src, sheetId: SHEET_ID, attempted });
 
   try {
+    /* 0. A published source is a fixed URL with the tab already chosen. There is
+       no tab to hunt for and no gid to pin, so this returns before any of that. */
+    if (source.url) {
+      const r = await fetch(source.url, { redirect: 'follow' });
+      attempted.push({ url: source.url, ok: r.ok, status: r.status });
+      if (!r.ok) return fail(
+        `The published CSV for "${src}" returned ${r.status}.`,
+        'Open the sheet, then File -> Share -> Publish to web, and republish the tab as CSV. ' +
+        'Republishing can mint a new link — set BOOK_CSV_URL in Vercel if it changed.');
+      const body = await r.text();
+      if (isLoginPage(body)) return fail(
+        'Google returned a page instead of CSV for the published sheet.',
+        'The publication has most likely been revoked. Re-publish the tab via File -> Share -> Publish to web.');
+      if (!looksLikeTheExport(body)) return fail(
+        `The published CSV for "${src}" does not look like the client book.`,
+        'It has no "Client Name" and "Total Billing FY" columns — the link probably points at the ' +
+        'wrong tab. Re-publish with the Clients tab selected and update BOOK_CSV_URL.');
+      return send({ body, gid: 'published' });
+    }
+
     // 1. A pinned tab wins outright.
     if (PINNED_GID) {
       const hit = await grab(BASE, PINNED_GID);

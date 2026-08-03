@@ -88,7 +88,10 @@ No build step, no backend, no runtime dependencies at all.
     browser  ->  /api/data  (this project)  ->  docs.google.com  ->  the sheet
 
 `api/data.js` is a serverless function on your own Vercel project. It takes
-`?src=internal` or `?src=client`, fetches the matching sheet server-side and hands back raw CSV. The browser only ever talks to your own
+`?src=internal`, `?src=client`, `?src=escalations` or `?src=book`, fetches the matching sheet
+server-side and hands back raw CSV. The first three are Google Sheets fetched by id
+with the right tab discovered by its columns; the fourth is a published-to-web CSV
+fetched by its full URL. The browser only ever talks to your own
 domain, so cross-origin restrictions never apply — which is why this is a function
 and not a direct `fetch` to Google.
 
@@ -332,28 +335,50 @@ shape changes, the compliance figures are still correct and still render — the
 failure is reported above the client list and nothing is flagged. Tests cover this
 explicitly.
 
-### This one is a snapshot, not a feed
+### This one comes from a published sheet
 
-The other two sources are fetched live. This one is compiled into `index.html`:
+The book is fetched live like the trackers, but by a different route. "CS Team
+Plan.xlsx" is an *uploaded* .xlsx, and Drive only runs `/export?format=csv` on
+Docs-editor files — so the usual trick has nothing to serve. **File -> Share ->
+Publish to web** sidesteps that: Google renders any chosen tab as CSV at a
+`/d/e/2PACX-.../pub` URL whatever the source format. `api/data.js` holds that URL
+as the `book` source and fetches it directly, skipping the tab hunt, since the
+publication link already names the tab.
 
-    const CLIENTS_ASOF = '2026-08-01';
-    const CLIENTS = [ ... ];   // 148 rows
+Two things follow from that, and both bite quietly:
 
-Only *numbered* rows from the sheet are taken. Below the client block there is
-scratch — two internal "Daily work track" rows, a stray duplicate, and prospect notes
-sitting in the wrong columns — and none of it carries a `Sr No.`. Filtering on the
-client name alone pulls that in and inflates the total. The test suite checks the
-embedded rows for exactly those shapes, so a future re-extraction cannot quietly
-reintroduce them.
+- **Publishing is separate from sharing.** Someone can un-publish without touching
+  a single permission, and the file will still look correctly shared. Re-publishing
+  can also mint a fresh link. Set `BOOK_CSV_URL` in Vercel to repoint it without a
+  code change.
+- **Google caches published output** for a few minutes. A change you just saved may
+  need a refresh or two to appear. The tab says so, so nobody concludes the feed is
+  broken.
 
-That is not a preference. "CS Team Plan.xlsx" is an *uploaded* .xlsx, and Drive only
-exports Docs-editor files as CSV, so there is nothing for `api/data.js` to fetch. The
-page states the snapshot date on the tab so the figures cannot quietly age.
+Only *numbered* rows are taken. Below the client block there is scratch — two
+internal "Daily work track" rows, a stray duplicate, and prospect notes sitting in
+the wrong columns — and none of it carries a `Sr No.`. Filtering on the client name
+alone pulls that in and inflates the total by ₹1L. `parseBook` filters on the
+number, and the suite replays the scratch through it to prove it stays out.
 
-To make it live: open the workbook in Drive, **File -> Save as Google Sheets**, share
-the copy as *Anyone with the link — Viewer*, add its id to `api/data.js` beside the
-other two, and add `clients` to the fetch in `load()`. The parser will need to read
-the Clients sheet's columns rather than the Asana export's.
+Money has three cases that are easy to collapse into two. A figure is a number;
+` ₹ - ` is a real zero; ` - ` is a cell nobody filled in and stays `null`. Reading
+the third as zero invents a client that bills nothing.
+
+### When the publication fails
+
+`index.html` still carries a `CLIENTS_FALLBACK` array — the book as of its
+`CLIENTS_FALLBACK_ASOF` date — and drops back to it if the fetch fails, so an
+expired publication does not take down a dashboard whose compliance half owes the
+book nothing.
+
+A stale book that looks live is worse than no book, so the fallback is loud: the
+tab turns to a warning, says **LIVE BOOK UNAVAILABLE**, names the snapshot date and
+prints the underlying reason. If you ever see that, the numbers below it are frozen.
+
+The fallback doubles as the test fixture — `qa.js` re-encodes it as CSV in the
+sheet's own shape and serves that as the published sheet, so the parser is tested
+against real data and a round trip that must come back unchanged.
 
 Rules, deliberately simple:
 
@@ -411,7 +436,7 @@ entries loaded and when.
     node qa.js
     TZ=Asia/Kolkata node qa.js
 
-360 assertions with the network mocked: parsing (spacer rows above the header, quoted
+378 assertions with the network mocked: parsing (spacer rows above the header, quoted
 fields containing commas and newlines, blank assignees, case-variant names), every
 failure path (sheet not shared, network down, unparseable content), the date-window
 rules, cross-checks between the three places misses are counted, escaping of sheet

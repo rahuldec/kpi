@@ -47,7 +47,38 @@ const ESC_SHEET = [
   '6,2026-07-08,,2026-07-27,Zzz Unknown Academy,Clients,Sukhmeet Singh,s@x.com,,,,,Client Escalations,'
 ].join('\n');
 
+/* The published client book, replayed as CSV. Rather than hand-maintaining a
+   second copy of 148 clients, this is generated from CLIENTS_FALLBACK in the
+   page itself and re-encoded in the sheet's own shape — quoted names, " ₹ 1,234.00 "
+   money, "-" for the blanks. So the round trip is what is under test: whatever
+   the fallback says, the parser has to read back out of a real CSV unchanged,
+   and every book figure asserted below stays pinned to one source.
+
+   The header carries the sheet's trailing empty columns and its "RM" column, so
+   the column-by-name lookup is exercised rather than a tidy fixture. */
+const BOOK_ROWS = JSON.parse(HTML.match(/const CLIENTS_FALLBACK = (\[.*?\]);/s)[1]);
+const BOOK_SHEET = (() => {
+  const q = v => /[",]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+  const money = r => r === null ? ' - '
+                   : r === 0   ? ' ₹ - '
+                   : ` ₹ ${r.toLocaleString('en-US')}.00 `;
+  const head = 'Sr No.,Client Name,Old/New,TYPE1,Category,Type, Total Billing FY , Team ,RM,Retention/Imp,,,';
+  const body = BOOK_ROWS.map((c, i) =>
+    [i + 1, q(c.n), c.a, c.t || '-', c.c, 'B', q(money(c.r)), c.o || '-', '', 'Retention', '', '', ''].join(','));
+  /* The scratch below the numbered block, reproduced: rows with a name and no
+     Sr No. Any of these reaching the book inflates it — the IBMR line alone adds
+     ₹1L to a client that is already counted. */
+  const scratch = [
+    ',Daily work track - Retention,,Vishvas,,,,,,,,,',
+    ',Daily work track - Implementation,,Ayush,,,,,,,,,',
+    ',IBMR,,,,, ₹ 100\u002C000.00 ,,,,,,'.replace('100\u002C000', '"100,000"'),
+    ',Cambridge Delhi,,,,,,,,,,,'
+  ];
+  return [head, ...body, ...scratch].join('\n');
+})();
+
 function boot({ body = SHEET, clientBody = CLIENT_DEFAULT, escBody = ESC_SHEET,
+                bookBody = BOOK_SHEET,
                 status = 200, reject = false, store = null } = {}) {
   const errs = [], calls = [];
   // beforeParse installs the mock before the page's own <script> runs, so the
@@ -71,7 +102,9 @@ function boot({ body = SHEET, clientBody = CLIENT_DEFAULT, escBody = ESC_SHEET,
           ok: status >= 200 && status < 300,
           status,
           text: () => Promise.resolve(
-            src === 'escalations' ? escBody : src === 'client' ? clientBody : body)
+            src === 'escalations' ? escBody :
+            src === 'book' ? bookBody :
+            src === 'client' ? clientBody : body)
         });
       };
     }
@@ -161,23 +194,88 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     check('both sheet sources declared', /internal:/.test(HTML) && /client:/.test(HTML));
   }
 
-  // ── 1a2. the embedded client book declares its age ─────────────
+  // ── 1a2. the client book says where it came from ───────────────
   {
-    check('client snapshot carries an as-of date', /const CLIENTS_ASOF = '\d{4}-\d{2}-\d{2}'/.test(HTML));
+    check('fallback snapshot carries an as-of date',
+          /const CLIENTS_FALLBACK_ASOF = '\d{4}-\d{2}-\d{2}'/.test(HTML));
     const { doc } = boot(); await settle();
     doc.querySelector('#sources2 button[data-src="clients"]').click(); await settle();
-    check('as-of date is shown on the page', /Snapshot of the Clients sheet/.test(txt(doc, '#asof')),
+    check('a live book says it is live', /Read live from the published/.test(txt(doc, '#asof')),
           txt(doc, '#asof'));
-    check('page says the book does not refresh itself',
-          /does not refresh on its own/.test(txt(doc, '#asof')), txt(doc, '#asof'));
+    check('and warns that Google caches the publication',
+          /caches published sheets/.test(txt(doc, '#asof')), txt(doc, '#asof'));
+    check('a live book is not styled as a warning',
+          doc.getElementById('asof').className !== 'bad');
+
+    /* The fallback is the dangerous state: the numbers still render and look
+       exactly as authoritative as live ones. It has to announce itself. */
+    const b = boot({ bookBody: 'nothing,useful\n1,2' }); await settle();
+    b.doc.querySelector('#sources2 button[data-src="clients"]').click(); await settle();
+    const note = txt(b.doc, '#asof');
+    check('a fallback book says the live one is unavailable',
+          /LIVE BOOK UNAVAILABLE/.test(note), note);
+    check('the fallback gives the reason', /Client Name/.test(note), note);
+    check('the fallback is styled as a warning',
+          b.doc.getElementById('asof').className === 'bad');
+    check('a failed book does not take the compliance side down',
+          b.doc.getElementById('content').hidden === false);
   }
 
-  // ── 1a3. the snapshot holds clients, not scratch ───────────────
+  // ── 1a3. the published book parses back to the snapshot ────────
+  {
+    const { win } = boot(); await settle();
+    const live = win.eval('CLIENTS');
+    check('the live book replaced the fallback', win.eval('BOOK_LIVE') === true);
+    check('a CSV round trip reproduces the book exactly',
+          JSON.stringify(live) === JSON.stringify(BOOK_ROWS),
+          `${live.length} rows vs ${BOOK_ROWS.length}`);
+
+    /* The scratch below the numbered block is the whole reason the Sr No. filter
+       exists. BOOK_SHEET carries it; none of it may survive. */
+    check('no internal tracker rows survive parsing',
+          !live.some(c => /daily work track/i.test(c.n)));
+    check('the unowned IBMR duplicate is dropped',
+          !live.some(c => c.n === 'IBMR'));
+    check('the scratch does not inflate the total',
+          live.reduce((s, c) => s + (c.r || 0), 0) ===
+          BOOK_ROWS.reduce((s, c) => s + (c.r || 0), 0));
+
+    /* " ₹ - " and " - " look alike and are not alike. Reading the unfilled one
+       as zero would invent a client that bills nothing. */
+    const csv = [
+      'Sr No.,Client Name,Old/New,TYPE1,Category,Type, Total Billing FY , Team ,RM',
+      '1,Real Money,Old,School,Large,B," ₹ 1,368,000.00 ",Mansi Rana,',
+      '2,Explicit Zero,Old,University,Large,B, ₹ - ,Sultan Malik,',
+      '3,Never Filled,Old,School,Small,B, - ,-,',
+      ',Prospect Note,,,,,,,'
+    ].join('\n');
+    const got = win.eval(`parseBook(${JSON.stringify(csv)})`);
+    check('a numbered row with no Sr No. is not a client', got.length === 3, got.length);
+    check('rupee formatting is stripped to a number',
+          got.find(c => c.n === 'Real Money').r === 1368000);
+    check('an explicit rupee dash is zero',
+          got.find(c => c.n === 'Explicit Zero').r === 0);
+    check('an unfilled cell stays null, not zero',
+          got.find(c => c.n === 'Never Filled').r === null);
+    check('a dash owner becomes unowned, not the literal dash',
+          got.find(c => c.n === 'Never Filled').o === '');
+    check('unfilled billing sorts last, not first',
+          got[got.length - 1].n === 'Never Filled', got.map(c => c.n).join(','));
+    check('ownership is read from Team, not RM',
+          got.find(c => c.n === 'Real Money').o === 'Mansi Rana');
+
+    check('a book with no Sr No. column is refused rather than guessed', (() => {
+      try { win.eval(`parseBook("Client Name, Total Billing FY \\nFoo, 1")`); return false; }
+      catch (e) { return /Sr No\./.test(e.message); }
+    })());
+  }
+
+  // ── 1a4. the snapshot holds clients, not scratch ───────────────
   {
     // The source sheet has notes and internal tracker rows below the numbered
     // client block. They came in once because the extraction filtered on "has a
     // name" rather than "is numbered"; these pin the shape of what belongs.
-    const m = HTML.match(/const CLIENTS = (\[.*?\]);/s);
+    const m = HTML.match(/const CLIENTS_FALLBACK = (\[.*?\]);/s);
     check('client snapshot parses', !!m);
     const rows = JSON.parse(m[1]);
     check('every entry has a name', rows.every(r => r.n && r.n.trim().length > 1));
@@ -825,10 +923,16 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
             .every(r => /₹/.test(r.children[3].textContent) &&
                         r.children[3].textContent !== '₹0'));
 
-    check('a team just short never rounds up to 100%', (() => {
-      // Mansi Rana sits ~5,000 below 50L — 99.9% must not print as 100%
+    /* The clamp at the 100% boundary is `gap >= 0 ? max(100, round) : min(99, round)`,
+       so a team a hair under target prints 99% and one a hair over prints 100%.
+       Mansi Rana used to be the shortfall fixture, sitting ~5,000 below 50L. The
+       3 Aug book moved Lal Bahadur Shastri Bilaspur to her and she is now over.
+       No team currently falls between 99% and 100%, so the shortfall half of the
+       clamp is exercised only by the sign-agreement check above; this asserts the
+       over-target half against a team just past the line. */
+    check('a team just over target does not round down to 99%', (() => {
       const r = rowFor('Mansi Rana');
-      return r.children[5].textContent === '99%' && r.children[6].textContent.startsWith('−');
+      return r.children[5].textContent === '103%' && r.children[6].textContent.startsWith('+');
     })(), rowFor('Mansi Rana').textContent);
 
     // revenue targets must not have leaked into compliance
@@ -895,8 +999,8 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     check('a team over target reads above 100%',
           parseInt(val(card('Sukhmeet Singh'), 1)) > 100, val(card('Sukhmeet Singh'), 1));
 
-    check('a team just short never rounds to 100%',
-          val(card('Mansi Rana'), 1) === '99%', val(card('Mansi Rana'), 1));
+    check('a team just over target does not round down to 99%',
+          val(card('Mansi Rana'), 1) === '103%', val(card('Mansi Rana'), 1));
 
     // Compliance must be a pooled ratio, not an average of member percentages
     check('compliance shows filed over expected', /\d+\/\d+ entries/.test(sub(card('Amit Kumar'), 0)),
@@ -1476,11 +1580,15 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
   {
     const { doc, errs, calls } = boot(); await settle();
     check('boots with no JS errors', errs.length === 0, errs.join(' | '));
-    check('called the data endpoint for all three sheets', calls.length === 3 &&
+    check('called the data endpoint for all four sheets', calls.length === 4 &&
           calls.every(u => /^\/api\/data\?src=/.test(u)), calls.join());
-    check('the two trackers are fetched together, escalations after', (() => {
+    /* Order is load-bearing, not incidental: buildEscalations matches escalation
+       names against the client book, so the book has to be in place first or the
+       matching silently runs against the fallback. */
+    check('trackers together, then the book, then escalations', (() => {
       const src = calls.map(u => u.match(/src=(\w+)/)[1]);
-      return src[0] === 'internal' && src[1] === 'client' && src[2] === 'escalations';
+      return src[0] === 'internal' && src[1] === 'client' &&
+             src[2] === 'book' && src[3] === 'escalations';
     })(), calls.join());
     check('cache-busted the request', /[?&]t=\d+/.test(calls[0] || ''), calls[0]);
     check('content revealed', doc.getElementById('content').hidden === false);
@@ -1602,7 +1710,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
   {
     const { doc, calls } = boot(); await settle();
     doc.getElementById('refresh').click(); await settle();
-    check('refresh refetches every sheet', calls.length === 6, calls.length + ' calls');
+    check('refresh refetches every sheet', calls.length === 8, calls.length + ' calls');
   }
 
   // ── 7. internal consistency of the figures ─────────────────────
