@@ -1991,6 +1991,46 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
           c.querySelector('.how').textContent.slice(0, 200));
   }
 
+  // ── 14. vercel.json is deployable ──────────────────────────────
+  {
+    /* This file is validated by Vercel against a strict schema before anything
+       is built, and a rejected deploy takes the whole dashboard's changes with
+       it — including, once, the no-cache header meant to stop browsers serving
+       an old copy of the page. JSON has no comment syntax and the schema allows
+       no extra keys, so any explanation belongs in the README, not in here. */
+    const path = require('path').join(require('path').dirname(FILE), 'vercel.json');
+    let v = null, parseErr = null;
+    try { v = JSON.parse(fs.readFileSync(path, 'utf8')); }
+    catch (e) { parseErr = e.message; }
+    check('vercel.json parses', !!v, parseErr || '');
+
+    if (v) {
+      const ALLOWED = new Set(['source', 'headers', 'has', 'missing']);
+      const strays = (v.headers || []).flatMap(r =>
+        Object.keys(r).filter(k => !ALLOWED.has(k)).map(k => `${r.source}: ${k}`));
+      check('no rule carries a key the schema rejects', strays.length === 0, strays.join());
+      check('every rule has a source and a headers array',
+            (v.headers || []).every(r => typeof r.source === 'string' && Array.isArray(r.headers)));
+      check('every header is a key/value pair',
+            (v.headers || []).every(r => r.headers.every(h =>
+              typeof h.key === 'string' && typeof h.value === 'string')));
+
+      const header = (src, key) => (v.headers.find(r => r.source === src)?.headers || [])
+        .find(h => h.key.toLowerCase() === key)?.value || '';
+      /* The page and its parser are the same file, so a cached page is a cached
+         dashboard — this pair is what makes a deploy visible without a hard reload. */
+      check('/ is revalidated on every load',
+            /no-cache/.test(header('/', 'cache-control')), header('/', 'cache-control'));
+      check('/index.html likewise',
+            /no-cache/.test(header('/index.html', 'cache-control')), header('/index.html', 'cache-control'));
+      check('the security headers are still set',
+            /default-src 'none'/.test(header('/(.*)', 'content-security-policy')));
+      check('and the page may still call its own API',
+            /connect-src 'self'/.test(header('/(.*)', 'content-security-policy')),
+            header('/(.*)', 'content-security-policy'));
+    }
+  }
+
   const w = Math.max(...results.map(r => r[1].length));
   for (const [ok, n, d] of results) console.log(`${ok ? ' ok ' : 'FAIL'}  ${n.padEnd(w)}  ${d}`);
   console.log(`\n${pass} passed, ${fail} failed`);

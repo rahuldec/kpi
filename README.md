@@ -123,6 +123,28 @@ Or drag this folder onto the Vercel dashboard, or connect it as a Git repo. Netl
 Cloudflare Pages, GitHub Pages and Render static sites all work the same way; only
 `vercel.json` is Vercel-specific, and dropping it costs you the headers, not the page.
 
+### vercel.json takes no comments
+
+Vercel validates that file against a strict schema *before* it builds anything, and a
+rejected deploy takes every other change with it. JSON has no comment syntax and the
+schema permits no extra keys on a header rule — a `comment` array inside one is enough
+to fail the whole deploy. So the reasoning lives here instead:
+
+**`/` and `/index.html` are sent `Cache-Control: no-cache, must-revalidate`.** The
+client book parser, the roster and the pod mapping all live inside `index.html`, so a
+browser holding an old copy of that file is holding an old copy of the entire
+dashboard — and it reads exactly like stale data from the sheet, which is the wrong
+place to go looking. Without this header, every deploy stays invisible to anyone who
+does not happen to hard-reload.
+
+`no-cache` does not mean "do not store". The browser still keeps the file and still
+asks whether it changed, so an unchanged page costs a 304 and no download. `/api` is
+deliberately left alone: `api/data.js` sets its own caching.
+
+`qa.js` checks all of this — that the file parses, that no rule carries a key the
+schema would reject, that both cache rules survive, and that the CSP still allows the
+page to call its own API.
+
 ## Scorecard — the monthly KPI record
 
 The third tab counts missed days per person, per tracker, for a whole month.
@@ -547,7 +569,7 @@ entries loaded and when.
     node qa.js
     TZ=Asia/Kolkata node qa.js
 
-407 assertions with the network mocked: parsing (spacer rows above the header, quoted
+415 assertions with the network mocked: parsing (spacer rows above the header, quoted
 fields containing commas and newlines, blank assignees, case-variant names), every
 failure path (sheet not shared, network down, unparseable content), the date-window
 rules, cross-checks between the three places misses are counted, escaping of sheet
