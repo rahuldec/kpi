@@ -88,10 +88,10 @@ No build step, no backend, no runtime dependencies at all.
     browser  ->  /api/data  (this project)  ->  docs.google.com  ->  the sheet
 
 `api/data.js` is a serverless function on your own Vercel project. It takes
-`?src=internal`, `?src=client`, `?src=escalations` or `?src=book`, fetches the matching sheet
-server-side and hands back raw CSV. The first three are Google Sheets fetched by id
-with the right tab discovered by its columns; the fourth is a published-to-web CSV
-fetched by its full URL. The browser only ever talks to your own
+`?src=internal`, `?src=client`, `?src=escalations`, `?src=book` or `?src=adoption`,
+fetches the matching sheet server-side and hands back raw CSV. The first three are
+Google Sheets fetched by id with the right tab discovered by its columns; the last two
+are published-to-web CSVs fetched by their full URL. The browser only ever talks to your own
 domain, so cross-origin restrictions never apply — which is why this is a function
 and not a direct `fetch` to Google.
 
@@ -155,8 +155,8 @@ one on screen, so a spreadsheet can total it.
 
 ## KPI meter
 
-**Overall -> KPI meter** puts the two halves on one screen: a card per team with a
-compliance dial and a business dial.
+**Overall -> KPI meter** puts the three halves on one screen: a card per team with a
+compliance dial, a business dial and a module adoption dial.
 
 ### Choosing months
 
@@ -185,7 +185,9 @@ the same control bar.
 
 Business is the standing book against the target.
 
-Below the two dials, each card carries an **escalation line**: how many are open on
+Module adoption is the third dial — see **Module adoption** below.
+
+Below the three dials, each card carries an **escalation line**: how many are open on
 that team's clients, and which clients they are — a count alone just moves the
 question along. It is deliberately not a third dial. A count of live problems has no
 denominator, and a progress bar would invite reading "2 of 5" into it. Teams with
@@ -211,10 +213,102 @@ come from the same `scoreRows()` call that drew the dial, so the explanation can
 disagree with the figure it explains. One panel opens at a time: several expanded
 cards push the rest off screen and the grid stops being comparable.
 
-**The two are not blended into one score.** Compliance is this month's behaviour,
-business is the standing book; a team can be filing perfectly and still be far short
-on revenue, and a single averaged figure hides exactly the case worth looking at.
-Both dials use the same no-rounding-across-100 rule as the book table.
+**The three are not blended into one score.** Compliance is this month's behaviour,
+business is the standing book, adoption is last quarter's product usage; a team can be
+filing perfectly and still be far short on revenue, and a single averaged figure hides
+exactly the case worth looking at. All three use the same no-rounding-across-100 rule
+as the book table.
+
+## Module adoption
+
+The third dial: of the modules that apply to a team's clients, how many are actually
+in use. Source is the **ERP Usage Score** workbook, one tab per RM per quarter, each
+holding the raw scorecard — a client per row, a module per three columns.
+
+### Count the grid, never the Total column
+
+Each module occupies three columns: a score, a grade, and a spare. Only the score
+carries information — the grade is `1`->A and `0`->C with nothing added, and the third
+column is always empty. A blank score means the module was never sold to that client
+and is excluded from both sides of the ratio; a `0` means sold and unused, and counts
+against it.
+
+The sheet computes its own `Total` as "13/17", and that column **must not be parsed**.
+Excel has coerced most of them to dates, and not consistently between tabs — one
+sheet's "3/10" became 3 October, another's became 10 March. Worse, "0/1" degenerates
+to 2000-01-01, which reads back as a perfectly plausible 1/1 and would score four
+clients at 100% when the truth is 0%. Counting the grid avoids all of it, and agrees
+with the sheet's own `Percentage` column on every row.
+
+The parser refuses any row claiming more modules adopted than apply to the client.
+That is arithmetically impossible and is the exact signature of the corrupted Total
+column being pasted in, so it rejects the sheet and names that column in the error
+rather than rendering a dial above 100%.
+
+### The book decides who owns a client
+
+A client is scored on whichever RM's tab the person doing the work happened to use,
+and that is **not** the same as who owns the account — fourteen of the current rows
+sit on a different tab than the client book assigns them to, following the assistant
+rather than the owner. Ownership comes from the book. The tab is kept only so the
+card can name where a disagreement came from, and both sides show it: the owning team
+lists the client under "scored on a different tab", and the tab's team sees it listed
+as belonging to someone else. Neither is silently resolved.
+
+### Coverage is part of the number
+
+A dial computed only over scored clients looks complete when it is not. Every card
+therefore carries a **Scored** line — "15 of 19 clients" — and when a team's book is
+not fully scored it turns red and names the revenue behind the gap. The (i) panel
+lists every never-scored client with its billing, and says plainly that they are
+excluded from the percentage rather than counted as zero. Scoring an unassessed
+client as zero would make a team that has simply not been measured look like it is
+failing.
+
+As of Quarter I this matters a great deal: 37 of 148 clients were never scored, and
+they skew to the largest accounts — only 3 of the top 10 by revenue appear, so the
+figures describe 59% of the book.
+
+### The target is a placeholder
+
+    const ADOPTION_TARGET = 0.80;
+
+Compliance has an obvious target (100% — every entry filed) and business has an agreed
+one (₹50L). Adoption has neither yet, so this number is asserted rather than derived,
+and both the card and the meter note say so. Change it in `index.html` once the
+business agrees one.
+
+### Where the data lives
+
+The workbook keeps one tab per RM per quarter as the working and audit layer. The
+dashboard reads a single derived **stacked** tab instead — `RM, Quarter, As Of,
+Client, Ownership, Modules Adopted, Modules Applicable, Adoption %` — because parsing
+a 119-column two-header-row sheet over CSV, once per RM, is a great deal of fragile
+surface for no gain.
+
+Publish that tab **on its own** (File -> Share -> Publish to web, pick the tab, not
+Entire Document) and set the resulting link — it will carry `gid=` and `single=true` —
+as `ADOPTION_CSV_URL` in Vercel -> Settings -> Environment Variables. Publishing the
+entire document serves whichever tab happens to be first, which is a raw per-RM tab,
+and would silently change if the tabs are ever reordered.
+
+`api/data.js` deliberately ships **no default URL** for this source. An empty one is
+refused with an explanatory error rather than falling through to the tab hunt, which
+searches the tracker spreadsheet and would happily return a timesheet export under the
+adoption name.
+
+Until the link is set, the page reads `ADOPTION_FALLBACK` — a snapshot compiled into
+`index.html`, dated by `ADOPTION_FALLBACK_ASOF` — and the (i) panel says which it is
+reading. A stale quarterly figure and a live one look identical otherwise.
+
+### Names that do not match
+
+    const ADOPTION_ALIAS = { 'cambridge': 'Cambridge Delhi', ... };
+
+Same idea as `ESC_ALIAS`: where the scorecard spells a client differently from the
+book, map it here on evidence rather than resemblance. Anything that still does not
+resolve is **named on the meter note** rather than dropped, because an unmatched
+client is revenue counting towards nobody.
 
 ## Client book
 
@@ -453,11 +547,11 @@ entries loaded and when.
     node qa.js
     TZ=Asia/Kolkata node qa.js
 
-378 assertions with the network mocked: parsing (spacer rows above the header, quoted
+407 assertions with the network mocked: parsing (spacer rows above the header, quoted
 fields containing commas and newlines, blank assignees, case-variant names), every
 failure path (sheet not shared, network down, unparseable content), the date-window
 rules, cross-checks between the three places misses are counted, escaping of sheet
-content, the branding and embedded logo, the page title and metric grouping, the monthly scorecard and its CSV export, the coverage warning firing only for a month that really is outside the data, scorecard sorting (every column, both directions, exempt cells sinking, CSV matching the screen), the remembered view mode, range, tab and sort order, hidden people leaving no trace in any count while exempt people keep their row, the client book tab and its filters, the book column sitting beside compliance without altering it, lakh/crore formatting, pod resolution from first names with every failure reported on the page, the KPI meter (both dials, degenerate rosters, and an invariant that meter compliance equals the pooled scorecard rows team by team), static hygiene (no duplicate ids, no dangling $() references, nothing declared and never used), the (i) panel agreeing with its dial down to the date count, and a sweep over every tab checking that what should be hidden is hidden in computed style rather than merely flagged, the source switch, the combined roster, per-tracker exemptions, the three view modes and their persistence, Sunday handling in Today/Yesterday,
+content, the branding and embedded logo, the page title and metric grouping, the monthly scorecard and its CSV export, the coverage warning firing only for a month that really is outside the data, scorecard sorting (every column, both directions, exempt cells sinking, CSV matching the screen), the remembered view mode, range, tab and sort order, hidden people leaving no trace in any count while exempt people keep their row, the client book tab and its filters, the book column sitting beside compliance without altering it, lakh/crore formatting, pod resolution from first names with every failure reported on the page, the KPI meter (all three dials, degenerate rosters, and an invariant that meter compliance equals the pooled scorecard rows team by team), static hygiene (no duplicate ids, no dangling $() references, nothing declared and never used), the (i) panel agreeing with its dial down to the date count, and a sweep over every tab checking that what should be hidden is hidden in computed style rather than merely flagged, the source switch, the combined roster, per-tracker exemptions, the three view modes and their persistence, Sunday handling in Today/Yesterday, module adoption (a CSV round trip through the compiled snapshot, scratch rows dropped or reported but never counted, the team totals reconciling to the matched rows so nothing is double-counted or lost, ownership taken from the book rather than the tab with both sides of each disagreement named, coverage stated on every card, unscored clients excluded rather than zeroed, and three failure paths — an impossible score above its own denominator, a raw per-RM tab published by mistake, and an empty sheet — each falling back to the snapshot with the reason shown),
 inverted date ranges, and timezone independence. Run them after any change to the parser — the
 Asana form fields are expected to change once back-dated entries are blocked.
 

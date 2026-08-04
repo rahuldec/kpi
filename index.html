@@ -171,17 +171,19 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
 
 /* Escalations on a team card. Not a dial: a count of live problems has no
    denominator, and a progress bar would invite reading "2 of 5" into it. */
-.escline{
+.escline,.covline{
   display:flex;align-items:baseline;gap:9px;margin:2px 0 0;
   padding-top:12px;border-top:1px solid var(--hair);
 }
-.escline .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.07em;
+.escline .lbl,.covline .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.07em;
   color:var(--faint);width:88px;flex:none}
-.escline .n{font-size:15px;font-weight:600;letter-spacing:-.012em}
-.escline.hot .n{color:var(--miss)}
-.escline.cool .n{color:var(--faint);font-weight:500}
-.escwho{font-size:12.5px;line-height:1.45;color:var(--miss);margin:5px 0 0 97px}
-.escwho.cool{color:var(--faint)}
+.escline .n,.covline .n{font-size:15px;font-weight:600;letter-spacing:-.012em}
+.escline.hot .n,.covline.hot .n{color:var(--miss)}
+.escline.cool .n,.covline.cool .n{color:var(--faint);font-weight:500}
+.gaps{font-size:12.5px;line-height:1.5;color:var(--ink);margin:4px 0 0}
+.gaps.none{color:var(--faint)}
+.escwho,.covwho{font-size:12.5px;line-height:1.45;color:var(--miss);margin:5px 0 0 97px}
+.escwho.cool,.covwho.cool{color:var(--faint)}
 
 /* ── client book ─
    A pod's members sit under the lead's name rather than in their own column:
@@ -656,6 +658,51 @@ let CLIENTS_ASOF = CLIENTS_FALLBACK_ASOF;
 let BOOK_LIVE = false;
 let BOOK_ERROR = null;
 
+/* ---------------- module adoption ----------------
+
+   One row per client scored in the quarterly ERP usage scorecards: how many
+   modules that client has taken up (`s`) out of the ones that apply to it (`a`).
+   Blank cells in the source grid mean "module not sold to this client" and are
+   excluded from `a`; a 0 means sold and unused, and is counted.
+
+   Never read the source sheet's own "Total" column. Excel coerced it to dates,
+   inconsistently between tabs — one sheet's "3/10" became 3 October, another's
+   became 10 March — and "0/1" degenerates to 2000-01-01, which reads back as a
+   plausible 1/1 and would score four clients at 100% instead of 0%. The scores
+   below are counted off the grid and agree with the sheet's Percentage column
+   on all 111 rows.
+
+   `rm` is the tab the client was scored on. It is NOT authoritative for
+   ownership — 14 of these rows sit on a different RM's tab than the client book
+   assigns them to, following the assistant who did the work rather than the
+   account owner. The book wins; `rm` is kept only so the card can say where a
+   disagreement came from. */
+const ADOPTION_FALLBACK_ASOF = '2026-08-04';
+const ADOPTION_QUARTER = 'Quarter I';
+const ADOPTION_FALLBACK = [{"n":"LNT B.Ed College","rm":"Sukhmeet Singh","s":6,"a":6},{"n":"Manav Mangal School Faridabad","rm":"Sukhmeet Singh","s":6,"a":6},{"n":"SD International","rm":"Sukhmeet Singh","s":8,"a":8},{"n":"SKS","rm":"Sukhmeet Singh","s":7,"a":7},{"n":"Shaheed Bhagat Singh","rm":"Sukhmeet Singh","s":6,"a":6},{"n":"Silver Spot Covent","rm":"Sukhmeet Singh","s":5,"a":5},{"n":"Vidya Training Institute","rm":"Amit Kumar","s":5,"a":5},{"n":"Mukand Shyama Public School","rm":"Sukhmeet Singh","s":16,"a":17},{"n":"Mukand MPS","rm":"Kashish Goel","s":15,"a":16},{"n":"Sahara Group","rm":"Amit Kumar","s":15,"a":16},{"n":"Vishvas Public School","rm":"Sukhmeet Singh","s":14,"a":15},{"n":"Cambridge World School","rm":"Sultan Malik","s":13,"a":14},{"n":"Pooja Modern Kurukshetra","rm":"Amit Kumar","s":13,"a":14},{"n":"Mukand MLPS","rm":"Sukhmeet Singh","s":18,"a":20},{"n":"OPS Ambala","rm":"Sukhmeet Singh","s":17,"a":19},{"n":"Shemford Futuristic School","rm":"Kashish Goel","s":14,"a":16},{"n":"Maharaja Agrasen Adarsh","rm":"Amit Kumar","s":18,"a":21},{"n":"Genesis School Karnal","rm":"Sukhmeet Singh","s":17,"a":20},{"n":"Mukand Swaraj Damla","rm":"Kashish Goel","s":17,"a":20},{"n":"SNCF Schools","rm":"Amit Kumar","s":17,"a":20},{"n":"Mukand Sushila","rm":"Sukhmeet Singh","s":16,"a":19},{"n":"Mukand JMIETI","rm":"Kashish Goel","s":21,"a":25},{"n":"Mukand JMIT","rm":"Kashish Goel","s":21,"a":25},{"n":"Tagore Group","rm":"Sultan Malik","s":14,"a":17},{"n":"MPPS School kkr","rm":"Sukhmeet Singh","s":17,"a":21},{"n":"BR International","rm":"Sultan Malik","s":16,"a":20},{"n":"Springdales, Ismailabad","rm":"Sultan Malik","s":16,"a":20},{"n":"Vishvas, Hisar","rm":"Sukhmeet Singh","s":12,"a":15},{"n":"Akshara","rm":"Sukhmeet Singh","s":15,"a":19},{"n":"Mukand Radaur Schools","rm":"Sukhmeet Singh","s":10,"a":13},{"n":"Cecil City & Cantt","rm":"Mansi Rana","s":13,"a":17},{"n":"RKSD College Kaithal","rm":"Sukhmeet Singh","s":13,"a":17},{"n":"Scholar Rosary Rohtak","rm":"Ankush Rana","s":16,"a":21},{"n":"DN College","rm":"Mansi Rana","s":12,"a":16},{"n":"Mavericks International KKR","rm":"Sultan Malik","s":12,"a":16},{"n":"Rational World School","rm":"Sultan Malik","s":12,"a":16},{"n":"Saraswati Sansthan S7","rm":"Sukhmeet Singh","s":9,"a":12},{"n":"SIS Academy","rm":"Sukhmeet Singh","s":11,"a":15},{"n":"BPR College","rm":"Sukhmeet Singh","s":8,"a":11},{"n":"Muni International Delhi","rm":"Sukhmeet Singh","s":8,"a":11},{"n":"SD APIIT","rm":"Sukhmeet Singh","s":8,"a":11},{"n":"Excel International Gohana","rm":"Ankush Rana","s":13,"a":18},{"n":"IsharJyot Degree College","rm":"Sukhmeet Singh","s":10,"a":14},{"n":"Mahavir Jain School Group","rm":"Kashish Goel","s":10,"a":14},{"n":"Lord Krishna Public School Ugala","rm":"Sukhmeet Singh","s":12,"a":17},{"n":"Rukmani BMAS","rm":"Sukhmeet Singh","s":12,"a":17},{"n":"IG College Ladwa","rm":"Kashish Goel","s":7,"a":10},{"n":"DAV College Ambala","rm":"Mansi Rana","s":9,"a":13},{"n":"Dhanna Bhagat School","rm":"Mansi Rana","s":13,"a":19},{"n":"Aryakulam International Munak","rm":"Ankush Rana","s":15,"a":22},{"n":"GITM Gurugram","rm":"Sultan Malik","s":18,"a":27},{"n":"Rukmani MRRA Barara Road","rm":"Sukhmeet Singh","s":12,"a":18},{"n":"Tallentian Officers Academy","rm":"Sultan Malik","s":2,"a":3},{"n":"Rishikul World Academy","rm":"Amit Kumar","s":11,"a":17},{"n":"TSUS Rohtak","rm":"Sultan Malik","s":9,"a":14},{"n":"Oxford","rm":"Sukhmeet Singh","s":7,"a":11},{"n":"Mukand SJPP","rm":"Kashish Goel","s":12,"a":19},{"n":"Navyug Kurukshetra","rm":"Mansi Rana","s":12,"a":19},{"n":"Mukand TIMT","rm":"Mansi Rana","s":18,"a":29},{"n":"Shah Satnam Sirsa","rm":"Sukhmeet Singh","s":13,"a":21},{"n":"Rpdav","rm":"Sukhmeet Singh","s":8,"a":13},{"n":"Lal Bahadur Shastri Bilaspur","rm":"Mansi Rana","s":19,"a":31},{"n":"Puneet EDPS","rm":"Sukhmeet Singh","s":9,"a":15},{"n":"Rukmani AKMV","rm":"Kashish Goel","s":9,"a":15},{"n":"SPS Convent School","rm":"Ankush Rana","s":12,"a":20},{"n":"Little Angel, Karnal","rm":"Sukhmeet Singh","s":11,"a":19},{"n":"IBMR Business School","rm":"Amit Kumar","s":12,"a":21},{"n":"Mukand MLNC","rm":"Mansi Rana","s":17,"a":30},{"n":"Masonic Public","rm":"Amit Kumar","s":14,"a":25},{"n":"Gurukul KKR","rm":"Mansi Rana","s":11,"a":20},{"n":"Arya College Panipat","rm":"Sultan Malik","s":12,"a":22},{"n":"DAV Girls Yamuna Nagar","rm":"Ankush Rana","s":12,"a":22},{"n":"GNKITM-TC","rm":"Mansi Rana","s":15,"a":28},{"n":"Vidya Public School","rm":"Amit Kumar","s":8,"a":15},{"n":"OPS Int","rm":"Kashish Goel","s":11,"a":21},{"n":"GNKC","rm":"Mansi Rana","s":14,"a":27},{"n":"Bharat College of Law","rm":"Sukhmeet Singh","s":7,"a":14},{"n":"Cambridge","rm":"Amit Kumar","s":8,"a":16},{"n":"GGDSD College Palwal","rm":"Amit Kumar","s":7,"a":14},{"n":"GGSCOP Ynr","rm":"Mansi Rana","s":16,"a":32},{"n":"Geeta Niketan Vidyapeeth","rm":"Sukhmeet Singh","s":6,"a":12},{"n":"Mukand VMLG","rm":"Sukhmeet Singh","s":9,"a":18},{"n":"Prachya School","rm":"Amit Kumar","s":7,"a":14},{"n":"Bharat Public School","rm":"Sukhmeet Singh","s":6,"a":13},{"n":"DAV College Pehowa","rm":"Mansi Rana","s":6,"a":13},{"n":"GNKC Karnal","rm":"Mansi Rana","s":6,"a":13},{"n":"GVM Girls College Sonipat","rm":"Kashish Goel","s":6,"a":13},{"n":"PKG College","rm":"Kashish Goel","s":11,"a":24},{"n":"Guru Nanak Kurukshetra","rm":"Sukhmeet Singh","s":5,"a":11},{"n":"SA Jain College + AIMT","rm":"Kashish Goel","s":7,"a":16},{"n":"Cambridge Field Global Panipat","rm":"Sultan Malik","s":10,"a":23},{"n":"SD College Panipat","rm":"Kashish Goel","s":6,"a":15},{"n":"SD Modern Hansi","rm":"Ankush Rana","s":6,"a":15},{"n":"DAV College Cheeka","rm":"Sultan Malik","s":7,"a":18},{"n":"Partap Public School Kunjpura","rm":"Mansi Rana","s":7,"a":18},{"n":"DIMT Law College","rm":"Ankush Rana","s":6,"a":16},{"n":"Greenfield Public School","rm":"Kashish Goel","s":8,"a":22},{"n":"Ideal College","rm":"Ankush Rana","s":6,"a":18},{"n":"IB College Panipat","rm":"Kashish Goel","s":4,"a":13},{"n":"Baba Shravan Nath","rm":"Sukhmeet Singh","s":3,"a":10},{"n":"Kalp Vriksh School Nissing","rm":"Mansi Rana","s":5,"a":19},{"n":"Swastik Bal Vikas Panipat","rm":"Kashish Goel","s":5,"a":21},{"n":"SD Kanya Ambala","rm":"Mansi Rana","s":4,"a":18},{"n":"IAMR Group","rm":"Amit Kumar","s":7,"a":38},{"n":"UARSchool Gharaunda","rm":"Ankush Rana","s":4,"a":24},{"n":"HIMT Group Noida","rm":"Amit Kumar","s":5,"a":38},{"n":"Imperial Public School Delhi","rm":"Mansi Rana","s":2,"a":16},{"n":"Mukand Analytics","rm":"Mansi Rana","s":0,"a":1},{"n":"Puneet Public School, Shahdra","rm":"Sultan Malik","s":0,"a":1},{"n":"SDGI Global University","rm":"Ankush Rana","s":0,"a":1},{"n":"Wisdom Kurukshetra","rm":"Ankush Rana","s":0,"a":1}];
+
+/* Names the scorecards spell differently from the book. Evidence, not
+   resemblance: "Cambridge" sits on Amit Kumar's tab and Cambridge Delhi is the
+   only Cambridge he owns, while Sultan's two Cambridges are both scored under
+   their full names on his own tab. */
+const ADOPTION_ALIAS = {
+  'cambridge': 'Cambridge Delhi',
+  'mahavir jain school group': 'Shri Mahavir Jain School',
+  'sa jain college + aimt': 'SA Jain (PG) College + AIMT'
+};
+
+/* A placeholder until the business sets one. Compliance has an obvious target
+   (100% — every entry filed) and business has an agreed one (₹50L). Adoption
+   has neither, so this number is asserted, not derived, and the page says so
+   rather than letting it pass as settled. */
+const ADOPTION_TARGET = 0.80;
+
+let ADOPTION = ADOPTION_FALLBACK;
+let ADOPTION_ASOF = ADOPTION_FALLBACK_ASOF;
+let ADOPT_LIVE = false;
+let ADOPT_ERROR = null;
+let ADOPT_BY_CLIENT = new Map(), ADOPT_UNMATCHED = [];
+
 /* Lowercased owner -> {clients, revenue}. The Clients sheet and the trackers now
    spell people the same way, so this joins on name; anyone not an owner is simply
    absent from the map and shows a dash rather than a zero. */
@@ -988,6 +1035,96 @@ function parseBook(text){
   // Highest billing first; the unfilled ones sink rather than reading as zero.
   out.sort((x, y) => (y.r === null ? -1 : y.r) - (x.r === null ? -1 : x.r));
   return out;
+}
+
+/* The stacked adoption tab: one row per client per quarter, with the module
+   counts already reduced. Header found by column name like the book's, so a
+   reordered or extended sheet still parses. A row needs a name and a numeric
+   applicable count; the "0 of 0" case is dropped rather than divided. */
+function parseAdoption(text){
+  const dl = (text.split('\n')[0].match(/\t/g) || []).length >= 2 ? '\t' : ',';
+  const rows = splitRows(text, dl);
+  let head = -1, ix = {};
+  for (let i = 0; i < Math.min(rows.length, 40); i++){
+    const h = rows[i].map(x => x.trim().toLowerCase());
+    const name = h.findIndex(x => x === 'client' || x === 'client name');
+    const got  = h.findIndex(x => x.includes('adopted'));
+    const app  = h.findIndex(x => x.includes('applicable'));
+    if (name > -1 && got > -1 && app > -1){
+      head = i;
+      ix = {name, got, app, rm: h.findIndex(x => x === 'rm'),
+            q: h.findIndex(x => x === 'quarter'), asof: h.findIndex(x => x.includes('as of'))};
+      break;
+    }
+  }
+  if (head < 0) throw new Error(
+    'Could not find a header row with "Client", "Modules Adopted" and "Modules Applicable". ' +
+    'The published link may still be pointing at a raw per-RM tab rather than the stacked one.');
+
+  const cell = (r, i) => i > -1 ? String(r[i] ?? '').trim() : '';
+  const out = [];
+  for (let i = head + 1; i < rows.length; i++){
+    const r = rows[i]; if (!r) continue;
+    const n = cell(r, ix.name);
+    const s = Number(cell(r, ix.got)), a = Number(cell(r, ix.app));
+    if (!n || !Number.isFinite(a) || a <= 0 || !Number.isFinite(s)) continue;
+    /* More modules adopted than apply to the client is arithmetically impossible
+       and is the exact signature of the corrupted Total column being pasted in
+       by mistake. Refuse it rather than rendering a dial above 100%. */
+    if (s > a) throw new Error(
+      `"${n}" is scored ${s} of ${a} modules, which cannot be right. ` +
+      'This usually means the sheet\'s own Total column was used instead of counting the grid.');
+    out.push({n, rm: cell(r, ix.rm), s, a});
+  }
+  return out;
+}
+
+/* Joins the scored clients to the book. Ownership comes from the book, never
+   from the tab a client happened to be scored on — see the note on `rm` above.
+   Anything that does not resolve is listed on the page rather than dropped,
+   because a silently unmatched client is revenue missing from a dial. */
+function buildAdoption(){
+  ADOPT_BY_CLIENT = new Map(); ADOPT_UNMATCHED = [];
+  const byName = new Map();
+  for (const c of CLIENTS) byName.set(eNorm(c.n), c);
+  for (const row of ADOPTION){
+    const alias = ADOPTION_ALIAS[row.n.trim().toLowerCase()] || row.n;
+    const c = byName.get(eNorm(alias));
+    if (!c){ ADOPT_UNMATCHED.push(row.n); continue; }
+    ADOPT_BY_CLIENT.set(c.n, {...row, client: c});
+  }
+}
+
+/* Everything a team card needs about adoption, including the parts that make it
+   honest: how much of the team's book was never scored at all. A dial computed
+   only over scored clients looks complete when it is not. */
+function adoptForTeam(lead){
+  const owned = CLIENTS.filter(c => c.o && c.o.toLowerCase() === String(lead).toLowerCase());
+  let adopted = 0, applicable = 0, revCovered = 0, revTotal = 0;
+  const missing = [], conflicts = [];
+  for (const c of owned){
+    revTotal += c.r || 0;
+    const hit = ADOPT_BY_CLIENT.get(c.n);
+    if (!hit){ missing.push(c); continue; }
+    adopted += hit.s; applicable += hit.a; revCovered += c.r || 0;
+    if (hit.rm && hit.rm.toLowerCase() !== String(lead).toLowerCase())
+      conflicts.push({client: c.n, rm: hit.rm});
+  }
+  /* Clients scored on this lead's tab that the book gives to someone else. They
+     do not count towards this team's score — the book decides — but the card
+     names them so the disagreement is visible from both sides. */
+  const strays = [];
+  for (const [name, hit] of ADOPT_BY_CLIENT)
+    if (hit.rm && hit.rm.toLowerCase() === String(lead).toLowerCase() &&
+        hit.client.o && hit.client.o.toLowerCase() !== String(lead).toLowerCase())
+      strays.push({client: name, owner: hit.client.o});
+
+  return {
+    scored: owned.length - missing.length, total: owned.length,
+    adopted, applicable, revCovered, revTotal, missing, conflicts, strays,
+    adoption: applicable ? adopted / applicable : null,
+    coverage: revTotal ? revCovered / revTotal : null
+  };
 }
 
 function parseExport(text){
@@ -1365,8 +1502,9 @@ function meterRows(){
     const revenue = book ? book.revenue : 0;
     const target = targetFor(e.team.length + 1);
     const esc = escForTeam(e.lead);
+    const adopt = adoptForTeam(e.lead);
     return {
-      ...e, revenue, target, esc,
+      ...e, revenue, target, esc, adopt,
       escOpen: esc.filter(x => x.open.length),
       compliance: e.expected ? e.filed / e.expected : null,
       business: target ? revenue / target : 0
@@ -1398,11 +1536,12 @@ function howHtml(r){
     `<b>${r.expected - r.filed} missed</b> — ` +
     `${r.expected ? Math.round(r.filed / r.expected * 100) : 0}%.</p>`;
 
+  h += adoptDetail(r);
   h += escDetail(r);
 
   if (!r.members.length) return h + `<p class="none">Nobody on this team has any expected days.</p>`;
 
-  h += `<h5>Days missed</h5>`;
+  h += `<h5>Days missed</h5><div class="missed">`;
   for (const m of r.members){
     h += `<p class="who2">${esc(m.name)}</p>`;
     let any = false;
@@ -1415,6 +1554,52 @@ function howHtml(r){
     }
     if (!any && TRACKERS.every(t => m.per[t]))
       h += `<p class="dates none">Nothing missed.</p>`;
+  }
+  return h + `</div>`;
+}
+
+/* The adoption dial, shown working. Three things belong here and only one of
+   them is the arithmetic: which clients were never scored (the denominator the
+   dial cannot show), and where the scorecard and the book disagree about who
+   owns an account. Both change how the number should be read. */
+function adoptDetail(r){
+  const a = r.adopt;
+  if (!a.total) return '';
+  const money = c => `${esc(c.n)} <span class="tk">${esc(inr(c.r || 0))}</span>`;
+
+  let h = `<h5>How module adoption is worked out</h5><p class="sum">` +
+    `Each scored client contributes the modules it has taken up out of the ones ` +
+    `that apply to it; modules never sold to a client are left out of both sides. ` +
+    `Summed across the team that is <b>${a.adopted} adopted</b> of ` +
+    `<b>${a.applicable} applicable</b> — ` +
+    `${a.applicable ? Math.round(a.adopted / a.applicable * 100) : 0}%. ` +
+    `This is ${esc(ADOPTION_QUARTER)} as at ${esc(pretty(ADOPTION_ASOF))}, not the ` +
+    `months chosen above, and the ${Math.round(ADOPTION_TARGET * 100)}% target is a ` +
+    `placeholder rather than an agreed one.` +
+    (ADOPT_LIVE ? '' : ` Read from the copy built into this page` +
+      (ADOPT_ERROR ? ` because the live sheet failed: ${esc(ADOPT_ERROR)}` : '') + `.`) +
+    `</p>`;
+
+  if (a.missing.length){
+    const rev = a.missing.reduce((n, c) => n + (c.r || 0), 0);
+    h += `<h5>Never scored — ${a.missing.length} of ${a.total} clients, ` +
+         `${esc(inr(rev))}</h5>` +
+         `<p class="gaps">${a.missing.slice().sort((x, y) => (y.r || 0) - (x.r || 0))
+            .map(money).join(' · ')}</p>` +
+         `<p class="gaps none">These are absent from the percentage above, not ` +
+         `counted as zero — the dial describes the ${a.scored} that were scored.</p>`;
+  }
+
+  if (a.conflicts.length || a.strays.length){
+    h += `<h5>Scored on a different tab than the book says</h5>`;
+    if (a.conflicts.length)
+      h += `<p class="gaps">${a.conflicts.map(c =>
+        `${esc(c.client)} <span class="tk">scored under ${esc(c.rm)}</span>`).join(' · ')}</p>`;
+    if (a.strays.length)
+      h += `<p class="gaps">${a.strays.map(c =>
+        `${esc(c.client)} <span class="tk">on this tab, book says ${esc(c.owner)}</span>`).join(' · ')}</p>`;
+    h += `<p class="gaps none">Counted by the book's owner, not by whose tab the ` +
+         `score was typed on.</p>`;
   }
   return h;
 }
@@ -1444,6 +1629,28 @@ function escDetail(r){
          `on ${esc(r.esc.filter(x => x.all.length > x.open.length).map(x => x.client).join(', '))}.</p>`;
   if (!open.length && !shut) return '';
   return h;
+}
+
+/* The adoption dial's denominator, said out loud. A team whose biggest accounts
+   were never scored would otherwise show a confident percentage drawn from its
+   small clients only — the failure this line exists to prevent. */
+function coverLine(r){
+  const a = r.adopt;
+  if (!a.total)
+    return `<p class="covwho cool">no clients in the book</p>`;
+  if (!a.scored)
+    return `<div class="covline hot"><span class="lbl">Scored</span>` +
+           `<span class="n">none of ${a.total}</span></div>` +
+           `<p class="covwho">no client on this book has been scored yet</p>`;
+
+  const full = a.scored === a.total;
+  const revPct = a.coverage === null ? null : Math.round(a.coverage * 100);
+  return `<div class="covline ${full ? 'cool' : 'hot'}">` +
+         `<span class="lbl">Scored</span>` +
+         `<span class="n">${a.scored} of ${a.total} clients</span></div>` +
+         (full ? '' :
+           `<p class="covwho">covers ${esc(inr(a.revCovered))} of ${esc(inr(a.revTotal))}` +
+           `${revPct === null ? '' : ` — ${revPct}% of the book`}</p>`);
 }
 
 function escLine(r){
@@ -1517,6 +1724,7 @@ function renderMeter(){
   $('meters').innerHTML = rows.map((r, i) => {
     const compMet = r.compliance !== null && r.compliance >= 1;
     const bizMet  = r.revenue >= r.target;
+    const adoptMet = r.adopt.adoption !== null && r.adopt.adoption >= ADOPTION_TARGET;
     return `<div class="mcard">` +
       `<button type="button" class="info" data-card="${i}" aria-expanded="false" ` +
       `title="How this is worked out">i</button>` +
@@ -1526,6 +1734,11 @@ function renderMeter(){
            r.expected ? `${r.filed}/${r.expected} entries` : 'nothing expected', compMet) +
       dial('Business', r.business,
            `${inr(r.revenue)} of ${inr(Math.round(r.target))}`, bizMet) +
+      dial('Module adoption', r.adopt.adoption,
+           r.adopt.applicable
+             ? `${r.adopt.adopted}/${r.adopt.applicable} modules`
+             : 'no client scored', adoptMet) +
+      coverLine(r) +
       escLine(r) +
       `<div class="how" id="how${i}" hidden>${howHtml(r)}</div>` +
       `</div>`;
@@ -1538,8 +1751,16 @@ function renderMeter(){
     `against entries expected, summed across the team rather than averaged, so a ` +
     `member with fifty expected days counts for fifty. Business is the standing book ` +
     `against ${TARGET_SCALED ? 'a target scaled to team size' : `<b>${esc(inr(TARGET_FULL_TEAM))} per team</b>`}. ` +
-    `The two are shown side by side, not blended: a team can be filing perfectly and ` +
+    `Module adoption is ${esc(ADOPTION_QUARTER)}, a quarterly figure that does not ` +
+    `move with the month picker, measured against a placeholder ` +
+    `${Math.round(ADOPTION_TARGET * 100)}% until a real target is agreed. ` +
+    `The three are shown side by side, not blended: a team can be filing perfectly and ` +
     `still be short on business, and one number would hide which.` +
+    (ADOPT_UNMATCHED.length
+      ? ` <b>${ADOPT_UNMATCHED.length} scored ${ADOPT_UNMATCHED.length === 1 ? 'client is' : 'clients are'} ` +
+        `not in the book</b> and count towards nobody: ` +
+        `${ADOPT_UNMATCHED.map(esc).join(', ')}. Add them to <code>ADOPTION_ALIAS</code> ` +
+        `in index.html if they are the same client under another name.` : '') +
     (excluded ? ` ${esc(NO_BOOK_TEAMS.join(', '))}` +
                 `${NO_BOOK_TEAMS.length === 1 ? "'s team is" : " teams are"} not shown here — ` +
                 `no client book to measure against — so ${excluded} ` +
@@ -2135,6 +2356,25 @@ async function load(){
       BOOK_LIVE = false;
       BOOK_ERROR = (e && e.message) || String(e);
     }
+
+    /* Adoption joins against client names, so like escalations it waits for the
+       book. It fails soft to the compiled snapshot rather than emptying the
+       dial — but the card says which it is reading, because a stale quarterly
+       figure and a live one look identical. */
+    try {
+      const rows = parseAdoption(await fetchRaw('adoption'));
+      if (!rows.length) throw new Error('The adoption sheet has a header but no client rows.');
+      ADOPTION = rows;
+      ADOPTION_ASOF = iso(new Date());
+      ADOPT_LIVE = true;
+      ADOPT_ERROR = null;
+    } catch (e) {
+      ADOPTION = ADOPTION_FALLBACK;
+      ADOPTION_ASOF = ADOPTION_FALLBACK_ASOF;
+      ADOPT_LIVE = false;
+      ADOPT_ERROR = (e && e.message) || String(e);
+    }
+    buildAdoption();
 
     /* Escalations are an enrichment, not a foundation. If that sheet is not
        shared, or its shape changes, the compliance figures are still correct and

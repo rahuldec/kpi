@@ -77,8 +77,26 @@ const BOOK_SHEET = (() => {
   return [head, ...body, ...scratch].join('\n');
 })();
 
+/* The stacked adoption tab, replayed as CSV and generated from ADOPTION_FALLBACK
+   in the page — same reasoning as the book fixture. The round trip is the test:
+   whatever the snapshot says, the parser has to read back out of a real CSV
+   unchanged. Two rows of scratch are included because a real sheet accumulates
+   them, and neither may reach a dial. */
+const ADOPT_ROWS = JSON.parse(HTML.match(/const ADOPTION_FALLBACK = (\[.*?\]);/s)[1]);
+const ADOPT_SHEET = (() => {
+  const q = v => /[",]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+  const head = 'RM,Quarter,As Of,Client,Ownership,Modules Adopted,Modules Applicable,Adoption %';
+  const body = ADOPT_ROWS.map(r =>
+    [q(r.rm), 'Q I', '', q(r.n), '', r.s, r.a, (r.s / r.a * 100).toFixed(1)].join(','));
+  /* Two kinds of scratch, and they must be handled differently: a wholly empty
+     row is dropped, while a named row the book has never heard of is reported —
+     silently discarding it would hide a client nobody is counting. */
+  const scratch = [',,,,,,,', ',,,Totals,,999,999,'];
+  return [head, ...body, ...scratch].join('\n');
+})();
+
 function boot({ body = SHEET, clientBody = CLIENT_DEFAULT, escBody = ESC_SHEET,
-                bookBody = BOOK_SHEET,
+                bookBody = BOOK_SHEET, adoptBody = ADOPT_SHEET,
                 status = 200, reject = false, store = null } = {}) {
   const errs = [], calls = [];
   // beforeParse installs the mock before the page's own <script> runs, so the
@@ -103,6 +121,7 @@ function boot({ body = SHEET, clientBody = CLIENT_DEFAULT, escBody = ESC_SHEET,
           status,
           text: () => Promise.resolve(
             src === 'escalations' ? escBody :
+            src === 'adoption' ? adoptBody :
             src === 'book' ? bookBody :
             src === 'client' ? clientBody : body)
         });
@@ -982,12 +1001,12 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     check('excluded people are not reported as unplaced',
           !/Mehak|Akshat/.test((txt(doc, '#meterhint').match(/in no team.*/) || [''])[0]),
           txt(doc, '#meterhint'));
-    check('each card carries both dials',
-          cards.every(c => c.querySelectorAll('.dial').length === 2));
-    check('the dials are labelled compliance and business',
+    check('each card carries all three dials',
+          cards.every(c => c.querySelectorAll('.dial').length === 3));
+    check('the dials are labelled compliance, business and adoption',
           cards.every(c => {
-            const l = [...c.querySelectorAll('.lbl')].map(x => x.textContent);
-            return l[0] === 'Compliance' && l[1] === 'Business';
+            const l = [...c.querySelectorAll('.dial .lbl')].map(x => x.textContent);
+            return l[0] === 'Compliance' && l[1] === 'Business' && l[2] === 'Module adoption';
           }));
 
     const card = n => cards.find(c => c.querySelector('h4').textContent === n);
@@ -1015,7 +1034,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
 
     // the two are never blended into one figure
     check('no card shows a single combined score',
-          cards.every(c => c.querySelectorAll('.val').length === 2));
+          cards.every(c => c.querySelectorAll('.val').length === 3));
     check('the note says why they are not blended',
           /not blended/.test(txt(doc, '#meterhint')), txt(doc, '#meterhint'));
     check('the note names the month in full', /July 2026/.test(txt(doc, '#meterhint')),
@@ -1174,7 +1193,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     })(), how.match(/\d+ expected, \d+ filed, \d+ missed/));
     check('the dates listed match the missed count', (() => {
       const t = Number(how.match(/(\d+) missed/)[1]);
-      const listed = (sultan.querySelector('.how').textContent.match(/\d+ [A-Z][a-z]{2}/g) || []).length;
+      const listed = (sultan.querySelector('.how .missed').textContent.match(/\d+ [A-Z][a-z]{2}/g) || []).length;
       return listed === t;
     })());
 
@@ -1298,7 +1317,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     check('every card carries an escalation line',
           cards.every(c => c.querySelector('.escline')));
     check('escalations are not drawn as a dial — a count has no denominator',
-          cards.every(c => c.querySelectorAll('.track').length === 2));
+          cards.every(c => c.querySelectorAll('.track').length === 3));
 
     // Budha College Karnal and Vedashree School are Sukhmeet's and Kashish's in
     // the embedded book; the fixture opens one on each.
@@ -1582,15 +1601,17 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
   {
     const { doc, errs, calls } = boot(); await settle();
     check('boots with no JS errors', errs.length === 0, errs.join(' | '));
-    check('called the data endpoint for all four sheets', calls.length === 4 &&
+    check('called the data endpoint for all five sheets', calls.length === 5 &&
           calls.every(u => /^\/api\/data\?src=/.test(u)), calls.join());
     /* Order is load-bearing, not incidental: buildEscalations matches escalation
        names against the client book, so the book has to be in place first or the
        matching silently runs against the fallback. */
-    check('trackers together, then the book, then escalations', (() => {
+    check('trackers together, then the book, then adoption and escalations', (() => {
       const src = calls.map(u => u.match(/src=(\w+)/)[1]);
-      return src[0] === 'internal' && src[1] === 'client' &&
-             src[2] === 'book' && src[3] === 'escalations';
+      /* Both adoption and escalations match against client names, so both must
+         follow the book — neither may overtake it. */
+      return src[0] === 'internal' && src[1] === 'client' && src[2] === 'book' &&
+             src.indexOf('adoption') > 2 && src.indexOf('escalations') > 2;
     })(), calls.join());
     check('cache-busted the request', /[?&]t=\d+/.test(calls[0] || ''), calls[0]);
     check('content revealed', doc.getElementById('content').hidden === false);
@@ -1712,7 +1733,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
   {
     const { doc, calls } = boot(); await settle();
     doc.getElementById('refresh').click(); await settle();
-    check('refresh refetches every sheet', calls.length === 8, calls.length + ' calls');
+    check('refresh refetches every sheet', calls.length === 10, calls.length + ' calls');
   }
 
   // ── 7. internal consistency of the figures ─────────────────────
@@ -1815,6 +1836,159 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     const { doc } = boot({ body: evil }); await settle();
     check('sheet content cannot inject elements',
           doc.querySelectorAll('#board img, #grid img, #chase img').length === 0);
+  }
+
+  /* Same roster shape as the meter section, so every lead has a card. */
+  const TEAM_INT = (() => {
+    const rows = []; let id = 1;
+    TEAM_PEOPLE.forEach((p, i) => {
+      for (let d = 1; d <= (i % 5) + 2; d++)
+        rows.push(`${id++},2026-07-01,,,x,S,${p},x@x.com,,2026-07-${String(d).padStart(2,'0')},,n`);
+    });
+    return [',,', ',,url', ',,', TEAM_HEAD].concat(rows).join('\n');
+  })();
+  const TEAM_CLI = TEAM_INT.replace(/\n(\d+),/g, (m, d) => '\n' + (Number(d) + 900) + ',');
+
+  // ── 12. module adoption ────────────────────────────────────────
+  {
+    const { doc, win } = boot({ body: TEAM_INT, clientBody: TEAM_CLI }); await settle();
+    doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
+    pickMonths(doc, '2026-07');
+    const cards = [...doc.querySelectorAll('.mcard')];
+    const card = n => cards.find(c => c.querySelector('h4').textContent === n);
+    const dialVal = (c, i) => c.querySelectorAll('.val')[i].textContent;
+    const dialSub = (c, i) => c.querySelectorAll('.sub')[i].textContent;
+
+    // the round trip: the published CSV must read back as the snapshot
+    check('the published sheet is read, not the built-in copy',
+          win.eval('ADOPT_LIVE') === true, win.eval('ADOPT_ERROR'));
+    check('round trip through CSV returns every scored client',
+          win.eval('ADOPTION.length') === ADOPT_ROWS.length + 1,   // + the Totals scratch row
+          `${win.eval('ADOPTION.length')} of ${ADOPT_ROWS.length}`);
+    check('and the counts survive it', (() => {
+      const want = ADOPT_ROWS.reduce((n, r) => n + r.s, 0);
+      return win.eval(`ADOPTION.filter(r=>r.n!=='Totals').reduce((n,r)=>n+r.s,0)`) === want;
+    })());
+
+    // scratch rows below the data must not reach a dial
+    check('a blank row is dropped outright',
+          !win.eval('ADOPTION').some(r => !r.n));
+    check('a named row the book does not know is reported rather than counted',
+          win.eval('ADOPT_UNMATCHED').includes('Totals'), win.eval('ADOPT_UNMATCHED').join());
+    check('and the page names it', /Totals/.test(txt(doc, '#meterhint')));
+    check('unmatched rows contribute to no team', (() => {
+      const summed = win.eval(`[...POD_TEAM.keys()].filter(l=>!noBook(l))
+        .reduce((n,l)=>n+adoptForTeam(l).applicable,0)`);
+      const all = win.eval('ADOPTION.reduce((n,r)=>n+r.a,0)');
+      return summed < all;
+    })());
+
+    /* Nothing may be counted twice or lost: every client that matched the book
+       belongs to exactly one team, so the team totals must add up to the whole. */
+    check('team totals reconcile with the matched rows', (() => {
+      const per = win.eval(`[...new Set(CLIENTS.map(c=>c.o).filter(Boolean))]
+        .reduce((n,o)=>n+adoptForTeam(o).applicable,0)`);
+      const matched = win.eval(`[...ADOPT_BY_CLIENT.values()].reduce((n,r)=>n+r.a,0)`);
+      return per === matched && per > 0;
+    })(), win.eval(`[...new Set(CLIENTS.map(c=>c.o).filter(Boolean))]
+        .reduce((n,o)=>n+adoptForTeam(o).applicable,0)`) + ' vs ' +
+      win.eval(`[...ADOPT_BY_CLIENT.values()].reduce((n,r)=>n+r.a,0)`));
+
+    // the dial is a pooled ratio over that team's book, like compliance
+    check('adoption shows adopted over applicable',
+          /\d+\/\d+ modules/.test(dialSub(card('Sukhmeet Singh'), 2)),
+          dialSub(card('Sukhmeet Singh'), 2));
+    check('adoption matches the pooled ratio', (() => {
+      const m = dialSub(card('Sukhmeet Singh'), 2).match(/(\d+)\/(\d+)/);
+      const want = Math.min(99, Math.round(Number(m[1]) / Number(m[2]) * 100));
+      return parseInt(dialVal(card('Sukhmeet Singh'), 2)) === want;
+    })(), dialSub(card('Sukhmeet Singh'), 2) + ' -> ' + dialVal(card('Sukhmeet Singh'), 2));
+
+    /* Ownership: four clients on Mansi's tab belong to Amit in the book. They
+       must count for Amit. This is the whole reason the tab's RM is advisory. */
+    check('a client scored on another tab counts for the book owner', (() => {
+      const a = win.eval(`JSON.stringify(adoptForTeam('Amit Kumar').strays)`);
+      return !/Cecil City/.test(a);
+    })());
+    check('and the owning team counts it', (() => {
+      const owned = win.eval(`ADOPT_BY_CLIENT.has('Cecil City & Cantt') &&
+        CLIENTS.find(c=>c.n==='Cecil City & Cantt').o`);
+      return owned === 'Amit Kumar';
+    })(), String(win.eval(`CLIENTS.find(c=>c.n==='Cecil City & Cantt').o`)));
+    check('the disagreement is shown, not silently resolved', (() => {
+      const c = win.eval(`adoptForTeam('Amit Kumar').conflicts.map(x=>x.client).join()`);
+      return /Cecil City & Cantt/.test(c);
+    })(), String(win.eval(`adoptForTeam('Amit Kumar').conflicts.map(x=>x.client).join()`)));
+
+    // coverage: the denominator the dial cannot show has to be on the card
+    check('every card states how much of the book was scored',
+          cards.every(c => c.querySelector('.covline, .covwho')));
+    check('a partly-scored team is flagged',
+          !!card('Mansi Rana').querySelector('.covline.hot'),
+          card('Mansi Rana').querySelector('.covline')?.textContent);
+    check('and names the revenue behind the gap',
+          /of ₹/.test(card('Mansi Rana').querySelector('.covwho')?.textContent || ''),
+          card('Mansi Rana').querySelector('.covwho')?.textContent);
+
+    /* Unscored clients must be absent from the ratio, not zero. Scoring them as
+       zero would make a team that simply has not been assessed look failing. */
+    check('unscored clients are excluded, not counted as zero', (() => {
+      const a = win.eval(`JSON.stringify(adoptForTeam('Mansi Rana'))`);
+      const o = JSON.parse(a);
+      const scoredApplicable = win.eval(`ADOPTION.filter(r=>
+        CLIENTS.some(c=>c.n===r.n && c.o==='Mansi Rana')).reduce((n,r)=>n+r.a,0)`);
+      return o.applicable === scoredApplicable && o.missing.length > 0;
+    })());
+
+    // the (i) panel has to name what is missing, with the money
+    card('Mansi Rana').querySelector('button.info').click();
+    const how = card('Mansi Rana').querySelector('.how').textContent.replace(/\s+/g, ' ');
+    check('the panel names the never-scored clients', /PIET College/.test(how), how.slice(0, 160));
+    check('the panel says they are not counted as zero',
+          /not counted as zero/.test(how));
+    check('the panel says which quarter it is', /Quarter I/.test(how));
+    check('the panel admits the target is a placeholder', /placeholder/.test(how));
+
+    // a team with no book is off this view entirely, as with business
+    check('teams with no client book are still excluded',
+          !cards.some(c => /Sagar Mishra/.test(c.querySelector('h4').textContent)));
+  }
+
+  // ── 13. adoption failure paths ─────────────────────────────────
+  {
+    /* More adopted than applicable is arithmetically impossible and is the exact
+       signature of the source sheet's corrupted Total column being pasted in.
+       It must be refused outright, not rendered as a dial above 100%. */
+    const bad = ADOPT_SHEET.replace(/\n(.*),(\d+),(\d+),/, (m, a, s, ap) => `\n${a},${Number(ap) + 5},${ap},`);
+    const { doc, win } = boot({ body: TEAM_INT, clientBody: TEAM_CLI, adoptBody: bad }); await settle();
+    check('a score above its own denominator is refused',
+          win.eval('ADOPT_LIVE') === false);
+    check('and the reason names the Total column',
+          /Total column/.test(String(win.eval('ADOPT_ERROR'))), String(win.eval('ADOPT_ERROR')));
+    check('the page still renders on that failure',
+          doc.getElementById('content').hidden === false);
+    check('and falls back to the built-in snapshot',
+          win.eval('ADOPTION === ADOPTION_FALLBACK'));
+  }
+  {
+    // A raw per-RM tab published by mistake: right workbook, wrong shape.
+    const { win } = boot({ body: TEAM_INT, clientBody: TEAM_CLI, adoptBody: 'S No.,Student Name,Registration No\n1,Somewhere,25' });
+    await settle();
+    check('a wrong tab is rejected rather than half-read',
+          win.eval('ADOPT_LIVE') === false);
+    check('and the message says the link may point at a per-RM tab',
+          /per-RM tab/.test(String(win.eval('ADOPT_ERROR'))), String(win.eval('ADOPT_ERROR')));
+  }
+  {
+    const { doc, win } = boot({ body: TEAM_INT, clientBody: TEAM_CLI, adoptBody: '' }); await settle();
+    doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
+    check('an empty sheet falls back rather than emptying the dial',
+          win.eval('ADOPTION === ADOPTION_FALLBACK'));
+    const c = [...doc.querySelectorAll('.mcard')][0];
+    c.querySelector('button.info').click();
+    check('and the card says it is reading the built-in copy',
+          /built into this page/.test(c.querySelector('.how').textContent),
+          c.querySelector('.how').textContent.slice(0, 200));
   }
 
   const w = Math.max(...results.map(r => r[1].length));

@@ -47,6 +47,16 @@ const SOURCES = {
                  // This export has no Due Date on most rows, so the tracker test
                  // would reject the right tab. Match on what it does have.
                  signature: csv => /projects/i.test(csv) && /parent task/i.test(csv) },
+  /* The stacked adoption tab. Deliberately has no default URL: the workbook it
+     lives in is published as "Entire Document", which for CSV serves whichever
+     tab happens to be first — a per-RM tab in the raw 119-column shape, not the
+     stacked one. Guessing at it would hand the page a sheet it cannot parse and
+     blame the parser. Publish the stacked tab on its own (File -> Share ->
+     Publish to web, pick that tab, not Entire Document) and set the resulting
+     link — it will carry gid= and single=true — as ADOPTION_CSV_URL in Vercel.
+     Until then the page falls back to its compiled snapshot and says so. */
+  adoption:    { url: process.env.ADOPTION_CSV_URL || '',
+                 signature: csv => /adopted/i.test(csv) && /applicable/i.test(csv) },
   book:        { url: process.env.BOOK_CSV_URL ||
                    'https://docs.google.com/spreadsheets/d/e/2PACX-1vRJduuwLQYkHFCDbGo1J-kGu8gN' +
                    'WH3CX7dD8vVekiztMWxuiJIY1wptsW4eGgO5wg/pub?gid=667331627&single=true&output=csv',
@@ -106,6 +116,18 @@ module.exports = async (req, res) => {
   try {
     /* 0. A published source is a fixed URL with the tab already chosen. There is
        no tab to hunt for and no gid to pin, so this returns before any of that. */
+    /* A published source with an empty url must not fall through to the tab
+       hunt below — that hunts inside the *tracker* spreadsheet and would hand
+       back a timesheet export under the adoption name. Wrong data is worse than
+       no data, so say plainly what is missing. */
+    if ('url' in source && !source.url)
+      return fail(
+        `No published URL is configured for ?src=${src}.`,
+        'Publish the stacked tab (File -> Share -> Publish to web -> pick that tab, ' +
+        'not Entire Document) and set the link as ADOPTION_CSV_URL in Vercel -> ' +
+        'Settings -> Environment Variables. The page falls back to its built-in ' +
+        'snapshot until then.');
+
     if (source.url) {
       /* The page varies its request to this function, so Vercel's edge never
          serves a stale copy — but this leg used to request the exact same Google
