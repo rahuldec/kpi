@@ -1275,18 +1275,43 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     const cards = [...doc.querySelectorAll('.mcard')];
     check('every card has an info button',
           cards.every(c => c.querySelector('button.info')));
-    check('panels start closed', cards.every(c => c.querySelector('.how').hidden));
+    /* The panel is a dialog now, so "closed" is a property of the dialog, not of
+       each card. Each card still holds its own copy of the content hidden — that
+       is the single source the dialog is filled from, which is what keeps the
+       explanation from drifting away from the card it explains. */
+    check('the dialog starts closed', doc.getElementById('howmodal').hidden);
+    check('and each card still carries its own panel content',
+          cards.every(c => c.querySelector('.how') && c.querySelector('.how').hidden));
     check('buttons report their state',
           cards.every(c => c.querySelector('button.info').getAttribute('aria-expanded') === 'false'));
 
     const card = n => cards.find(c => new RegExp(n).test(c.querySelector('h4').textContent));
     const sultan = card('Sultan Malik');
     sultan.querySelector('button.info').click();
-    check('clicking opens the panel', !sultan.querySelector('.how').hidden);
+    check('clicking opens the dialog', !doc.getElementById('howmodal').hidden);
     check('and flips aria-expanded',
           sultan.querySelector('button.info').getAttribute('aria-expanded') === 'true');
+    check('the dialog is titled with the team it describes',
+          doc.getElementById('howtitle').textContent === 'Sultan Malik',
+          doc.getElementById('howtitle').textContent);
+    check('and names the team under it',
+          /Lokesh Kumar/.test(doc.getElementById('howwho').textContent),
+          doc.getElementById('howwho').textContent);
+    check('it is announced as a dialog', (() => {
+      const sheet = doc.querySelector('#howmodal .sheet');
+      return sheet.getAttribute('role') === 'dialog' &&
+             sheet.getAttribute('aria-modal') === 'true' &&
+             sheet.getAttribute('aria-labelledby') === 'howtitle';
+    })());
+    check('the page behind it cannot scroll',
+          doc.documentElement.classList.contains('modalopen'));
+    check('and focus moves into it',
+          doc.activeElement === doc.getElementById('howclose'),
+          doc.activeElement && doc.activeElement.id);
 
-    const how = sultan.querySelector('.how').textContent.replace(/\s+/g, ' ');
+    /* Everything below reads the DIALOG, not the card — if the copy in is ever
+       wrong, these fail rather than passing against the hidden original. */
+    const how = doc.getElementById('howbody').textContent.replace(/\s+/g, ' ');
     check('it states the rule', /one expected entry per tracker/.test(how), how.slice(0, 90));
     check('it names the Sunday and Saturday treatment',
           /Sundays excluded/.test(how) && /Saturdays counted/.test(how));
@@ -1308,26 +1333,55 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     })(), how.match(/\d+ expected, \d+ filed, \d+ missed/));
     check('the dates listed match the missed count', (() => {
       const t = Number(how.match(/(\d+) missed/)[1]);
-      const listed = (sultan.querySelector('.how .missed').textContent.match(/\d+ [A-Z][a-z]{2}/g) || []).length;
+      const listed = (doc.querySelector('#howbody .how .missed').textContent
+        .match(/\d+ [A-Z][a-z]{2}/g) || []).length;
       return listed === t;
     })());
 
-    // only one open at a time, or the grid stops being comparable
+    // one team at a time — the dialog is reused, never stacked
     card('Amit Kumar').querySelector('button.info').click();
-    check('opening another closes the first', sultan.querySelector('.how').hidden);
+    check('opening another swaps the dialog over',
+          doc.getElementById('howtitle').textContent === 'Amit Kumar',
+          doc.getElementById('howtitle').textContent);
     check('and resets the first button',
           sultan.querySelector('button.info').getAttribute('aria-expanded') === 'false');
-    check('the second is open', !card('Amit Kumar').querySelector('.how').hidden);
+    check('only one button reports itself open',
+          doc.querySelectorAll('button.info[aria-expanded=true]').length === 1);
+    check('and the body is the second team\'s',
+          /39 filed|Priya/.test(doc.getElementById('howbody').textContent),
+          doc.getElementById('howbody').textContent.slice(0, 80));
     card('Amit Kumar').querySelector('button.info').click();
-    check('clicking the same button closes it', card('Amit Kumar').querySelector('.how').hidden);
+    check('clicking the same button closes it', doc.getElementById('howmodal').hidden);
+    check('closing releases the page scroll',
+          !doc.documentElement.classList.contains('modalopen'));
+    check('and returns focus to the button that opened it',
+          doc.activeElement === card('Amit Kumar').querySelector('button.info'),
+          doc.activeElement && doc.activeElement.className);
+    check('and empties the dialog rather than leaving it loaded',
+          doc.getElementById('howbody').innerHTML === '');
+
+    // the three ways out
+    sultan.querySelector('button.info').click();
+    doc.getElementById('howclose').click();
+    check('the close button closes it', doc.getElementById('howmodal').hidden);
+    sultan.querySelector('button.info').click();
+    doc.getElementById('howback').dispatchEvent(
+      new (win.MouseEvent)('click', {bubbles: true}));
+    check('clicking the backdrop closes it', doc.getElementById('howmodal').hidden);
+    sultan.querySelector('button.info').click();
+    doc.querySelector('#howmodal .sheet').dispatchEvent(
+      new (win.MouseEvent)('click', {bubbles: true}));
+    check('but clicking inside the sheet does not', !doc.getElementById('howmodal').hidden);
+    doc.dispatchEvent(new (win.KeyboardEvent)('keydown', {key: 'Escape', bubbles: true}));
+    check('Escape closes it', doc.getElementById('howmodal').hidden);
 
     // the panel must follow the joined toggle, like the dial does
     doc.getElementById('joined').checked = false;
     doc.getElementById('joined').dispatchEvent(new (win.Event)('change'));
     const after = [...doc.querySelectorAll('.mcard')]
       .find(c => /Sultan Malik/.test(c.querySelector('h4').textContent));
-    check('re-rendering closes any open panel',
-          [...doc.querySelectorAll('.how')].every(h => h.hidden));
+    check('re-rendering closes the dialog',
+          doc.getElementById('howmodal').hidden);
     after.querySelector('button.info').click();
     check('the panel drops the skip sentence when the toggle is off',
           !/first ever entry are skipped/.test(after.querySelector('.how').textContent),

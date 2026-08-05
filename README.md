@@ -243,14 +243,22 @@ They are untouched everywhere compliance is measured: the scorecard and the dail
 boards score their people exactly like everyone else. Both views say who is left out
 and why, so the totals are not read as covering the whole team.
 
-Each card has an **(i)** button. It opens under that card and answers the question
-the number provokes — the rule in one sentence, then the arithmetic for that team,
-then **every date each member missed**, split by tracker. The counts and the dates
-come from the same `scoreRows()` call that drew the dial, so the explanation cannot
-disagree with the figure it explains. One panel opens at a time: several expanded
-cards push the rest off screen and the grid stops being comparable.
+Each card has an **(i)** button. It opens a dialog over the grid and answers the
+question the number provokes — the rule in one sentence, then the arithmetic for
+that team, then **every date each member missed**, split by tracker. The counts and
+the dates come from the same `scoreRows()` call that drew the dial, so the
+explanation cannot disagree with the figure it explains.
 
-**The three are not blended into one score.** Compliance is this month's behaviour,
+It used to expand under its own card, on the reasoning that an RM wants their dates
+beside their number. With four dials the content outgrew that: the panel pushed
+every card below it off screen, so the comparison it was protecting was lost anyway.
+The dialog is filled by copying the card's own hidden panel markup — one source for
+the content, so what is read in the dialog is by construction what the card
+computed. Escape, the backdrop and the close button all shut it, focus returns to
+the button that opened it, and any re-render closes it rather than leaving stale
+arithmetic on screen.
+
+**The four are not blended into one score.** Compliance is this month's behaviour,
 business is the standing book, adoption is last quarter's product usage; a team can be
 filing perfectly and still be far short on revenue, and a single averaged figure hides
 exactly the case worth looking at. All three use the same no-rounding-across-100 rule
@@ -326,7 +334,7 @@ the work was shared out differently.
 
 A dial computed only over scored clients looks complete when it is not. Every card
 therefore carries a **Scored** line — "15 of 19 clients" — and when a team's book is
-not fully scored it turns red and names the revenue behind the gap. The (i) panel
+not fully scored it turns red and shows the revenue behind the gap. The (i) panel
 lists every never-scored client with its billing, and says plainly that they are
 excluded from the percentage rather than counted as zero. Scoring an unassessed
 client as zero would make a team that has simply not been measured look like it is
@@ -744,7 +752,7 @@ entries loaded and when.
     node qa.js
     TZ=Asia/Kolkata node qa.js
 
-502 assertions with the network mocked: parsing (spacer rows above the header, quoted
+523 assertions with the network mocked: parsing (spacer rows above the header, quoted
 fields containing commas and newlines, blank assignees, case-variant names), every
 failure path (sheet not shared, network down, unparseable content), the date-window
 rules, cross-checks between the three places misses are counted, escaping of sheet

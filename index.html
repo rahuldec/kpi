@@ -141,9 +141,12 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
 .mcard .dial:last-of-type + .track{margin-bottom:0}
 
 /* ── how-it-adds-up panel ─────────────────────────────────────────────────────
-   Opens under the card it belongs to rather than floating over the grid: an RM
-   reading it wants their own team's dates beside their own team's number, and a
-   modal that covers the other cards makes them lose the comparison. */
+   Opens as a dialog over the grid. It began as a panel expanding under its own
+   card — the reasoning being that an RM wants their dates beside their number —
+   but with four dials the content outgrew the card: the panel pushed every lower
+   card off screen, and the comparison it was meant to protect was lost anyway.
+   A dialog holds one team's detail at readable width and leaves the grid intact
+   underneath. Changed 5 Aug at the user's request. */
 .mcard{position:relative}
 .info{
   position:absolute;top:13px;right:13px;width:22px;height:22px;padding:0;
@@ -154,6 +157,40 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
 }
 .info:hover{color:var(--brand);border-color:var(--brand)}
 .info[aria-expanded=true]{color:#fff;background:var(--brand);border-color:var(--brand)}
+
+/* ── the (i) dialog ─ */
+.modal{position:fixed;inset:0;z-index:60;display:flex;align-items:center;
+  justify-content:center;padding:24px}
+.modal[hidden]{display:none}
+.modalback{position:absolute;inset:0;background:rgba(24,20,18,.42)}
+.sheet{
+  position:relative;width:min(660px,100%);max-height:min(82vh,780px);
+  display:flex;flex-direction:column;background:var(--card);border-radius:16px;
+  overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,.26),0 2px 8px rgba(0,0,0,.08);
+}
+.sheethead{display:flex;align-items:flex-start;gap:16px;flex:none;
+  padding:20px 22px 15px;border-bottom:1px solid var(--line)}
+.sheetid{min-width:0}
+.sheetkicker{margin:0 0 4px;font-size:11px;font-weight:600;text-transform:uppercase;
+  letter-spacing:.08em;color:var(--brand)}
+.sheethead h4{margin:0;font-size:20px;font-weight:600;letter-spacing:-.022em;color:var(--ink)}
+.sheetwho{margin:3px 0 0;font-size:13px;color:var(--faint)}
+.x{margin-left:auto;flex:none;width:28px;height:28px;padding:0;border-radius:50%;
+  border:1px solid var(--line);background:none;color:var(--faint);cursor:pointer;
+  font:400 18px/1 inherit;display:flex;align-items:center;justify-content:center;
+  transition:color .15s ease,border-color .15s ease}
+.x:hover{color:var(--ink);border-color:var(--ink)}
+.sheetbody{overflow:auto;padding:6px 22px 22px;-webkit-overflow-scrolling:touch}
+/* The panel's own styles are written for a strip under a card; inside the dialog
+   it is the whole content, so it loses the frame and its sections get room. */
+.modal .how{margin:0;padding:0;border:0;background:none;font-size:13.5px}
+.modal .how h5{margin:20px 0 9px;padding-top:16px;border-top:1px solid var(--hair)}
+.modal .how h5:first-child{margin-top:16px;padding-top:0;border-top:0}
+html.modalopen{overflow:hidden}
+@media (max-width:560px){
+  .modal{padding:0}
+  .sheet{width:100%;max-height:100vh;height:100%;border-radius:0}
+}
 .how{
   margin:14px -16px -2px;padding:14px 16px 15px;border-top:1px solid var(--line);
   background:var(--page);font-size:13px;line-height:1.55;color:var(--body);
@@ -715,6 +752,24 @@ footer b{color:var(--body);font-weight:600}
   </div>
 
   <p class="exempt" id="exempt"></p>
+
+  <!-- The (i) panel. One dialog, reused by every card: the content is built into
+       each card hidden and copied in here on open, so there is exactly one copy
+       of the layout to style and one thing on screen at a time. -->
+  <div class="modal" id="howmodal" hidden>
+    <div class="modalback" id="howback"></div>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="howtitle">
+      <div class="sheethead">
+        <div class="sheetid">
+          <p class="sheetkicker">How this is worked out</p>
+          <h4 id="howtitle"></h4>
+          <p class="sheetwho" id="howwho"></p>
+        </div>
+        <button type="button" class="x" id="howclose" aria-label="Close">&times;</button>
+      </div>
+      <div class="sheetbody" id="howbody"></div>
+    </div>
+  </div>
 
   <footer>
     <b>How a day counts.</b> A person-day is "filed" if at least one entry exists with that due date — a separate Online Meeting and Phone call row on the same day still counts once. With the checkbox on, days before a person's first-ever entry are excluded, so a recent joiner isn't scored for a period they weren't around; days after their first entry always count, so someone who stops filing still shows up. Turn it off to see raw coverage against the full range.
@@ -2607,6 +2662,9 @@ function renderMeter(){
       `<div class="how" id="how${i}" hidden>${howHtml(r)}</div>` +
       `</div>`;
   }).join('');
+  /* Every card was just rebuilt, so anything the dialog is showing describes a
+     card that no longer exists. Close it rather than leave stale arithmetic up. */
+  closeHow();
   OPEN_CARD = null;
 
   const running = MONTHS.includes(thisMonth());
@@ -3420,21 +3478,58 @@ $('clientlist').addEventListener('click', e => {
 });
 $('cowner').addEventListener('change', e => { CFILTER.owner = e.target.value; renderClientList(); });
 $('ctype').addEventListener('change',  e => { CFILTER.type  = e.target.value; renderClientList(); });
+/* The dialog. Each card still builds its own panel markup and keeps it hidden —
+   that is the single source of the content, and it means the arithmetic shown
+   here cannot drift from the card it came from. Opening copies it in. */
+let HOW_TRIGGER = null;
+
+function openHow(i){
+  const src = $('how' + i);
+  const card = src.closest('.mcard');
+  if (!src || !card) return;
+  $('howtitle').textContent = card.querySelector('h4').textContent;
+  const who = card.querySelector('.who');
+  $('howwho').textContent = who ? who.textContent : '';
+  $('howwho').hidden = !who || !who.textContent;
+  $('howbody').innerHTML = `<div class="how">${src.innerHTML}</div>`;
+  $('howmodal').hidden = false;
+  document.documentElement.classList.add('modalopen');
+  HOW_TRIGGER = document.querySelector(`button.info[data-card="${i}"]`);
+  HOW_TRIGGER?.setAttribute('aria-expanded', 'true');
+  OPEN_CARD = i;
+  $('howbody').scrollTop = 0;
+  $('howclose').focus();
+}
+
+function closeHow(){
+  if ($('howmodal').hidden) return;
+  $('howmodal').hidden = true;
+  $('howbody').innerHTML = '';
+  document.documentElement.classList.remove('modalopen');
+  document.querySelectorAll('button.info[aria-expanded=true]')
+    .forEach(b => b.setAttribute('aria-expanded', 'false'));
+  /* Back to the button that opened it, or a keyboard user is dropped at the top
+     of the document with no idea where they were. */
+  HOW_TRIGGER?.focus();
+  HOW_TRIGGER = null;
+  OPEN_CARD = null;
+}
+
 $('meters').addEventListener('click', e => {
   const b = e.target.closest('button.info'); if (!b) return;
   const i = b.dataset.card;
-  /* One open at a time. Several expanded panels push the lower cards off screen
-     and the grid stops being comparable, which is the whole point of it. */
-  if (OPEN_CARD !== null && OPEN_CARD !== i){
-    $('how' + OPEN_CARD).hidden = true;
-    document.querySelector(`button.info[data-card="${OPEN_CARD}"]`)
-      ?.setAttribute('aria-expanded', 'false');
-  }
-  const panel = $('how' + i);
-  const open = panel.hidden;
-  panel.hidden = !open;
-  b.setAttribute('aria-expanded', String(open));
-  OPEN_CARD = open ? i : null;
+  if (!$('howmodal').hidden && OPEN_CARD === i){ closeHow(); return; }
+  closeHow();
+  openHow(i);
+});
+$('howclose').addEventListener('click', closeHow);
+/* Anywhere off the sheet closes it — including the padding around it, which is
+   part of the backdrop as far as a click is concerned. */
+$('howmodal').addEventListener('click', e => {
+  if (!e.target.closest('.sheet')) closeHow();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeHow();
 });
 $('scaletarget').addEventListener('change', e => {
   TARGET_SCALED = e.target.checked;
