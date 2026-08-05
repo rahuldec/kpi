@@ -90,8 +90,9 @@ No build step, no backend, no runtime dependencies at all.
 `api/data.js` is a serverless function on your own Vercel project. It takes
 `?src=internal`, `?src=client`, `?src=escalations`, `?src=book` or `?src=adoption`,
 fetches the matching sheet server-side and hands back raw CSV. The first three are
-Google Sheets fetched by id with the right tab discovered by its columns; the last two
-are published-to-web CSVs fetched by their full URL. The browser only ever talks to your own
+Google Sheets fetched by id with the right tab discovered by its columns; `book` is a
+published-to-web CSV fetched by its full URL; `adoption` fetches several tabs by name
+and returns them together. The browser only ever talks to your own
 domain, so cross-origin restrictions never apply — which is why this is a function
 and not a direct `fetch` to Google.
 
@@ -342,11 +343,14 @@ module, `1` adopted, `0` applicable but unused, `-` not sold to that client. The
 grid for 111 clients across 43 modules costs about 8KB, and it is what lets the page
 answer "who has not taken up X" rather than only "how is this team doing".
 
-The published stacked tab carries per-client totals only, so the **module table always
-reads the compiled grid**, live feed or not. Where the sheet and the grid disagree
-about a client's totals the page names the clients and says to recompile, rather than
-showing both and letting the reader pick. `s` and `a` are derived from the mask and
-never stored beside it — two copies of the same fact drift.
+Masks come from whichever source the rows came from — live tabs or the compiled
+fallback — so the module table and the totals can never describe different data. `s`
+and `a` are derived from the mask and never stored beside it; two copies of the same
+fact drift.
+
+Anything the parser has to skip — a cell that is neither 0, 1 nor blank, a client whose
+Percentage column disagrees with its own grid, a scored client the book has never heard
+of — is **named on the page**. A row quietly dropped is a client nobody is counting.
 
 ### Where the data lives
 
@@ -356,20 +360,34 @@ Client, Ownership, Modules Adopted, Modules Applicable, Adoption %` — because 
 a 119-column two-header-row sheet over CSV, once per RM, is a great deal of fragile
 surface for no gain.
 
-Publish that tab **on its own** (File -> Share -> Publish to web, pick the tab, not
-Entire Document) and set the resulting link — it will carry `gid=` and `single=true` —
-as `ADOPTION_CSV_URL` in Vercel -> Settings -> Environment Variables. Publishing the
-entire document serves whichever tab happens to be first, which is a raw per-RM tab,
-and would silently change if the tabs are ever reordered.
+The dashboard reads those raw tabs directly. No derived tab, no publishing, and
+nothing to send anyone each quarter.
 
-`api/data.js` deliberately ships **no default URL** for this source. An empty one is
-refused with an explanatory error rather than falling through to the tab hunt, which
-searches the tracker spreadsheet and would happily return a timesheet export under the
-adoption name.
+    /gviz/tq?tqx=out:csv&sheet=Q1%20Mansi%20Rana
 
-Until the link is set, the page reads `ADOPTION_FALLBACK` — a snapshot compiled into
-`index.html`, dated by `ADOPTION_FALLBACK_ASOF` — and the (i) panel says which it is
-reading. A stale quarterly figure and a live one look identical otherwise.
+gviz serves any tab of a **native** Google Sheet as CSV given its *title*. So the page
+takes the RM names it already has from the client book, builds `Q<n> <RM full name>`,
+and asks for those. `api/data.js` tries Q4 down to Q1, stops at the first quarter any
+tab answers for, and returns the blocks concatenated behind `#### TAB:` markers — one
+response and one cache entry however many tabs there are.
+
+**The naming rule is the whole contract.** A tab must be `Q2 Mansi Rana`, spelled as
+the client book spells that RM. Get it wrong and the tab is not found; the page names
+what it looked for rather than quietly showing five RMs out of six.
+
+Two conditions, both true of "ERP Usage Score": the workbook is a native Google Sheet
+(gviz will not serve an uploaded `.xlsx` — this is why the client book had to be
+published instead), and it is link-shared as Viewer. Point at a different file with
+`ADOPTION_SHEET_ID`. The file id is fixed server-side and only tab *names* come from
+the client, so a crafted name can at worst name a tab that does not exist.
+
+Adding Q2 is: create six tabs, name them `Q2 <RM>`. Nothing else.
+
+If every quarter comes back empty the page falls back to `ADOPTION_FALLBACK`, the
+Quarter I grid compiled into `index.html` and dated by `ADOPTION_FALLBACK_ASOF`. That
+is a real quarter rather than an empty state, so every figure stays true, just dated —
+and the page says which of the two it is reading, because otherwise they look
+identical.
 
 ### Names that do not match
 
@@ -617,7 +635,7 @@ entries loaded and when.
     node qa.js
     TZ=Asia/Kolkata node qa.js
 
-441 assertions with the network mocked: parsing (spacer rows above the header, quoted
+446 assertions with the network mocked: parsing (spacer rows above the header, quoted
 fields containing commas and newlines, blank assignees, case-variant names), every
 failure path (sheet not shared, network down, unparseable content), the date-window
 rules, cross-checks between the three places misses are counted, escaping of sheet

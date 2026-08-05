@@ -47,16 +47,18 @@ const SOURCES = {
                  // This export has no Due Date on most rows, so the tracker test
                  // would reject the right tab. Match on what it does have.
                  signature: csv => /projects/i.test(csv) && /parent task/i.test(csv) },
-  /* The stacked adoption tab. Deliberately has no default URL: the workbook it
-     lives in is published as "Entire Document", which for CSV serves whichever
-     tab happens to be first — a per-RM tab in the raw 119-column shape, not the
-     stacked one. Guessing at it would hand the page a sheet it cannot parse and
-     blame the parser. Publish the stacked tab on its own (File -> Share ->
-     Publish to web, pick that tab, not Entire Document) and set the resulting
-     link — it will carry gid= and single=true — as ADOPTION_CSV_URL in Vercel.
-     Until then the page falls back to its compiled snapshot and says so. */
-  adoption:    { url: process.env.ADOPTION_CSV_URL || '',
-                 signature: csv => /adopted/i.test(csv) && /applicable/i.test(csv) },
+  /* Module adoption. Not a single tab but one per RM per quarter, and the set
+     grows every quarter — so this source addresses tabs by NAME rather than by
+     gid. gviz serves any tab of a native Google Sheet as CSV given its title,
+     which means a new quarter needs no new id, no re-publishing and no code
+     change: name the tabs "Q2 <RM full name>" and they are found.
+
+     Requires the workbook to be a native Google Sheet (not an uploaded .xlsx —
+     gviz will not serve those) and link-shared as Viewer. "ERP Usage Score"
+     satisfies both. Override the file with ADOPTION_SHEET_ID in Vercel. */
+  adoption:    { id: process.env.ADOPTION_SHEET_ID ||
+                     '1uPatUpKNHNNvrz5mtz8_af9e_0rk6iPu9o0Bfc919sw',
+                 byName: true },
   book:        { url: process.env.BOOK_CSV_URL ||
                    'https://docs.google.com/spreadsheets/d/e/2PACX-1vRJduuwLQYkHFCDbGo1J-kGu8gN' +
                    'WH3CX7dD8vVekiztMWxuiJIY1wptsW4eGgO5wg/pub?gid=667331627&single=true&output=csv',
@@ -65,6 +67,27 @@ const SOURCES = {
 };
 
 const trackerSignature = csv => /due date/i.test(csv) && /assignee/i.test(csv);
+
+/* One tab of a native Google Sheet, addressed by its title. */
+async function grabNamed(id, tab) {
+  const url = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq` +
+              `?tqx=out:csv&sheet=${encodeURIComponent(tab)}`;
+  const r = await fetch(url, { redirect: 'follow' });
+  if (!r.ok) return { ok: false, status: r.status };
+  const body = await r.text();
+  /* gviz answers a missing tab with an HTML error page rather than a 404, and
+     an unshared file with the login page. Both start with a tag; neither is a
+     tab that exists, and neither must reach the parser. */
+  if (isLoginPage(body)) return { ok: false, missing: true };
+  return { ok: true, body };
+}
+
+/* Tab titles come from the client, so they are the one thing here an outsider
+   could influence. The file id never does — it is fixed above — so the worst a
+   crafted name can do is name a tab that does not exist. Still: keep them to
+   what a tab title can plausibly be, and cap how many are asked for at once, so
+   this cannot be turned into a fan-out. */
+const cleanTab = s => String(s || '').replace(/[^\w .&'()-]/g, '').trim().slice(0, 60);
 const isLoginPage = body => body.trimStart().startsWith('<');
 
 async function grab(base, gid) {
@@ -114,7 +137,44 @@ module.exports = async (req, res) => {
     res.status(502).json({ error, hint, source: src, sheetId: SHEET_ID, attempted });
 
   try {
-    /* 0. A published source is a fixed URL with the tab already chosen. There is
+    /* 0a. Tabs by name, one per RM per quarter. The client sends the RM names it
+       knows from the client book; this tries the most recent quarter first and
+       stops at the first one any tab answers for, so a half-finished Q2 does not
+       hide a complete Q1. Blocks come back concatenated with a marker line — one
+       response, one edge cache entry, however many tabs. */
+    if (source.byName) {
+      const names = String((req.query && req.query.rms) ||
+        new URL(req.url, 'http://x').searchParams.get('rms') || '')
+        .split(',').map(cleanTab).filter(Boolean).slice(0, 12);
+      if (!names.length)
+        return fail('No RM names were supplied for ?src=adoption.',
+                    'The page sends them from the client book; an empty list means the ' +
+                    'book failed to load first.');
+
+      const qParam = Number((req.query && req.query.q) ||
+        new URL(req.url, 'http://x').searchParams.get('q') || 0);
+      const quarters = qParam >= 1 && qParam <= 4 ? [qParam] : [4, 3, 2, 1];
+
+      for (const q of quarters) {
+        const tabs = names.map(n => `Q${q} ${n}`);
+        attempted.push(...tabs);
+        const got = await Promise.all(tabs.map(async t => ({t, r: await grabNamed(SHEET_ID, t)})));
+        const hits = got.filter(x => x.r.ok);
+        if (!hits.length) continue;
+        const body = hits.map(x => `#### TAB: ${x.t}\n${x.r.body}`).join('\n\n') +
+          got.filter(x => !x.r.ok).map(x => `\n\n#### MISSING: ${x.t}`).join('');
+        res.setHeader('X-Adoption-Quarter', String(q));
+        res.setHeader('X-Adoption-Tabs', String(hits.length));
+        return send({body, gid: `Q${q}`});
+      }
+      return fail(
+        `No tab was found for any quarter in the ERP Usage Score sheet.`,
+        `Tabs are looked up by name, so each must be called "Q<number> <RM full name>" ` +
+        `exactly as the client book spells that RM — for example "Q1 ${names[0]}". ` +
+        `Tried: ${attempted.slice(0, 8).join(', ')}${attempted.length > 8 ? '…' : ''}`);
+    }
+
+    /* 0b. A published source is a fixed URL with the tab already chosen. There is
        no tab to hunt for and no gid to pin, so this returns before any of that. */
     /* A published source with an empty url must not fall through to the tab
        hunt below — that hunts inside the *tracker* spreadsheet and would hand

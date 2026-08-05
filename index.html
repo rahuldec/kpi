@@ -720,11 +720,12 @@ let BOOK_ERROR = null;
    always: these are the RM's team score, and 14 of these rows sit on a tab that
    disagrees with the book. Do not reintroduce tab-based attribution. */
 const ADOPTION_FALLBACK_ASOF = '2026-08-04';
-const ADOPTION_QUARTER = 'Quarter I';
+let ADOPTION_QUARTER = 'Quarter I';
+const ADOPTION_QUARTER_FALLBACK = ADOPTION_QUARTER;
 /* The union of every module named across the six RM tabs, ordered by how many
    clients they apply to. Module sets differ per RM, so this is a union, not any
    one tab's list. */
-const ADOPTION_MODULES = ["SIS","Fee Management","Student App","Online Payments PG integration","Student Certificates","Academic Portal by Okie Dokie","Student Attendance","Employee Management","Admission Module","Student Diary - Homework, Assignment","Student Diary - Circular, Notice","Front Desk","Transport Management","SMS, WhatsApp Integartion","Student Queries","Library","Class Test","Student Feedback","Biometric Integration","HRMS - Leaves Management","HRMS - Salary Computation","Website updation","Collect Other income","Webtabs","Internal Exam","Email Communication","Employee Annoucements","Placement Management","Alumni Management","Lesson Plan","Books Chapter Proceeding","Research Publication","Activities Management","Faculty Feedback","GPS Integartion","Hostel Management","Timetable Setup","Transport Attendance","DMC Marks Entry","Hostel Gatepass","Mess Management","Hostel Attendance","Image Gallery"];
+let ADOPTION_MODULES = ["SIS","Fee Management","Student App","Online Payments PG integration","Student Certificates","Academic Portal by Okie Dokie","Student Attendance","Employee Management","Admission Module","Student Diary - Homework, Assignment","Student Diary - Circular, Notice","Front Desk","Transport Management","SMS, WhatsApp Integartion","Student Queries","Library","Class Test","Student Feedback","Biometric Integration","HRMS - Leaves Management","HRMS - Salary Computation","Website updation","Collect Other income","Webtabs","Internal Exam","Email Communication","Employee Annoucements","Placement Management","Alumni Management","Lesson Plan","Books Chapter Proceeding","Research Publication","Activities Management","Faculty Feedback","GPS Integartion","Hostel Management","Timetable Setup","Transport Attendance","DMC Marks Entry","Hostel Gatepass","Mess Management","Hostel Attendance","Image Gallery"];
 
 /* One row per scored client. `m` is a mask over ADOPTION_MODULES, one character
    each: 1 adopted, 0 applicable but unused, - not sold to this client. Storing
@@ -739,6 +740,7 @@ for (const r of ADOPTION_FALLBACK){
   r.s = (r.m.match(/1/g) || []).length;
   r.a = r.s + (r.m.match(/0/g) || []).length;
 }
+const ADOPTION_MODULES_FALLBACK = ADOPTION_MODULES;
 
 /* Names the scorecards spell differently from the book. Evidence, not
    resemblance: "Cambridge" sits on Amit Kumar's tab and Cambridge Delhi is the
@@ -757,6 +759,7 @@ const ADOPTION_ALIAS = {
 const ADOPTION_TARGET = 0.80;
 
 let ADOPTION = ADOPTION_FALLBACK;
+let ADOPTION_NOTES = [];
 let ADOPTION_ASOF = ADOPTION_FALLBACK_ASOF;
 let ADOPT_LIVE = false;
 let ADOPT_ERROR = null;
@@ -766,7 +769,7 @@ let ADOPT_BY_CLIENT = new Map(), ADOPT_UNMATCHED = [];
    the module table from the snapshot regardless is what keeps the most useful
    cut on the page after the live feed is switched on. Where the two disagree
    about a client's totals, the page says so instead of showing both silently. */
-let ADOPT_GRID = new Map(), ADOPT_DRIFT = [];
+let ADOPT_GRID = new Map();
 
 /* Lowercased owner -> {clients, revenue}. The Clients sheet and the trackers now
    spell people the same way, so this joins on name; anyone not an owner is simply
@@ -1110,46 +1113,125 @@ function parseBook(text){
   return out;
 }
 
-/* The stacked adoption tab: one row per client per quarter, with the module
-   counts already reduced. Header found by column name like the book's, so a
-   reordered or extended sheet still parses. A row needs a name and a numeric
-   applicable count; the "0 of 0" case is dropped rather than divided. */
-function parseAdoption(text){
-  const dl = (text.split('\n')[0].match(/\t/g) || []).length >= 2 ? '\t' : ',';
-  const rows = splitRows(text, dl);
-  let head = -1, ix = {};
-  for (let i = 0; i < Math.min(rows.length, 40); i++){
-    const h = rows[i].map(x => x.trim().toLowerCase());
-    const name = h.findIndex(x => x === 'client' || x === 'client name');
-    const got  = h.findIndex(x => x.includes('adopted'));
-    const app  = h.findIndex(x => x.includes('applicable'));
-    if (name > -1 && got > -1 && app > -1){
-      head = i;
-      ix = {name, got, app, rm: h.findIndex(x => x === 'rm'),
-            q: h.findIndex(x => x === 'quarter'), asof: h.findIndex(x => x.includes('as of'))};
-      break;
+/* The raw per-RM scorecard tabs, exactly as the CS team keeps them: two header
+   rows, then three columns per module — a 1/0 score, a Grade, and a spare. Only
+   the score column carries information (Grade is 1->A and 0->C with nothing
+   added, and the third is always empty).
+
+   Reading these directly rather than a derived tab is what keeps the page live
+   without anyone maintaining a second copy: a new quarter is six new tabs named
+   "Q2 <RM>", and nothing else changes.
+
+   NEVER read the sheet's own Total column. Excel coerced it to dates in the
+   source files, inconsistently between tabs — one sheet's "3/10" became 3
+   October, another's 10 March — and "0/1" degenerates to 2000-01-01, which reads
+   back as a plausible 1/1 and would score a client at 100% when the truth is 0%.
+   The Percentage column survived intact and is used as the cross-check instead.
+
+   Returns the module union across every tab plus one row per client, each with a
+   mask over that union. */
+function parseAdoptionBlocks(text){
+  const blocks = String(text).split(/^#### TAB: /m).slice(1);
+  if (!blocks.length) throw new Error(
+    'The adoption response carried no tabs. Each tab must be named ' +
+    '"Q<number> <RM full name>" exactly as the client book spells that RM.');
+
+  const modKey = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const modules = [];             // display names, in first-seen order
+  const modIndex = new Map();     // key -> position in `modules`
+  const rows = [], notes = [];
+
+  for (const block of blocks){
+    const nl = block.indexOf('\n');
+    const tab = block.slice(0, nl).trim();
+    const body = block.slice(nl + 1).split(/\n\n#### MISSING: /)[0];
+    const rm = tab.replace(/^Q\s*\d+\s*/i, '').trim();
+    const grid = splitRows(body, ',');
+    if (grid.length < 3){ notes.push(`${tab}: fewer than three rows`); continue; }
+
+    const h0 = grid[0], h1 = grid[1];
+    const width = Math.max(...grid.map(r => r.length));
+    const cell = (r, i) => String((r && r[i]) ?? '').trim();
+
+    /* Identity columns by name, never by position — a tab with an extra leading
+       column would otherwise silently read scores as client names. */
+    const id = {};
+    for (let i = 0; i < Math.min(width, 8); i++){
+      const k = modKey(h0[i]);
+      if (k.startsWith('sno')) id.sno = i;
+      else if (k.includes('name')) id.client = i;
+      else if (k.includes('registration')) id.reg = i;
+      else if (k.includes('ownership')) id.owner = i;
+    }
+    if (id.sno === undefined || id.client === undefined){
+      notes.push(`${tab}: no "S No." and "Student Name" columns`); continue;
+    }
+
+    /* Module columns: the name comes from row 0 and carries forward across its
+       three columns; a column counts only where row 1 names a quarter. */
+    const TAIL = new Set(['rank', 'total', 'percentage', 'grade', '']);
+    const cols = [];
+    let current = null, pctCol = -1;
+    for (let i = Math.max(id.sno, id.client, id.reg ?? 0, id.owner ?? 0) + 1; i < width; i++){
+      const label = modKey(h0[i]);
+      if (TAIL.has(label) && cell(h0, i)){
+        if (label === 'percentage') pctCol = i;
+        current = null;
+        continue;
+      }
+      if (cell(h0, i)) current = cell(h0, i);
+      if (modKey(h1[i]).startsWith('quarter') && current) cols.push({i, name: current});
+    }
+    if (!cols.length){ notes.push(`${tab}: no "Quarter" score columns`); continue; }
+
+    for (const c of cols){
+      const k = modKey(c.name);
+      if (!modIndex.has(k)){ modIndex.set(k, modules.length); modules.push(c.name); }
+      c.slot = modIndex.get(k);
+    }
+
+    for (let r = 2; r < grid.length; r++){
+      const row = grid[r];
+      if (!row || !/^\d+$/.test(cell(row, id.sno))) continue;   // scratch below the block
+      const name = cell(row, id.client);
+      if (!name) continue;
+
+      const marks = new Map();
+      let s = 0, a = 0;
+      for (const c of cols){
+        const v = cell(row, c.i);
+        if (v === '') continue;
+        if (v !== '0' && v !== '1'){
+          notes.push(`${tab} / ${name}: ${c.name} holds "${v}", not 0/1/blank — ignored`);
+          continue;
+        }
+        a++; if (v === '1') s++;
+        marks.set(c.slot, v);
+      }
+      if (!a) continue;
+
+      if (pctCol > -1){
+        const stated = Number(cell(row, pctCol).replace('%', ''));
+        const got = s / a * 100;
+        if (Number.isFinite(stated) && Math.abs((stated <= 1 ? stated * 100 : stated) - got) > 1)
+          notes.push(`${tab} / ${name}: sheet says ${Math.round(stated)}%, the grid gives ` +
+                     `${Math.round(got)}% (${s}/${a}) — the grid is used`);
+      }
+      rows.push({n: name, rm, s, a, marks});
     }
   }
-  if (head < 0) throw new Error(
-    'Could not find a header row with "Client", "Modules Adopted" and "Modules Applicable". ' +
-    'The published link may still be pointing at a raw per-RM tab rather than the stacked one.');
 
-  const cell = (r, i) => i > -1 ? String(r[i] ?? '').trim() : '';
-  const out = [];
-  for (let i = head + 1; i < rows.length; i++){
-    const r = rows[i]; if (!r) continue;
-    const n = cell(r, ix.name);
-    const s = Number(cell(r, ix.got)), a = Number(cell(r, ix.app));
-    if (!n || !Number.isFinite(a) || a <= 0 || !Number.isFinite(s)) continue;
-    /* More modules adopted than apply to the client is arithmetically impossible
-       and is the exact signature of the corrupted Total column being pasted in
-       by mistake. Refuse it rather than rendering a dial above 100%. */
-    if (s > a) throw new Error(
-      `"${n}" is scored ${s} of ${a} modules, which cannot be right. ` +
-      'This usually means the sheet\'s own Total column was used instead of counting the grid.');
-    out.push({n, rm: cell(r, ix.rm), s, a});
+  if (!rows.length) throw new Error(
+    'The tabs were found but no client rows could be read from them. ' +
+    (notes[0] || 'Check the two header rows are intact.'));
+
+  /* Masks are built once the union is known, so a module that only appears on a
+     later tab still lines up on every row. */
+  for (const r of rows){
+    r.m = modules.map((_, i) => r.marks.has(i) ? r.marks.get(i) : '-').join('');
+    delete r.marks;
   }
-  return out;
+  return {modules, rows, notes};
 }
 
 /* Joins the scored clients to the book. Ownership comes from the book, never
@@ -1158,7 +1240,7 @@ function parseAdoption(text){
    because a silently unmatched client is revenue missing from a dial. */
 function buildAdoption(){
   ADOPT_BY_CLIENT = new Map(); ADOPT_UNMATCHED = [];
-  ADOPT_GRID = new Map(); ADOPT_DRIFT = [];
+  ADOPT_GRID = new Map();
   const byName = new Map();
   for (const c of CLIENTS) byName.set(eNorm(c.n), c);
   const resolve = n => byName.get(eNorm(ADOPTION_ALIAS[n.trim().toLowerCase()] || n));
@@ -1168,17 +1250,9 @@ function buildAdoption(){
     if (!c){ ADOPT_UNMATCHED.push(row.n); continue; }
     ADOPT_BY_CLIENT.set(c.n, {...row, client: c});
   }
-  for (const row of ADOPTION_FALLBACK){
-    const c = resolve(row.n);
-    if (!c) continue;
-    ADOPT_GRID.set(c.n, row.m);
-    /* Only meaningful once a live sheet is in play: the compiled grid and the
-       published totals describe the same quarter, so a difference means one of
-       them was not updated. */
-    const live = ADOPT_BY_CLIENT.get(c.n);
-    if (ADOPT_LIVE && live && (live.s !== row.s || live.a !== row.a))
-      ADOPT_DRIFT.push(`${c.n}: sheet ${live.s}/${live.a}, built-in grid ${row.s}/${row.a}`);
-  }
+  /* Masks come from whichever source the rows came from, so the module table and
+     the totals can never describe different data. */
+  for (const [name, hit] of ADOPT_BY_CLIENT) if (hit.m) ADOPT_GRID.set(name, hit.m);
 }
 
 /* Everything a team card needs about adoption, including the parts that make it
@@ -1780,9 +1854,20 @@ function renderAdoption(){
     `module only where it applies to them — modules never sold are left out of both ` +
     `sides, an unused one counts against. Ownership is the client book's, so these are ` +
     `the RM's team figures whichever tab the scoring was typed on. ` +
-    (ADOPT_LIVE ? `Read from the published sheet.`
+    (ADOPT_LIVE ? `Read live from the ERP Usage Score sheet, one tab per RM.`
                 : `Read from the copy built into this page` +
-                  (ADOPT_ERROR ? `, because the live sheet failed: ${esc(ADOPT_ERROR)}` : '') + `.`);
+                  (ADOPT_ERROR ? `, because the live sheet failed: ${esc(ADOPT_ERROR)}` : '') + `.`) +
+    /* Anything the parser had to skip or could not reconcile is named here. A
+       row quietly dropped is a client nobody is counting. */
+    (ADOPTION_NOTES.length
+      ? ` <b>${ADOPTION_NOTES.length} ${ADOPTION_NOTES.length === 1 ? 'row needs' : 'rows need'} ` +
+        `attention in the sheet:</b> ${ADOPTION_NOTES.slice(0, 12).map(esc).join('; ')}` +
+        (ADOPTION_NOTES.length > 12 ? ` (and ${ADOPTION_NOTES.length - 12} more).` : `.`)
+      : ``) +
+    (ADOPT_UNMATCHED.length
+      ? ` <b>${ADOPT_UNMATCHED.length} scored ${ADOPT_UNMATCHED.length === 1 ? 'client is' : 'clients are'} ` +
+        `not in the client book</b> and count towards nobody: ${ADOPT_UNMATCHED.map(esc).join(', ')}.`
+      : ``);
 
   /* Two dials, not one. The adoption figure describes only the clients somebody
      scored; the coverage figure says how much of the business that is. Showing
@@ -1824,14 +1909,9 @@ function renderAdoption(){
     `Across every client the module applies to. A module nobody has taken up is a ` +
     `product or onboarding question rather than an RM one, which is why this table ` +
     `comes before the team one. ` +
-    (ADOPT_LIVE
-      ? `The published sheet carries per-client totals only, so this breakdown is read ` +
-        `from the ${esc(ADOPTION_QUARTER)} grid compiled into the page` +
-        (ADOPT_DRIFT.length
-          ? `, and <b>${ADOPT_DRIFT.length} ${ADOPT_DRIFT.length === 1 ? 'client disagrees' : 'clients disagree'} ` +
-            `with the sheet</b>: ${ADOPT_DRIFT.map(esc).join('; ')}. Recompile the grid.`
-          : `; the two agree on every client's totals.`)
-      : ``);
+    `Counted from the score column of each RM's tab; the Grade columns repeat it ` +
+    `and the sheet's own Total column is never read — Excel turned most of those ` +
+    `into dates.`;
 
   $('adoptmodules').innerHTML =
     `<thead><tr><th>Module</th><th class="num">In use</th><th class="num">Applies to</th>` +
@@ -2492,8 +2572,11 @@ function showActive(){
 
 /* The bytes, before any parsing — the escalation sheet is a different shape and
    needs its own parser, but the fetch and error handling are identical. */
-async function fetchRaw(src){
-  const res = await fetch(`/api/data?src=${src}&t=${Date.now()}`, {cache:'no-store'});
+async function fetchRaw(src, params){
+  const extra = params
+    ? Object.entries(params).map(([k, v]) => `&${k}=${encodeURIComponent(v)}`).join('')
+    : '';
+  const res = await fetch(`/api/data?src=${src}&t=${Date.now()}${extra}`, {cache:'no-store'});
   const body = await res.text();
   LAST_BODY[src] = body;
   if(!res.ok){
@@ -2583,15 +2666,29 @@ async function load(){
        dial — but the card says which it is reading, because a stale quarterly
        figure and a live one look identical. */
     try {
-      const rows = parseAdoption(await fetchRaw('adoption'));
-      if (!rows.length) throw new Error('The adoption sheet has a header but no client rows.');
+      /* The RM names come from the book, which is why this waits for it: the tab
+         titles are "Q<n> <RM>", so without the book there is nothing to ask for. */
+      const rms = [...new Set(CLIENTS.map(c => c.o).filter(Boolean))];
+      if (!rms.length) throw new Error('The client book named no RMs to look up tabs for.');
+      const raw = await fetchRaw('adoption', {rms: rms.join(',')});
+      const {modules, rows, notes} = parseAdoptionBlocks(raw);
+      ADOPTION_MODULES = modules;
       ADOPTION = rows;
+      ADOPTION_NOTES = notes;
+      const ROMAN = {1: 'I', 2: 'II', 3: 'III', 4: 'IV'};
+      const qn = Number((raw.match(/#### TAB: Q\s*(\d+)/) || [, 0])[1]);
+      if (ROMAN[qn]) ADOPTION_QUARTER = 'Quarter ' + ROMAN[qn];
       ADOPTION_ASOF = iso(new Date());
       ADOPT_LIVE = true;
       ADOPT_ERROR = null;
     } catch (e) {
+      /* The compiled grid is a real Quarter I, not an empty state — falling back
+         to it keeps every figure on the page true, just dated. */
       ADOPTION = ADOPTION_FALLBACK;
+      ADOPTION_MODULES = ADOPTION_MODULES_FALLBACK;
+      ADOPTION_QUARTER = ADOPTION_QUARTER_FALLBACK;
       ADOPTION_ASOF = ADOPTION_FALLBACK_ASOF;
+      ADOPTION_NOTES = [];
       ADOPT_LIVE = false;
       ADOPT_ERROR = (e && e.message) || String(e);
     }

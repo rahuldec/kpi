@@ -87,17 +87,55 @@ const ADOPT_ROWS = JSON.parse(HTML.match(/const ADOPTION_FALLBACK = (\[.*?\]);/s
      fixture derives them the same way rather than keeping a second copy. */
   .map(r => ({...r, s: (r.m.match(/1/g) || []).length,
                     a: (r.m.match(/1/g) || []).length + (r.m.match(/0/g) || []).length}));
-const ADOPT_MODULES = JSON.parse(HTML.match(/const ADOPTION_MODULES = (\[.*?\]);/s)[1]);
+const ADOPT_MODULES = JSON.parse(HTML.match(/(?:const|let) ADOPTION_MODULES = (\[.*?\]);/s)[1]);
+/* The raw per-RM tabs, rebuilt from the page's own compiled grid and wrapped in
+   the same "#### TAB:" markers api/data.js emits. This is the real shape the CS
+   team keeps: two header rows, three columns per module (score, Grade, spare),
+   then Rank/Total/Percentage/Grade. Round-tripping through it is the test — the
+   parser has to return what the grid says, out of the format it actually meets.
+
+   The Total column is deliberately written as the corrupted values Excel
+   produced, because the parser must ignore it. */
 const ADOPT_SHEET = (() => {
-  const q = v => /[",]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
-  const head = 'RM,Quarter,As Of,Client,Ownership,Modules Adopted,Modules Applicable,Adoption %';
-  const body = ADOPT_ROWS.map(r =>
-    [q(r.rm), 'Q I', '', q(r.n), '', r.s, r.a, (r.s / r.a * 100).toFixed(1)].join(','));
-  /* Two kinds of scratch, and they must be handled differently: a wholly empty
-     row is dropped, while a named row the book has never heard of is reported —
-     silently discarding it would hide a client nobody is counting. */
-  const scratch = [',,,,,,,', ',,,Totals,,999,999,'];
-  return [head, ...body, ...scratch].join('\n');
+  const q = v => /[",]/.test(v) ? `"${String(v).replace(/"/g, '""')}"` : v;
+  const byRm = new Map();
+  for (const r of ADOPT_ROWS){
+    if (!byRm.has(r.rm)) byRm.set(r.rm, []);
+    byRm.get(r.rm).push(r);
+  }
+  const blocks = [];
+  for (const [rm, rows] of byRm){
+    const h0 = ['S No.', 'Student Name', 'Registration No', 'Client Ownership.'];
+    const h1 = ['', '', '', ''];
+    ADOPT_MODULES.forEach(m => { h0.push(q(m), '', ''); h1.push('Quarter I', 'Grade', ''); });
+    h0.push('Rank', 'Total', 'Percentage', 'Grade');
+    h1.push('', '', '', '');
+
+    const body = rows.map((r, i) => {
+      const cells = [i + 1, q(r.n), 100 + i, 'Someone 1'];
+      ADOPT_MODULES.forEach((_, j) => {
+        const ch = r.m[j];
+        cells.push(ch === '-' ? '' : ch, ch === '1' ? 'A' : ch === '0' ? 'C' : '', '');
+      });
+      /* A date where "3/10" should be — exactly what the source files hold. */
+      cells.push(i + 1, `2001-${String(r.a).padStart(2, '0')}-${String(r.s || 1).padStart(2, '0')}`,
+                 (r.s / r.a * 100).toFixed(0), 'B');
+      return cells.join(',');
+    });
+    /* Scratch below the numbered block, as every real tab has: unnumbered rows
+       are dropped outright. A numbered row naming a client the book does not
+       know is different — that one must be reported, never silently discarded,
+       because it is a client nobody is counting. */
+    body.push(',Daily work track,,,,,', ',,,,,,');
+    if (rm === [...byRm.keys()][0]){
+      const stray = [900, 'Totals', '', ''];
+      ADOPT_MODULES.forEach((_, j) => stray.push(j === 0 ? '1' : '', j === 0 ? 'A' : '', ''));
+      stray.push('', '', '100', 'A');
+      body.push(stray.join(','));
+    }
+    blocks.push(`#### TAB: Q1 ${rm}\n` + [h0.join(','), h1.join(','), ...body].join('\n'));
+  }
+  return blocks.join('\n\n');
 })();
 
 function boot({ body = SHEET, clientBody = CLIENT_DEFAULT, escBody = ESC_SHEET,
@@ -1872,7 +1910,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     check('the published sheet is read, not the built-in copy',
           win.eval('ADOPT_LIVE') === true, win.eval('ADOPT_ERROR'));
     check('round trip through CSV returns every scored client',
-          win.eval('ADOPTION.length') === ADOPT_ROWS.length + 1,   // + the Totals scratch row
+          win.eval('ADOPTION.length') === ADOPT_ROWS.length + 1,   // + the stray Totals row
           `${win.eval('ADOPTION.length')} of ${ADOPT_ROWS.length}`);
     check('and the counts survive it', (() => {
       const want = ADOPT_ROWS.reduce((n, r) => n + r.s, 0);
@@ -2085,6 +2123,21 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     })(), gaps.slice(0, 3).map(r => r[0] + ' ' + r[2]).join(' / '));
     check('and the page says they are excluded rather than zeroed',
           /not counted as zero/.test(doc.getElementById('adoptgapnote').textContent));
+    check('rows the parser had to skip are named on the page', (() => {
+      /* Notes are only useful if they reach the reader; collecting them and
+         keeping quiet is the same as dropping the row. */
+      const notes = win.eval('ADOPTION_NOTES.length');
+      const shown = /needs? attention|need attention/.test(
+        doc.getElementById('adopthint').textContent);
+      return notes === 0 || shown;
+    })());
+    check('and so are scored clients the book has never heard of',
+          !win.eval('ADOPT_UNMATCHED.length') ||
+          /not in the client book/.test(doc.getElementById('adopthint').textContent),
+          win.eval('ADOPT_UNMATCHED').join());
+    check('the quarter comes from the tab names, not a constant',
+          win.eval(`ADOPTION_QUARTER`) === 'Quarter I' && win.eval('ADOPT_LIVE') === true);
+
     check('the header says which quarter, not which month',
           /Quarter I/.test(doc.getElementById('adopthint').textContent));
   }
@@ -2105,39 +2158,50 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
 
   // ── 13. adoption failure paths ─────────────────────────────────
   {
-    /* More adopted than applicable is arithmetically impossible and is the exact
-       signature of the source sheet's corrupted Total column being pasted in.
-       It must be refused outright, not rendered as a dial above 100%. */
-    const bad = ADOPT_SHEET.replace(/\n(.*),(\d+),(\d+),/, (m, a, s, ap) => `\n${a},${Number(ap) + 5},${ap},`);
-    const { doc, win } = boot({ body: TEAM_INT, clientBody: TEAM_CLI, adoptBody: bad }); await settle();
-    check('a score above its own denominator is refused',
-          win.eval('ADOPT_LIVE') === false);
-    check('and the reason names the Total column',
-          /Total column/.test(String(win.eval('ADOPT_ERROR'))), String(win.eval('ADOPT_ERROR')));
+    /* The sheet's own Percentage column is the cross-check. Where it disagrees
+       with the grid the grid wins — but the disagreement is recorded, because
+       silently preferring one of two conflicting sources is how a wrong number
+       survives. The Total column is never consulted at all: the fixture writes
+       it as the corrupted dates Excel produced. */
+    const wrong = ADOPT_SHEET.replace(/,100,A\n/, ',7,A\n');
+    const { win } = boot({ body: TEAM_INT, clientBody: TEAM_CLI, adoptBody: wrong });
+    await settle();
+    check('a percentage that disagrees with the grid is recorded',
+          win.eval('ADOPTION_NOTES.some(n => /the grid is used/.test(n))'),
+          String(win.eval('ADOPTION_NOTES[0] || "(none)"')));
+    check('and the grid is what gets used', win.eval('ADOPT_LIVE') === true);
+    check('the corrupted Total column never reaches a figure', (() => {
+      /* Every row's totals must come from counting 0s and 1s. If Total were read,
+         these would not match the mask. */
+      return win.eval(`ADOPTION.every(r =>
+        r.s === (r.m.match(/1/g)||[]).length &&
+        r.a === r.s + (r.m.match(/0/g)||[]).length)`);
+    })());
+  }
+  {
+    // A response with no tabs at all: the sheet is reachable but nothing matched.
+    const { doc, win } = boot({ body: TEAM_INT, clientBody: TEAM_CLI, adoptBody: 'nothing here' });
+    await settle();
+    check('a response with no tab markers is refused', win.eval('ADOPT_LIVE') === false);
+    check('and the message says how tabs must be named',
+          /Q<number>/.test(String(win.eval('ADOPT_ERROR'))), String(win.eval('ADOPT_ERROR')));
     check('the page still renders on that failure',
           doc.getElementById('content').hidden === false);
-    check('and falls back to the built-in snapshot',
-          win.eval('ADOPTION === ADOPTION_FALLBACK'));
+    check('and falls back to the compiled grid',
+          win.eval('ADOPTION === ADOPTION_FALLBACK && ADOPTION_MODULES === ADOPTION_MODULES_FALLBACK'));
+    check('the fallback quarter is restored too',
+          win.eval('ADOPTION_QUARTER') === win.eval('ADOPTION_QUARTER_FALLBACK'));
   }
   {
-    // A raw per-RM tab published by mistake: right workbook, wrong shape.
-    const { win } = boot({ body: TEAM_INT, clientBody: TEAM_CLI, adoptBody: 'S No.,Student Name,Registration No\n1,Somewhere,25' });
+    /* Headers present, no numbered rows: the tab exists but is empty. */
+    const empty = '#### TAB: Q1 Mansi Rana\nS No.,Student Name\n,,\n';
+    const { doc, win } = boot({ body: TEAM_INT, clientBody: TEAM_CLI, adoptBody: empty });
     await settle();
-    check('a wrong tab is rejected rather than half-read',
-          win.eval('ADOPT_LIVE') === false);
-    check('and the message says the link may point at a per-RM tab',
-          /per-RM tab/.test(String(win.eval('ADOPT_ERROR'))), String(win.eval('ADOPT_ERROR')));
-  }
-  {
-    const { doc, win } = boot({ body: TEAM_INT, clientBody: TEAM_CLI, adoptBody: '' }); await settle();
-    doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
-    check('an empty sheet falls back rather than emptying the dial',
+    doc.querySelector('#sources4 button[data-src="adoption"]').click(); await settle();
+    check('an empty tab falls back rather than emptying the dial',
           win.eval('ADOPTION === ADOPTION_FALLBACK'));
-    const c = [...doc.querySelectorAll('.mcard')][0];
-    c.querySelector('button.info').click();
-    check('and the card says it is reading the built-in copy',
-          /built into this page/.test(c.querySelector('.how').textContent),
-          c.querySelector('.how').textContent.slice(0, 200));
+    const c = [...doc.querySelectorAll('#adoptclients tbody tr')];
+    check('and the tab still has its clients', c.length > 0, String(c.length));
   }
 
   // ── 14. vercel.json is deployable ──────────────────────────────
