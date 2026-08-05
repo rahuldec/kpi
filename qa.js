@@ -2204,6 +2204,78 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     check('and the tab still has its clients', c.length > 0, String(c.length));
   }
 
+  // ── 13b. one spelling per person, and the day not going stale ──
+  {
+    /* Asana sends the same person under different casing. Whichever row arrives
+       first used to win, which is how a lowercase name reached the boards while
+       the client book showed the proper one. */
+    const rows = [];
+    TEAM_PEOPLE.forEach((p, i) => {
+      const mangled = p.toLowerCase();
+      for (let d = 1; d <= 3; d++)
+        rows.push(`${i * 9 + d},2026-07-01,,,x,S,${d === 1 ? mangled : p},x@x.com,,` +
+                  `2026-07-0${d},,n`);
+    });
+    const INT = [',,', ',,url', ',,', TEAM_HEAD].concat(rows).join('\n');
+    const { doc, win } = boot({ body: INT, clientBody: INT.replace(/\n(\d+),/g, (m, d) =>
+      '\n' + (Number(d) + 700) + ',') });
+    await settle();
+
+    check('a lowercase first sighting does not become the display name',
+          !win.eval(`[...ROSTER.values()].some(p => /^[a-z]/.test(p.name))`),
+          win.eval(`[...ROSTER.values()].map(p=>p.name).filter(n=>/^[a-z]/.test(n)).join()`));
+    check('and the spelling matches the client book exactly', (() => {
+      /* The owner filter compares strings, so board and filter must agree. */
+      const owners = win.eval(`JSON.stringify([...new Set(CLIENTS.map(c=>c.o).filter(Boolean))])`);
+      const roster = win.eval(`JSON.stringify([...ROSTER.values()].map(p=>p.name))`);
+      return JSON.parse(owners).every(o => JSON.parse(roster).includes(o));
+    })());
+    /* Not a re-casing: names that are not title-case must survive untouched. */
+    check('names with deliberate casing are left alone',
+          win.eval(`CLIENTS.some(c => c.n === 'MPPS School kkr')`) &&
+          win.eval(`CLIENTS.some(c => c.n === 'SA Jain (PG) College + AIMT')`));
+
+    /* The owner filter itself: its options come from the same strings it
+       compares, so a selection can never return nothing. */
+    doc.querySelector('#sources2 button[data-src="clients"]').click(); await settle();
+    const sel = doc.getElementById('cowner');
+    const opts = [...sel.options].map(o => o.value).filter(Boolean);
+    check('every owner option matches a client exactly',
+          opts.every(o => win.eval(`CLIENTS.some(c => c.o === ${JSON.stringify(o)})`)),
+          opts.join());
+    check('and selecting one returns rows', (() => {
+      sel.value = opts[0];
+      sel.dispatchEvent(new win.Event('change'));
+      return doc.querySelectorAll('#clientlist tbody tr').length > 0;
+    })(), opts[0]);
+  }
+  {
+    /* A page left open across midnight kept calling yesterday "Today". */
+    const { doc, win } = boot({ body: TEAM_INT, clientBody: TEAM_CLI }); await settle();
+    const shown = () => doc.getElementById('from').value;
+    const before = shown();
+    check('the day is taken from the clock, not a constant',
+          before === win.eval('todayWorking()'), before);
+
+    /* Wind the page's idea of "now" forward a day and poke the rollover check
+       the way returning to the tab would. */
+    win.eval(`(() => {
+      const real = Date;
+      const shifted = new Date(Date.now() + 86400000);
+      globalThis.Date = class extends real {
+        constructor(...a){ return a.length ? new real(...a) : new real(shifted); }
+        static now(){ return shifted.getTime(); }
+      };
+    })()`);
+    win.eval('checkDayRollover()');
+    check('crossing midnight moves the day on',
+          shown() !== before && shown() === win.eval('todayWorking()'),
+          `${before} -> ${shown()}`);
+    check('and "Today" still means today',
+          win.eval('CHASE_DAY') === win.eval('todayWorking()'));
+    win.eval('globalThis.Date = Object.getPrototypeOf(globalThis.Date)');
+  }
+
   // ── 14. vercel.json is deployable ──────────────────────────────
   {
     /* This file is validated by Vercel against a strict schema before anything

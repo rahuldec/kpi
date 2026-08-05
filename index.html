@@ -1004,16 +1004,46 @@ const COVER = {};
 const EXPORT_CAP = 500;
 let ROSTER = new Map();
 
-/* Keyed case-insensitively — Asana display names vary ("kashish Goel" vs
-   "Kashish Goel") and two spellings of one person must not become two people.
-   The first spelling seen wins for display. */
+/* Asana's display-name casing varies row to row, so "whichever spelling arrived
+   first" can be the lowercase one — which is how "kashish Goel" reached the
+   boards while the client book said "Kashish Goel". PODS and the book's Team
+   column are both typed by hand and are the spellings people expect, so they
+   win.
+
+   This only chooses BETWEEN spellings of the same name. It does not re-case
+   anything it has no canonical form for: names here are not title-case
+   ("MPPS School kkr", "IsharJyot", "SA Jain (PG) College + AIMT"), and
+   title-casing at ingest would mangle them. */
+/* How many words start with a capital — enough to prefer "Vansh Saini" over
+   "vansh saini" without touching a name that is deliberately lowercase
+   throughout, since that one scores zero either way and nothing replaces it. */
+const cased = n => String(n || '').split(/\s+/).filter(w => /^[A-Z]/.test(w)).length;
+
+function canonicalNames(){
+  const m = new Map();
+  const add = n => { const s = String(n || '').trim(); if (s) m.set(s.toLowerCase(), s); };
+  for (const [lead, team] of Object.entries(PODS)){ add(lead); (team || []).forEach(add); }
+  for (const c of CLIENTS) add(c.o);
+  return m;
+}
+
+/* Keyed case-insensitively — two spellings of one person must not become two
+   people. */
 function buildRoster(){
   ROSTER = new Map();
+  const canon = canonicalNames();
   for (const rows of Object.values(DATA))
     for (const r of rows){
       const key = r.name.toLowerCase();
       const prev = ROSTER.get(key);
-      if (!prev) ROSTER.set(key, {name: r.name, first: r.due});
+      if (!prev){
+        ROSTER.set(key, {name: canon.get(key) || r.name, first: r.due});
+      } else if (!canon.has(key) && cased(r.name) > cased(prev.name)){
+        /* No hand-typed spelling for this person, so pick the best of the ones
+           Asana actually sent rather than whichever landed first. Choosing
+           between observed spellings is safe; inventing capitals is not. */
+        prev.name = r.name;
+      }
       else if (r.due < prev.first) prev.first = r.due;
     }
 }
@@ -2822,7 +2852,28 @@ $('presets').addEventListener('click', e => {
   applyMode(b.dataset.mode, true);
   render();
 });
-$('refresh').addEventListener('click', load);
+$('refresh').addEventListener('click', () => { checkDayRollover(); load(); });
+
+/* CHASE_DAY is computed when the page loads and never again, so a dashboard left
+   open across midnight keeps calling yesterday "Today" — the same captured-once
+   mistake as BOOK was. iso() reads local date parts, so the date itself is
+   correct in whatever timezone the viewer is in; what goes stale is the moment
+   it was taken. Re-check whenever the tab is looked at again, and on a slow
+   timer for a page nobody touches. */
+let DAY_AT_LOAD = todayWorking();
+function checkDayRollover(){
+  const now = todayWorking();
+  if (now === DAY_AT_LOAD) return false;
+  DAY_AT_LOAD = now;
+  if (MODE === 'today' || MODE === 'yesterday'){
+    applyMode(MODE, false);
+    if (ROSTER.size) render();
+  }
+  return true;
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkDayRollover(); });
+window.addEventListener('focus', checkDayRollover);
+setInterval(checkDayRollover, 60000);
 
 const savedSrc = readStore(SOURCE_KEY);
 SOURCE = SOURCES[savedSrc] ? savedSrc : 'internal';

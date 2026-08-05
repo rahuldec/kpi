@@ -247,6 +247,30 @@ filing perfectly and still be far short on revenue, and a single averaged figure
 exactly the case worth looking at. All three use the same no-rounding-across-100 rule
 as the book table.
 
+## Names, and the day
+
+Two things that look like data problems and are not.
+
+**One spelling per person.** Asana sends the same person under different casing row
+to row, and the roster used to keep whichever spelling arrived first — which is how a
+lowercase name reached the boards while the client book showed the proper one. The
+roster now prefers a hand-typed spelling where one exists (`PODS`, or the book's
+`Team` column), and otherwise the best-cased spelling Asana actually sent. It chooses
+between observed spellings and never invents capitals: names here are not title-case
+("MPPS School kkr", "IsharJyot", "SA Jain (PG) College + AIMT") and title-casing at
+ingest would mangle them.
+
+The owner filter on the client book was never affected by this. Its options are built
+from the same `CLIENTS` strings it compares against, so a selection cannot return
+nothing — `qa.js` now asserts that too.
+
+**The day is re-read, not remembered.** `iso()` reads local date parts, so the date is
+right in whatever timezone the viewer is in, and the suite runs in three of them. What
+went stale was the *moment*: `CHASE_DAY` was computed once at load, so a dashboard left
+open across midnight kept calling yesterday "Today". It is now re-checked when the tab
+is looked at again, on focus, and on a slow timer — the same captured-once mistake
+`BOOK` made.
+
 ## Module adoption
 
 The third dial: of the modules that apply to a team's clients, how many are actually
@@ -635,7 +659,7 @@ entries loaded and when.
     node qa.js
     TZ=Asia/Kolkata node qa.js
 
-446 assertions with the network mocked: parsing (spacer rows above the header, quoted
+454 assertions with the network mocked: parsing (spacer rows above the header, quoted
 fields containing commas and newlines, blank assignees, case-variant names), every
 failure path (sheet not shared, network down, unparseable content), the date-window
 rules, cross-checks between the three places misses are counted, escaping of sheet
