@@ -1904,21 +1904,26 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
       return parseInt(dialVal(card('Sukhmeet Singh'), 2)) === want;
     })(), dialSub(card('Sukhmeet Singh'), 2) + ' -> ' + dialVal(card('Sukhmeet Singh'), 2));
 
-    /* Ownership: four clients on Mansi's tab belong to Amit in the book. They
-       must count for Amit. This is the whole reason the tab's RM is advisory. */
+    /* Ownership: Cecil City & Cantt is scored on Mansi's tab but the book gives it
+       to Amit, because the tab follows the assistant who did the work and
+       assistants move between RMs. It must count for Amit and for nobody else —
+       these are the RM's team score. */
     check('a client scored on another tab counts for the book owner', (() => {
-      const a = win.eval(`JSON.stringify(adoptForTeam('Amit Kumar').strays)`);
-      return !/Cecil City/.test(a);
+      const amit = win.eval(`adoptForTeam('Amit Kumar').total`);
+      const owned = win.eval(`CLIENTS.filter(c=>c.o==='Amit Kumar').length`);
+      const scoredForAmit = win.eval(`CLIENTS.filter(c=>c.o==='Amit Kumar' &&
+        ADOPT_BY_CLIENT.has(c.n)).length`);
+      return amit === owned && scoredForAmit === win.eval(`adoptForTeam('Amit Kumar').scored`);
     })());
-    check('and the owning team counts it', (() => {
-      const owned = win.eval(`ADOPT_BY_CLIENT.has('Cecil City & Cantt') &&
-        CLIENTS.find(c=>c.n==='Cecil City & Cantt').o`);
-      return owned === 'Amit Kumar';
-    })(), String(win.eval(`CLIENTS.find(c=>c.n==='Cecil City & Cantt').o`)));
-    check('the disagreement is shown, not silently resolved', (() => {
-      const c = win.eval(`adoptForTeam('Amit Kumar').conflicts.map(x=>x.client).join()`);
-      return /Cecil City & Cantt/.test(c);
-    })(), String(win.eval(`adoptForTeam('Amit Kumar').conflicts.map(x=>x.client).join()`)));
+    check('and it is Amit who owns it in the book',
+          win.eval(`CLIENTS.find(c=>c.n==='Cecil City & Cantt').o`) === 'Amit Kumar',
+          String(win.eval(`CLIENTS.find(c=>c.n==='Cecil City & Cantt').o`)));
+    check('the tab it was scored on changes nothing', (() => {
+      /* Mansi's figures must be identical whether or not that row sits on her tab. */
+      const before = win.eval(`adoptForTeam('Mansi Rana').applicable`);
+      const onTab = win.eval(`ADOPTION.filter(r=>r.rm==='Mansi Rana').reduce((n,r)=>n+r.a,0)`);
+      return before !== onTab && before > 0;
+    })());
 
     // coverage: the denominator the dial cannot show has to be on the card
     check('every card states how much of the book was scored',
@@ -1949,9 +1954,48 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     check('the panel says which quarter it is', /Quarter I/.test(how));
     check('the panel admits the target is a placeholder', /placeholder/.test(how));
 
+    /* The live book must reach every consumer, not just the client book tab.
+       BOOK was a parse-time constant until 5 Aug, so the business dial kept
+       showing the revenue baked into the snapshot while the book tab showed
+       today's. Nothing on screen compared the two until the adoption card
+       printed the same team's total beside it. */
+    check('the business dial and the adoption card agree on the book', (() => {
+      return cards.every(c => {
+        const biz = (c.querySelectorAll('.sub')[1].textContent.match(/^₹([\d.]+)L/) || [])[1];
+        const cov = (c.querySelector('.covwho')?.textContent.match(/of ₹([\d.]+)L/) || [])[1];
+        return !cov || !biz || cov === biz;
+      });
+    })(), cards.map(c => c.querySelector('h4').textContent + ':' +
+          c.querySelectorAll('.sub')[1].textContent + '|' +
+          (c.querySelector('.covwho')?.textContent || '')).join(' ~ ').slice(0, 200));
+
     // a team with no book is off this view entirely, as with business
     check('teams with no client book are still excluded',
           !cards.some(c => /Sagar Mishra/.test(c.querySelector('h4').textContent)));
+  }
+
+  {
+    /* Revenue changed in the sheet since the snapshot was cut. Every figure the
+       page shows must follow the sheet; any that follows the snapshot is stale. */
+    const moved = BOOK_SHEET.replace(/"? ₹ [\d,]+\.00 "?,Mansi Rana/,
+                                     ' ₹ 1.00 ,Mansi Rana');
+    const { doc, win } = boot({ body: TEAM_INT, clientBody: TEAM_CLI, bookBody: moved });
+    await settle();
+    check('the live book is what loaded', win.eval('CLIENTS !== CLIENTS_FALLBACK'));
+    check('a revenue change in the sheet reaches the business dial', (() => {
+      const live = win.eval(`CLIENTS.filter(c=>c.o==='Mansi Rana').reduce((n,c)=>n+(c.r||0),0)`);
+      const shown = win.eval(`bookOf('Mansi Rana').revenue`);
+      return shown === live;
+    })(), String(win.eval(`bookOf('Mansi Rana').revenue`)) + ' vs ' +
+      String(win.eval(`CLIENTS.filter(c=>c.o==='Mansi Rana').reduce((n,c)=>n+(c.r||0),0)`)));
+    check('and it is not the snapshot figure', (() => {
+      const snap = BOOK_ROWS.filter(c => c.o === 'Mansi Rana').reduce((n, c) => n + (c.r || 0), 0);
+      return win.eval(`bookOf('Mansi Rana').revenue`) !== snap;
+    })());
+    check('the adoption coverage follows the same book', (() => {
+      const live = win.eval(`CLIENTS.filter(c=>c.o==='Mansi Rana').reduce((n,c)=>n+(c.r||0),0)`);
+      return win.eval(`adoptForTeam('Mansi Rana').revTotal`) === live;
+    })());
   }
 
   // ── 13. adoption failure paths ─────────────────────────────────

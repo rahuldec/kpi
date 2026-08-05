@@ -672,11 +672,12 @@ let BOOK_ERROR = null;
    below are counted off the grid and agree with the sheet's Percentage column
    on all 111 rows.
 
-   `rm` is the tab the client was scored on. It is NOT authoritative for
-   ownership — 14 of these rows sit on a different RM's tab than the client book
-   assigns them to, following the assistant who did the work rather than the
-   account owner. The book wins; `rm` is kept only so the card can say where a
-   disagreement came from. */
+   `rm` is the tab the client was scored on and is recorded for provenance only —
+   nothing reads it. Which tab a client was scored on tracks the assistant who
+   did the work, and assistants move between RMs, so it says nothing about who
+   owns the account. Ownership comes from the Team column of the client book,
+   always: these are the RM's team score, and 14 of these rows sit on a tab that
+   disagrees with the book. Do not reintroduce tab-based attribution. */
 const ADOPTION_FALLBACK_ASOF = '2026-08-04';
 const ADOPTION_QUARTER = 'Quarter I';
 const ADOPTION_FALLBACK = [{"n":"LNT B.Ed College","rm":"Sukhmeet Singh","s":6,"a":6},{"n":"Manav Mangal School Faridabad","rm":"Sukhmeet Singh","s":6,"a":6},{"n":"SD International","rm":"Sukhmeet Singh","s":8,"a":8},{"n":"SKS","rm":"Sukhmeet Singh","s":7,"a":7},{"n":"Shaheed Bhagat Singh","rm":"Sukhmeet Singh","s":6,"a":6},{"n":"Silver Spot Covent","rm":"Sukhmeet Singh","s":5,"a":5},{"n":"Vidya Training Institute","rm":"Amit Kumar","s":5,"a":5},{"n":"Mukand Shyama Public School","rm":"Sukhmeet Singh","s":16,"a":17},{"n":"Mukand MPS","rm":"Kashish Goel","s":15,"a":16},{"n":"Sahara Group","rm":"Amit Kumar","s":15,"a":16},{"n":"Vishvas Public School","rm":"Sukhmeet Singh","s":14,"a":15},{"n":"Cambridge World School","rm":"Sultan Malik","s":13,"a":14},{"n":"Pooja Modern Kurukshetra","rm":"Amit Kumar","s":13,"a":14},{"n":"Mukand MLPS","rm":"Sukhmeet Singh","s":18,"a":20},{"n":"OPS Ambala","rm":"Sukhmeet Singh","s":17,"a":19},{"n":"Shemford Futuristic School","rm":"Kashish Goel","s":14,"a":16},{"n":"Maharaja Agrasen Adarsh","rm":"Amit Kumar","s":18,"a":21},{"n":"Genesis School Karnal","rm":"Sukhmeet Singh","s":17,"a":20},{"n":"Mukand Swaraj Damla","rm":"Kashish Goel","s":17,"a":20},{"n":"SNCF Schools","rm":"Amit Kumar","s":17,"a":20},{"n":"Mukand Sushila","rm":"Sukhmeet Singh","s":16,"a":19},{"n":"Mukand JMIETI","rm":"Kashish Goel","s":21,"a":25},{"n":"Mukand JMIT","rm":"Kashish Goel","s":21,"a":25},{"n":"Tagore Group","rm":"Sultan Malik","s":14,"a":17},{"n":"MPPS School kkr","rm":"Sukhmeet Singh","s":17,"a":21},{"n":"BR International","rm":"Sultan Malik","s":16,"a":20},{"n":"Springdales, Ismailabad","rm":"Sultan Malik","s":16,"a":20},{"n":"Vishvas, Hisar","rm":"Sukhmeet Singh","s":12,"a":15},{"n":"Akshara","rm":"Sukhmeet Singh","s":15,"a":19},{"n":"Mukand Radaur Schools","rm":"Sukhmeet Singh","s":10,"a":13},{"n":"Cecil City & Cantt","rm":"Mansi Rana","s":13,"a":17},{"n":"RKSD College Kaithal","rm":"Sukhmeet Singh","s":13,"a":17},{"n":"Scholar Rosary Rohtak","rm":"Ankush Rana","s":16,"a":21},{"n":"DN College","rm":"Mansi Rana","s":12,"a":16},{"n":"Mavericks International KKR","rm":"Sultan Malik","s":12,"a":16},{"n":"Rational World School","rm":"Sultan Malik","s":12,"a":16},{"n":"Saraswati Sansthan S7","rm":"Sukhmeet Singh","s":9,"a":12},{"n":"SIS Academy","rm":"Sukhmeet Singh","s":11,"a":15},{"n":"BPR College","rm":"Sukhmeet Singh","s":8,"a":11},{"n":"Muni International Delhi","rm":"Sukhmeet Singh","s":8,"a":11},{"n":"SD APIIT","rm":"Sukhmeet Singh","s":8,"a":11},{"n":"Excel International Gohana","rm":"Ankush Rana","s":13,"a":18},{"n":"IsharJyot Degree College","rm":"Sukhmeet Singh","s":10,"a":14},{"n":"Mahavir Jain School Group","rm":"Kashish Goel","s":10,"a":14},{"n":"Lord Krishna Public School Ugala","rm":"Sukhmeet Singh","s":12,"a":17},{"n":"Rukmani BMAS","rm":"Sukhmeet Singh","s":12,"a":17},{"n":"IG College Ladwa","rm":"Kashish Goel","s":7,"a":10},{"n":"DAV College Ambala","rm":"Mansi Rana","s":9,"a":13},{"n":"Dhanna Bhagat School","rm":"Mansi Rana","s":13,"a":19},{"n":"Aryakulam International Munak","rm":"Ankush Rana","s":15,"a":22},{"n":"GITM Gurugram","rm":"Sultan Malik","s":18,"a":27},{"n":"Rukmani MRRA Barara Road","rm":"Sukhmeet Singh","s":12,"a":18},{"n":"Tallentian Officers Academy","rm":"Sultan Malik","s":2,"a":3},{"n":"Rishikul World Academy","rm":"Amit Kumar","s":11,"a":17},{"n":"TSUS Rohtak","rm":"Sultan Malik","s":9,"a":14},{"n":"Oxford","rm":"Sukhmeet Singh","s":7,"a":11},{"n":"Mukand SJPP","rm":"Kashish Goel","s":12,"a":19},{"n":"Navyug Kurukshetra","rm":"Mansi Rana","s":12,"a":19},{"n":"Mukand TIMT","rm":"Mansi Rana","s":18,"a":29},{"n":"Shah Satnam Sirsa","rm":"Sukhmeet Singh","s":13,"a":21},{"n":"Rpdav","rm":"Sukhmeet Singh","s":8,"a":13},{"n":"Lal Bahadur Shastri Bilaspur","rm":"Mansi Rana","s":19,"a":31},{"n":"Puneet EDPS","rm":"Sukhmeet Singh","s":9,"a":15},{"n":"Rukmani AKMV","rm":"Kashish Goel","s":9,"a":15},{"n":"SPS Convent School","rm":"Ankush Rana","s":12,"a":20},{"n":"Little Angel, Karnal","rm":"Sukhmeet Singh","s":11,"a":19},{"n":"IBMR Business School","rm":"Amit Kumar","s":12,"a":21},{"n":"Mukand MLNC","rm":"Mansi Rana","s":17,"a":30},{"n":"Masonic Public","rm":"Amit Kumar","s":14,"a":25},{"n":"Gurukul KKR","rm":"Mansi Rana","s":11,"a":20},{"n":"Arya College Panipat","rm":"Sultan Malik","s":12,"a":22},{"n":"DAV Girls Yamuna Nagar","rm":"Ankush Rana","s":12,"a":22},{"n":"GNKITM-TC","rm":"Mansi Rana","s":15,"a":28},{"n":"Vidya Public School","rm":"Amit Kumar","s":8,"a":15},{"n":"OPS Int","rm":"Kashish Goel","s":11,"a":21},{"n":"GNKC","rm":"Mansi Rana","s":14,"a":27},{"n":"Bharat College of Law","rm":"Sukhmeet Singh","s":7,"a":14},{"n":"Cambridge","rm":"Amit Kumar","s":8,"a":16},{"n":"GGDSD College Palwal","rm":"Amit Kumar","s":7,"a":14},{"n":"GGSCOP Ynr","rm":"Mansi Rana","s":16,"a":32},{"n":"Geeta Niketan Vidyapeeth","rm":"Sukhmeet Singh","s":6,"a":12},{"n":"Mukand VMLG","rm":"Sukhmeet Singh","s":9,"a":18},{"n":"Prachya School","rm":"Amit Kumar","s":7,"a":14},{"n":"Bharat Public School","rm":"Sukhmeet Singh","s":6,"a":13},{"n":"DAV College Pehowa","rm":"Mansi Rana","s":6,"a":13},{"n":"GNKC Karnal","rm":"Mansi Rana","s":6,"a":13},{"n":"GVM Girls College Sonipat","rm":"Kashish Goel","s":6,"a":13},{"n":"PKG College","rm":"Kashish Goel","s":11,"a":24},{"n":"Guru Nanak Kurukshetra","rm":"Sukhmeet Singh","s":5,"a":11},{"n":"SA Jain College + AIMT","rm":"Kashish Goel","s":7,"a":16},{"n":"Cambridge Field Global Panipat","rm":"Sultan Malik","s":10,"a":23},{"n":"SD College Panipat","rm":"Kashish Goel","s":6,"a":15},{"n":"SD Modern Hansi","rm":"Ankush Rana","s":6,"a":15},{"n":"DAV College Cheeka","rm":"Sultan Malik","s":7,"a":18},{"n":"Partap Public School Kunjpura","rm":"Mansi Rana","s":7,"a":18},{"n":"DIMT Law College","rm":"Ankush Rana","s":6,"a":16},{"n":"Greenfield Public School","rm":"Kashish Goel","s":8,"a":22},{"n":"Ideal College","rm":"Ankush Rana","s":6,"a":18},{"n":"IB College Panipat","rm":"Kashish Goel","s":4,"a":13},{"n":"Baba Shravan Nath","rm":"Sukhmeet Singh","s":3,"a":10},{"n":"Kalp Vriksh School Nissing","rm":"Mansi Rana","s":5,"a":19},{"n":"Swastik Bal Vikas Panipat","rm":"Kashish Goel","s":5,"a":21},{"n":"SD Kanya Ambala","rm":"Mansi Rana","s":4,"a":18},{"n":"IAMR Group","rm":"Amit Kumar","s":7,"a":38},{"n":"UARSchool Gharaunda","rm":"Ankush Rana","s":4,"a":24},{"n":"HIMT Group Noida","rm":"Amit Kumar","s":5,"a":38},{"n":"Imperial Public School Delhi","rm":"Mansi Rana","s":2,"a":16},{"n":"Mukand Analytics","rm":"Mansi Rana","s":0,"a":1},{"n":"Puneet Public School, Shahdra","rm":"Sultan Malik","s":0,"a":1},{"n":"SDGI Global University","rm":"Ankush Rana","s":0,"a":1},{"n":"Wisdom Kurukshetra","rm":"Ankush Rana","s":0,"a":1}];
@@ -706,7 +707,13 @@ let ADOPT_BY_CLIENT = new Map(), ADOPT_UNMATCHED = [];
 /* Lowercased owner -> {clients, revenue}. The Clients sheet and the trackers now
    spell people the same way, so this joins on name; anyone not an owner is simply
    absent from the map and shows a dash rather than a zero. */
-const BOOK = (() => {
+/* Rebuilt whenever CLIENTS changes, never computed once at parse time. This was
+   a `const` IIFE until 5 Aug, which meant it captured the compiled snapshot and
+   the live book never reached it — the business dial quietly showed the day the
+   snapshot was cut while the client book tab showed today. Nothing on screen
+   compared the two, so it went unnoticed until the adoption card printed the
+   same team's book total beside it and the two disagreed. */
+function buildBook(){
   const m = new Map();
   for (const c of CLIENTS){
     if (!c.o) continue;
@@ -716,7 +723,8 @@ const BOOK = (() => {
     m.set(k, e);
   }
   return m;
-})();
+}
+let BOOK = buildBook();
 const bookOf = name => BOOK.get(String(name).trim().toLowerCase()) || null;
 
 /* Pod lookups are built once the roster exists, because resolving a first name
@@ -1101,27 +1109,16 @@ function buildAdoption(){
 function adoptForTeam(lead){
   const owned = CLIENTS.filter(c => c.o && c.o.toLowerCase() === String(lead).toLowerCase());
   let adopted = 0, applicable = 0, revCovered = 0, revTotal = 0;
-  const missing = [], conflicts = [];
+  const missing = [];
   for (const c of owned){
     revTotal += c.r || 0;
     const hit = ADOPT_BY_CLIENT.get(c.n);
     if (!hit){ missing.push(c); continue; }
     adopted += hit.s; applicable += hit.a; revCovered += c.r || 0;
-    if (hit.rm && hit.rm.toLowerCase() !== String(lead).toLowerCase())
-      conflicts.push({client: c.n, rm: hit.rm});
   }
-  /* Clients scored on this lead's tab that the book gives to someone else. They
-     do not count towards this team's score — the book decides — but the card
-     names them so the disagreement is visible from both sides. */
-  const strays = [];
-  for (const [name, hit] of ADOPT_BY_CLIENT)
-    if (hit.rm && hit.rm.toLowerCase() === String(lead).toLowerCase() &&
-        hit.client.o && hit.client.o.toLowerCase() !== String(lead).toLowerCase())
-      strays.push({client: name, owner: hit.client.o});
-
   return {
     scored: owned.length - missing.length, total: owned.length,
-    adopted, applicable, revCovered, revTotal, missing, conflicts, strays,
+    adopted, applicable, revCovered, revTotal, missing,
     adoption: applicable ? adopted / applicable : null,
     coverage: revTotal ? revCovered / revTotal : null
   };
@@ -1590,17 +1587,6 @@ function adoptDetail(r){
          `counted as zero — the dial describes the ${a.scored} that were scored.</p>`;
   }
 
-  if (a.conflicts.length || a.strays.length){
-    h += `<h5>Scored on a different tab than the book says</h5>`;
-    if (a.conflicts.length)
-      h += `<p class="gaps">${a.conflicts.map(c =>
-        `${esc(c.client)} <span class="tk">scored under ${esc(c.rm)}</span>`).join(' · ')}</p>`;
-    if (a.strays.length)
-      h += `<p class="gaps">${a.strays.map(c =>
-        `${esc(c.client)} <span class="tk">on this tab, book says ${esc(c.owner)}</span>`).join(' · ')}</p>`;
-    h += `<p class="gaps none">Counted by the book's owner, not by whose tab the ` +
-         `score was typed on.</p>`;
-  }
   return h;
 }
 
@@ -2347,11 +2333,13 @@ async function load(){
       if (!book.length) throw new Error(
         'The published client book has a header but no numbered client rows.');
       CLIENTS = book;
+      BOOK = buildBook();
       CLIENTS_ASOF = iso(new Date());
       BOOK_LIVE = true;
       BOOK_ERROR = null;
     } catch (e) {
       CLIENTS = CLIENTS_FALLBACK;
+      BOOK = buildBook();
       CLIENTS_ASOF = CLIENTS_FALLBACK_ASOF;
       BOOK_LIVE = false;
       BOOK_ERROR = (e && e.message) || String(e);

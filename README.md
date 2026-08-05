@@ -205,7 +205,12 @@ with three expected days weigh as much as someone with fifty. It respects the mo
 picker and the "skip days before someone's first entry" toggle, both of which sit in
 the same control bar.
 
-Business is the standing book against the target.
+Business is the standing book against the target. `BOOK` — the per-team totals behind
+that dial — is rebuilt every time `CLIENTS` changes. It was a parse-time `const` until
+5 Aug, which meant it captured the compiled snapshot and the live book never reached
+it: the dial showed the day the snapshot was cut while the client book tab showed
+today, and nothing on screen compared the two. The adoption card now prints the same
+team's book total beside it, and `qa.js` asserts the two agree on every card.
 
 Module adoption is the third dial — see **Module adoption** below.
 
@@ -269,13 +274,19 @@ rather than rendering a dial above 100%.
 
 ### The book decides who owns a client
 
+**This is the RM's team score.** Ownership comes from the `Team` column of the client
+book and from nowhere else.
+
 A client is scored on whichever RM's tab the person doing the work happened to use,
-and that is **not** the same as who owns the account — fourteen of the current rows
-sit on a different tab than the client book assigns them to, following the assistant
-rather than the owner. Ownership comes from the book. The tab is kept only so the
-card can name where a disagreement came from, and both sides show it: the owning team
-lists the client under "scored on a different tab", and the tab's team sees it listed
-as belonging to someone else. Neither is silently resolved.
+and that is not the same thing. Assistants move between RMs, so the tab tracks who did
+the typing, not who carries the account — fourteen of the current rows sit on a tab
+that disagrees with the book. The scorecard's own "Client Ownership" column has the
+same problem: it holds an assistant's first name and a counter ("Priya 3"), not an RM.
+Both are ignored.
+
+The tab name is still carried on each row as `rm`, for provenance only. Nothing reads
+it, and nothing should — attribution by tab would move a client between teams whenever
+the work was shared out differently.
 
 ### Coverage is part of the number
 
@@ -569,7 +580,7 @@ entries loaded and when.
     node qa.js
     TZ=Asia/Kolkata node qa.js
 
-415 assertions with the network mocked: parsing (spacer rows above the header, quoted
+420 assertions with the network mocked: parsing (spacer rows above the header, quoted
 fields containing commas and newlines, blank assignees, case-variant names), every
 failure path (sheet not shared, network down, unparseable content), the date-window
 rules, cross-checks between the three places misses are counted, escaping of sheet
