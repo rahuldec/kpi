@@ -59,11 +59,29 @@ const SOURCES = {
   adoption:    { id: process.env.ADOPTION_SHEET_ID ||
                      '1uPatUpKNHNNvrz5mtz8_af9e_0rk6iPu9o0Bfc919sw',
                  byName: true },
+  /* Client feedback. A Google Form's own responses tab, published as CSV. Same
+     transport as the book and for the same reason — one fixed tab, no hunt.
+
+     The form is the client's voice; everything else on this dashboard is ours.
+     That is exactly why it joins on a name typed by the respondent, which is the
+     weak link: see the note on the institution field in README. */
+  feedback:    { url: process.env.FEEDBACK_CSV_URL ||
+                   'https://docs.google.com/spreadsheets/d/e/2PACX-1vQnAHkLeFy5AzJEjnokYna54ZEIkf' +
+                   '4ZnLCKNTqNvLuLPTVcOMX_1TY7U9jOL5HCf_ienaNUBCrwmzlI/pub?gid=981789536&single=true&output=csv',
+                 signature: csv => /timestamp/i.test(csv) && /institution/i.test(csv),
+                 envVar: 'FEEDBACK_CSV_URL',
+                 mismatch: 'It has no "Timestamp" and "Institution" columns — the link probably ' +
+                           'points at the wrong tab. Re-publish with the form responses tab ' +
+                           'selected and update FEEDBACK_CSV_URL.' },
   book:        { url: process.env.BOOK_CSV_URL ||
                    'https://docs.google.com/spreadsheets/d/e/2PACX-1vRJduuwLQYkHFCDbGo1J-kGu8gN' +
                    'WH3CX7dD8vVekiztMWxuiJIY1wptsW4eGgO5wg/pub?gid=667331627&single=true&output=csv',
                  // Neither a tracker nor an escalation export — one row per client.
-                 signature: csv => /client name/i.test(csv) && /total billing/i.test(csv) }
+                 signature: csv => /client name/i.test(csv) && /total billing/i.test(csv),
+                 envVar: 'BOOK_CSV_URL',
+                 mismatch: 'It has no "Client Name" and "Total Billing FY" columns — the link ' +
+                           'probably points at the wrong tab. Re-publish with the Clients tab ' +
+                           'selected and update BOOK_CSV_URL.' }
 };
 
 const trackerSignature = csv => /due date/i.test(csv) && /assignee/i.test(csv);
@@ -207,15 +225,15 @@ module.exports = async (req, res) => {
       if (!r.ok) return fail(
         `The published CSV for "${src}" returned ${r.status}.`,
         'Open the sheet, then File -> Share -> Publish to web, and republish the tab as CSV. ' +
-        'Republishing can mint a new link — set BOOK_CSV_URL in Vercel if it changed.');
+        `Republishing can mint a new link — set ${source.envVar || 'the URL environment variable'} ` +
+        'in Vercel if it changed.');
       const body = await r.text();
       if (isLoginPage(body)) return fail(
         'Google returned a page instead of CSV for the published sheet.',
         'The publication has most likely been revoked. Re-publish the tab via File -> Share -> Publish to web.');
       if (!looksLikeTheExport(body)) return fail(
-        `The published CSV for "${src}" does not look like the client book.`,
-        'It has no "Client Name" and "Total Billing FY" columns — the link probably points at the ' +
-        'wrong tab. Re-publish with the Clients tab selected and update BOOK_CSV_URL.');
+        `The published CSV for "${src}" is not the tab this source expects.`,
+        source.mismatch || 'The link probably points at the wrong tab.');
       return send({ body, gid: 'published' });
     }
 

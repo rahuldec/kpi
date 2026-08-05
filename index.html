@@ -512,6 +512,13 @@ footer b{color:var(--body);font-weight:600}
     </div>
 
     <div class="group">
+      <span class="grouplabel">Voice</span>
+      <div class="sources" id="sources5">
+        <button type="button" data-src="feedback">Client feedback</button>
+      </div>
+    </div>
+
+    <div class="group">
       <span class="grouplabel">Overall</span>
       <div class="sources" id="sources3">
         <button type="button" data-src="meter">KPI meter</button>
@@ -599,6 +606,34 @@ footer b{color:var(--body);font-weight:600}
       <h3>Never scored</h3>
       <p class="targetnote" id="adoptgapnote"></p>
       <table class="board" id="adoptgaps"></table>
+    </div>
+  </section>
+
+  <section id="feedback" hidden>
+    <div class="card">
+      <h3>Where it stands</h3>
+      <p class="hint" id="feedhint"></p>
+      <div class="meters" id="feedtotals"></div>
+    </div>
+    <div class="card">
+      <h3>By team</h3>
+      <p class="targetnote" id="feedteamnote"></p>
+      <table class="board" id="feedteams"></table>
+    </div>
+    <div class="card">
+      <h3>Every response</h3>
+      <p class="targetnote" id="feedrespnote"></p>
+      <table class="board" id="feedresponses"></table>
+    </div>
+    <div class="card" id="feedaskcard">
+      <h3>What they asked for</h3>
+      <p class="targetnote" id="feedasknote"></p>
+      <table class="board" id="feedasks"></table>
+    </div>
+    <div class="card" id="feedgapcard">
+      <h3>Not heard from</h3>
+      <p class="targetnote" id="feedgapnote"></p>
+      <table class="board" id="feedgaps"></table>
     </div>
   </section>
 
@@ -771,6 +806,65 @@ let ADOPT_BY_CLIENT = new Map(), ADOPT_UNMATCHED = [];
    about a client's totals, the page says so instead of showing both silently. */
 let ADOPT_GRID = new Map();
 
+/* ---------------- client feedback ---------------- */
+/* The Okie Dokie Feedback Form's own responses tab, published as CSV.
+
+   This is the only source on the dashboard the CS team does not write. Calls,
+   book and adoption are all our own record of our own work; this is the client
+   saying whether any of it landed. That makes it the most valuable number here
+   and the most fragile, for one reason: it joins to a client by an institution
+   name the respondent typed themselves. Every other join on this page is
+   between two of our own sheets. See FEED_ALIAS and the unmatched list.
+
+   There is no compiled fallback and there should not be one. A snapshot of the
+   client's opinion goes stale in a way a client list does not, and two test
+   submissions baked into the page would read as findings. If the sheet cannot
+   be reached the tab says so and shows nothing. */
+const FEEDBACK_FALLBACK = [];
+
+/* The form's answer options, mapped to 1-5 so they can be averaged. Written out
+   rather than inferred: an option the form offers but this map does not know is
+   reported on the page, never scored as zero and never silently dropped. Add
+   the option here when the form gains one. */
+const SUPPORT_SCALE = {
+  'excellent': 5, 'very good': 4, 'good': 4, 'satisfactory': 3, 'average': 3,
+  'fair': 3, 'below average': 2, 'poor': 2, 'very poor': 1, 'bad': 1
+};
+const RECO_SCALE = {
+  'highly likely to recommend': 5, 'highly likely': 5,
+  'likely to recommend': 4, 'likely': 4,
+  'neutral': 3, 'not sure': 3, 'maybe': 3,
+  'unlikely to recommend': 2, 'unlikely': 2,
+  'would not recommend': 1, 'not likely': 1, 'never': 1
+};
+const EFFICIENCY_SCALE = {
+  'significantly improved': 5, 'greatly improved': 5,
+  'improved': 4, 'somewhat improved': 3, 'slightly improved': 3,
+  'no change': 2, 'no improvement': 2, 'worsened': 1, 'declined': 1
+};
+
+/* Same status as ADOPTION_TARGET: asserted, not agreed, and the page says so.
+   4 out of 5 average satisfaction. */
+const FEEDBACK_TARGET = 0.80;
+
+/* Below this many responses a team's average is a couple of opinions, not a
+   score. The figure still shows — hiding it would be its own distortion — but
+   it is marked, and nothing on the page ranks teams beneath it. */
+const FEEDBACK_MIN_N = 3;
+
+/* Institutions the form spells differently from the client book. Evidence only,
+   the same rule as ADOPTION_ALIAS: add an entry when you know the two names are
+   the same client, never because they look similar. */
+const FEED_ALIAS = {};
+
+let FEEDBACK = FEEDBACK_FALLBACK;
+let FEEDBACK_NOTES = [];
+let FEED_ASOF = null;
+let FEED_LIVE = false;
+let FEED_ERROR = null;
+/* Client name -> every response for that client, newest first. */
+let FEED_BY_CLIENT = new Map(), FEED_UNMATCHED = [];
+
 /* Lowercased owner -> {clients, revenue}. The Clients sheet and the trackers now
    spell people the same way, so this joins on name; anyone not an owner is simply
    absent from the map and shows a dash rather than a zero. */
@@ -907,7 +1001,8 @@ const SOURCES = {
   scorecard: {label: 'CS Team — monthly scorecard',    noun: 'calls'},
   clients:   {label: 'CS client book',                 noun: 'calls'},
   meter:     {label: 'CS team KPI meter',              noun: 'calls'},
-  adoption:  {label: 'ERP module adoption',            noun: 'calls'}
+  adoption:  {label: 'ERP module adoption',            noun: 'calls'},
+  feedback:  {label: 'Client feedback',                noun: 'calls'}
 };
 const TRACKERS = ['internal','client'];
 const MONTH_KEY = 'kpi.months';
@@ -1306,6 +1401,194 @@ function adoptForTeam(lead){
   };
 }
 
+/* The form's responses tab, exactly as Google writes it: one row per submission,
+   one column per question, the question text itself as the header.
+
+   Columns are found by a distinctive fragment of each question rather than by
+   position, because the wording of a Google Form question is edited far more
+   often than the form is rebuilt, and reordering questions moves the columns.
+   A question that has been reworded past its fragment goes missing loudly (the
+   page names it) rather than reading as every client declining to answer.
+
+   Nothing here is scored as zero when it is absent. A blank answer, an option
+   this page does not know, a row with no institution — each is carried into
+   FEEDBACK_NOTES and left out of the arithmetic. The whole point of the source
+   is that it is small; quietly turning a non-answer into a bad score would move
+   a team's number more than the real answers do. */
+function parseFeedback(text){
+  const dl = (String(text).split('\n')[0].match(/\t/g) || []).length >= 2 ? '\t' : ',';
+  const rows = splitRows(text, dl);
+  const notes = [];
+  let head = -1, h = [];
+  for (let i = 0; i < Math.min(rows.length, 10); i++){
+    const r = rows[i].map(x => String(x || '').trim().toLowerCase());
+    if (r.some(x => x.includes('timestamp')) && r.some(x => x.includes('institution'))){
+      head = i; h = r; break;
+    }
+  }
+  if (head < 0) throw new Error(
+    'Could not find a header row with "Timestamp" and "Institution" in the feedback sheet.');
+
+  const col = (label, ...frags) => {
+    const i = h.findIndex(x => frags.some(f => x.includes(f)));
+    if (i < 0) notes.push(`No column matched "${label}" — that question is not being read.`);
+    return i;
+  };
+  const ix = {
+    ts:      col('Timestamp', 'timestamp'),
+    inst:    col('Institution', 'institution'),
+    who:     col('Who filled it in', 'name and designation', 'designation'),
+    ui:      col('Interface', 'user-friendly', 'user friendly'),
+    mods:    col('Modules used', 'modules do you use', 'use most frequently'),
+    gaps:    col('Missing features', 'missing or need improvement'),
+    eff:     col('Efficiency', 'operational efficiency'),
+    sup:     col('Support quality', 'customer support'),
+    likes:   col('What they like', 'top 3'),
+    improve: col('Improvement asked for', 'improvement which'),
+    reco:    col('Recommend', 'recommend'),
+    score:   col('Satisfaction', 'how satisfied')
+  };
+  if (ix.inst < 0) throw new Error(
+    'The feedback sheet has no institution column, so no response can be attached to a client.');
+
+  const cell = (r, i) => i > -1 ? String(r[i] ?? '').trim() : '';
+
+  /* Scored answers are looked up, never guessed. An option that is not in the
+     map is named on the page with the client it came from — that is how a form
+     edit surfaces, rather than as a quiet drift in the averages. */
+  const scale = (raw, map, what, inst) => {
+    if (!raw) return null;
+    const v = map[raw.toLowerCase()];
+    if (v === undefined){
+      notes.push(`${inst}: "${raw}" is not a ${what} option this page knows, so it was not scored.`);
+      return null;
+    }
+    return v;
+  };
+
+  const out = [];
+  for (let i = head + 1; i < rows.length; i++){
+    const r = rows[i]; if (!r) continue;
+    const inst = cell(r, ix.inst);
+    const rawTs = cell(r, ix.ts);
+    if (!inst && !rawTs) continue;                 // a blank row is nothing, not a problem
+    if (!inst){
+      notes.push(`A response submitted ${rawTs || 'at an unrecorded time'} names no institution, ` +
+                 `so it cannot be attached to a client.`);
+      continue;
+    }
+
+    const n = Number(String(cell(r, ix.score)).replace(/[^0-9.]/g, ''));
+    let sat = null;
+    if (cell(r, ix.score) === '') sat = null;
+    else if (!isFinite(n) || n < 1 || n > 5)
+      notes.push(`${inst}: satisfaction reads "${cell(r, ix.score)}", which is not 1-5.`);
+    else sat = n;
+
+    out.push({
+      inst, ts: parseFormStamp(rawTs, notes, inst), rawTs,
+      who: cell(r, ix.who),
+      ui: cell(r, ix.ui),
+      mods: cell(r, ix.mods),
+      gaps: cell(r, ix.gaps),
+      eff: scale(cell(r, ix.eff), EFFICIENCY_SCALE, 'efficiency', inst),
+      efRaw: cell(r, ix.eff),
+      sup: scale(cell(r, ix.sup), SUPPORT_SCALE, 'support', inst),
+      supRaw: cell(r, ix.sup),
+      likes: cell(r, ix.likes),
+      improve: cell(r, ix.improve),
+      reco: scale(cell(r, ix.reco), RECO_SCALE, 'recommendation', inst),
+      recoRaw: cell(r, ix.reco),
+      sat
+    });
+  }
+  // Newest first, and a row with no readable date sinks rather than leading.
+  out.sort((a, b) => String(b.ts || '').localeCompare(String(a.ts || '')));
+  return {rows: out, notes};
+}
+
+/* Google writes the form timestamp in the spreadsheet's own locale, so the same
+   sheet can read 05/08/2026 in one account and 08/05/2026 in another. This
+   assumes day-first, which is what the sheet uses, and checks rather than
+   trusts: a first field over 12 confirms day-first, a second field over 12
+   proves the opposite and is corrected and reported. A date it cannot read at
+   all becomes null — the response still counts, it just has no date on it. */
+function parseFormStamp(raw, notes, inst){
+  const m = String(raw || '').match(/(\d{1,4})[\/-](\d{1,2})[\/-](\d{2,4})/);
+  if (!m) return null;
+  let [, a, b, y] = m;
+  a = Number(a); b = Number(b); y = Number(y);
+  if (String(m[1]).length === 4) return `${m[1]}-${String(b).padStart(2,'0')}-${String(y).padStart(2,'0')}`;
+  if (y < 100) y += 2000;
+  let d = a, mo = b;
+  if (b > 12 && a <= 12){
+    d = b; mo = a;
+    notes.push(`${inst}: the timestamp "${raw}" is month-first, unlike the rest of the sheet.`);
+  }
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  return `${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+
+/* Responses onto clients, using the client book as the authority — the same rule
+   the adoption dial settled on. A response whose institution is not in the book
+   counts towards nobody and is named on the page; the alternative, matching on
+   resemblance, would put one client's complaint on another client's RM. */
+function buildFeedback(){
+  FEED_BY_CLIENT = new Map(); FEED_UNMATCHED = [];
+  const byName = new Map();
+  for (const c of CLIENTS) byName.set(eNorm(c.n), c);
+  const resolve = n => byName.get(eNorm(FEED_ALIAS[String(n).trim().toLowerCase()] || n));
+
+  const seen = new Set();
+  for (const row of FEEDBACK){
+    const c = resolve(row.inst);
+    if (!c){
+      if (!seen.has(row.inst)){ seen.add(row.inst); FEED_UNMATCHED.push(row.inst); }
+      continue;
+    }
+    if (!FEED_BY_CLIENT.has(c.n)) FEED_BY_CLIENT.set(c.n, []);
+    FEED_BY_CLIENT.get(c.n).push({...row, client: c});
+  }
+  for (const list of FEED_BY_CLIENT.values())
+    list.sort((a, b) => String(b.ts || '').localeCompare(String(a.ts || '')));
+}
+
+/* The latest response is the client's current view; earlier ones are history.
+   Averaging every submission would let one institution that answers monthly
+   outvote ten that answered once. */
+const latestFeedback = name => (FEED_BY_CLIENT.get(name) || [])[0] || null;
+
+/* Everything a team card needs about feedback, coverage included and for the
+   same reason as adoption: an average over the three clients who replied is not
+   a score for a book of nineteen. */
+function feedForTeam(lead){
+  const owned = CLIENTS.filter(c => c.o && c.o.toLowerCase() === String(lead).toLowerCase());
+  const heard = [], silent = [];
+  let revHeard = 0, revTotal = 0, responses = 0;
+  for (const c of owned){
+    revTotal += c.r || 0;
+    const all = FEED_BY_CLIENT.get(c.n);
+    if (!all || !all.length){ silent.push(c); continue; }
+    responses += all.length;
+    heard.push(all[0]);
+    revHeard += c.r || 0;
+  }
+  const mean = key => {
+    const v = heard.map(r => r[key]).filter(x => x !== null && x !== undefined);
+    return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
+  };
+  const sat = mean('sat');
+  return {
+    heard: heard.length, total: owned.length, responses, silent, latest: heard,
+    revHeard, revTotal,
+    sat, support: mean('sup'), reco: mean('reco'),
+    satisfaction: sat === null ? null : sat / 5,
+    coverage: owned.length ? heard.length / owned.length : null,
+    revCoverage: revTotal ? revHeard / revTotal : null,
+    thin: heard.length > 0 && heard.length < FEEDBACK_MIN_N
+  };
+}
+
 function parseExport(text){
   const dl=(text.split('\n')[0].match(/\t/g)||[]).length>=2?'\t':',';
   const rows=splitRows(text,dl); let head=-1,ix={};
@@ -1682,8 +1965,9 @@ function meterRows(){
     const target = targetFor(e.team.length + 1);
     const esc = escForTeam(e.lead);
     const adopt = adoptForTeam(e.lead);
+    const feed = feedForTeam(e.lead);
     return {
-      ...e, revenue, target, esc, adopt,
+      ...e, revenue, target, esc, adopt, feed,
       escOpen: esc.filter(x => x.open.length),
       compliance: e.expected ? e.filed / e.expected : null,
       business: target ? revenue / target : 0
@@ -1716,6 +2000,7 @@ function howHtml(r){
     `${r.expected ? Math.round(r.filed / r.expected * 100) : 0}%.</p>`;
 
   h += adoptDetail(r);
+  h += feedDetail(r);
   h += escDetail(r);
 
   if (!r.members.length) return h + `<p class="none">Nobody on this team has any expected days.</p>`;
@@ -1819,6 +2104,80 @@ function coverLine(r){
          (full ? '' :
            `<p class="covwho">covers ${esc(inr(a.revCovered))} of ${esc(inr(a.revTotal))}` +
            `${revPct === null ? '' : ` — ${revPct}% of the book`}</p>`);
+}
+
+/* The feedback dial, shown working. The denominator matters more here than
+   anywhere else on the page: an RM whose one happy client replied outscores an
+   RM whose ten mixed ones did, and nothing about the dial itself says so. */
+function feedDetail(r){
+  const f = r.feed;
+  if (!f.total) return '';
+  const money = c => `${esc(c.n)} <span class="tk">${esc(inr(c.r || 0))}</span>`;
+
+  if (FEED_ERROR)
+    return `<h5>How client feedback is worked out</h5>` +
+           `<p class="sum">The feedback sheet did not load, so no figure here describes ` +
+           `this team's clients: ${esc(FEED_ERROR)}</p>`;
+
+  if (!f.heard)
+    return `<h5>How client feedback is worked out</h5>` +
+           `<p class="sum">None of this team's ${f.total} clients has answered the feedback ` +
+           `form, so there is no score — not a score of zero. Silence is not dissatisfaction.</p>`;
+
+  let h = `<h5>How client feedback is worked out</h5><p class="sum">` +
+    `The most recent response from each client that answered, averaged. ` +
+    `<b>${f.heard} of ${f.total}</b> clients replied` +
+    (f.responses > f.heard
+      ? ` (${f.responses} submissions in total — only the latest from each client counts, ` +
+        `so a client that answers often does not outvote one that answered once)` : '') +
+    `. Satisfaction <b>${f.sat === null ? '—' : f.sat.toFixed(1)}/5</b>` +
+    (f.support === null ? '' : `, support ${f.support.toFixed(1)}/5`) +
+    (f.reco === null ? '' : `, recommendation ${f.reco.toFixed(1)}/5`) +
+    `. The ${f.total - f.heard} that did not reply are left out, not counted as unhappy.</p>`;
+
+  if (f.thin)
+    h += `<p class="sum"><b>Fewer than ${FEEDBACK_MIN_N} replies.</b> This is a couple of ` +
+         `opinions rather than a measurement of the team, and it is shown for that reason ` +
+         `only — nothing on this page ranks teams on it.</p>`;
+
+  if (f.silent.length)
+    h += `<p class="who2">Not heard from</p><p class="dates">` +
+         f.silent.slice().sort((a, b) => (b.r || 0) - (a.r || 0)).map(money).join(' · ') +
+         `</p>`;
+
+  const asks = f.latest.filter(x => x.improve || x.gaps);
+  if (asks.length)
+    h += `<p class="who2">What they asked for</p>` +
+         asks.map(x => `<p class="dates"><span class="tk">${esc(x.client.n)}</span>` +
+                       `${esc([x.improve, x.gaps].filter(Boolean).join(' — '))}</p>`).join('');
+  return h;
+}
+
+/* Coverage for the feedback dial, in the same shape as the adoption one. Two
+   distinct empty states, deliberately: a team nobody has asked reads differently
+   from a team asked and not answered, and both read differently from zero. */
+function feedLine(r){
+  const f = r.feed;
+  if (!f.total)
+    return `<p class="covwho cool">no clients in the book</p>`;
+  if (FEED_ERROR)
+    return `<div class="covline cool"><span class="lbl">Heard from</span>` +
+           `<span class="n">—</span></div>` +
+           `<p class="covwho cool">feedback sheet not loaded</p>`;
+  if (!f.heard)
+    return `<div class="covline hot"><span class="lbl">Heard from</span>` +
+           `<span class="n">none of ${f.total}</span></div>` +
+           `<p class="covwho">no client on this book has answered the form yet</p>`;
+
+  const full = f.heard === f.total;
+  const revPct = f.revCoverage === null ? null : Math.round(f.revCoverage * 100);
+  return `<div class="covline ${full ? 'cool' : 'hot'}"><span class="lbl">Heard from</span>` +
+         `<span class="n">${f.heard} of ${f.total} clients</span></div>` +
+         `<p class="covwho${full ? ' cool' : ''}">` +
+         (f.thin ? `too few to read as a team score. ` : '') +
+         (full ? `every client on this book has answered`
+               : `${esc(inr(f.revHeard))} of ${esc(inr(f.revTotal))}` +
+                 `${revPct === null ? '' : ` — ${revPct}% of the book`}`) + `</p>`;
 }
 
 function escLine(r){
@@ -2001,6 +2360,156 @@ function renderAdoption(){
   }
 }
 
+/* The client feedback tab. Deliberately ordered the other way round from the
+   adoption tab: coverage first, then the score. With a handful of responses the
+   honest headline is how few clients have spoken, not what they said, and a big
+   satisfaction figure at the top would be read as the finding whatever the note
+   underneath it said.
+
+   Nothing here moves with the month picker — a response is dated, but the score
+   is the client's current view rather than a monthly figure. */
+function renderFeedback(){
+  const owned = CLIENTS.filter(c => c.o);
+  const latest = owned.map(c => latestFeedback(c.n)).filter(Boolean);
+  const silent = owned.filter(c => !latestFeedback(c.n));
+  const total = [...FEED_BY_CLIENT.values()].reduce((n, l) => n + l.length, 0);
+
+  const mean = key => {
+    const v = latest.map(r => r[key]).filter(x => x !== null && x !== undefined);
+    return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
+  };
+  const sat = mean('sat'), sup = mean('sup'), reco = mean('reco');
+  const bookTotal = owned.reduce((n, c) => n + (c.r || 0), 0);
+  const heardRev = latest.reduce((n, r) => n + (r.client.r || 0), 0);
+
+  $('feedhint').innerHTML =
+    `The Okie Dokie Feedback Form, one row per submission` +
+    (FEED_ASOF ? `, read ${esc(pretty(FEED_ASOF))}` : '') + `. ` +
+    `Each client counts once, through its most recent response — an institution that ` +
+    `answers every month does not outweigh one that answered once. Clients who have not ` +
+    `answered are left out of every average on this page rather than counted as ` +
+    `dissatisfied, which is why the coverage figure sits beside the score and not below it. ` +
+    (FEED_ERROR
+      ? `<b>The sheet did not load, so nothing here describes your clients:</b> ${esc(FEED_ERROR)}`
+      : FEED_LIVE ? `Read live from the published responses tab.` : '') +
+    (FEEDBACK_NOTES.length
+      ? ` <b>${FEEDBACK_NOTES.length} ${FEEDBACK_NOTES.length === 1 ? 'response needs' : 'responses need'} ` +
+        `attention:</b> ${FEEDBACK_NOTES.slice(0, 12).map(esc).join('; ')}` +
+        (FEEDBACK_NOTES.length > 12 ? ` (and ${FEEDBACK_NOTES.length - 12} more).` : `.`) : '') +
+    (FEED_UNMATCHED.length
+      ? ` <b>${FEED_UNMATCHED.length} ${FEED_UNMATCHED.length === 1 ? 'institution is' : 'institutions are'} ` +
+        `not in the client book</b> and count towards nobody: ${FEED_UNMATCHED.map(esc).join(', ')}. ` +
+        `The form takes the institution name as free text, so a client can answer under a ` +
+        `spelling the book does not have; map it in <code>FEED_ALIAS</code>.` : '');
+
+  /* Coverage card first, and it carries the sample-size warning. */
+  const thin = latest.length > 0 && latest.length < FEEDBACK_MIN_N;
+  $('feedtotals').innerHTML =
+    `<div class="mcard"><h4>How much of the book has been heard from</h4>` +
+    dial('Clients heard from', owned.length ? latest.length / owned.length : null,
+         `${latest.length} of ${owned.length} clients`, silent.length === 0) +
+    `<p class="covwho${silent.length ? '' : ' cool'}">` +
+    `${esc(inr(heardRev))} of ${esc(inr(bookTotal))} of the book` +
+    (total > latest.length ? ` · ${total} submissions in all` : '') +
+    (silent.length ? `. The rest are listed at the foot of this page.` : `.`) + `</p></div>` +
+    `<div class="mcard"><h4>What they said</h4>` +
+    dial('Satisfaction', sat === null ? null : sat / 5,
+         sat === null ? 'nobody has answered' : `${sat.toFixed(1)} of 5`,
+         sat !== null && !thin && sat / 5 >= FEEDBACK_TARGET) +
+    `<p class="covwho${thin ? '' : ' cool'}">` +
+    (sat === null
+      ? `No response carries a satisfaction score yet.`
+      : `Support ${sup === null ? '—' : sup.toFixed(1) + '/5'}, ` +
+        `recommendation ${reco === null ? '—' : reco.toFixed(1) + '/5'}. ` +
+        (thin ? `Fewer than ${FEEDBACK_MIN_N} clients have answered — this is a couple of ` +
+                `opinions, not a measurement.`
+              : `Measured against a placeholder ${Math.round(FEEDBACK_TARGET * 100)}%, ` +
+                `which nobody has agreed yet.`)) + `</p></div>`;
+
+  const owners = [...new Set(owned.map(c => c.o))];
+  const teams = owners.map(o => ({lead: o, ...feedForTeam(o)})).filter(t => t.total)
+                      .sort((a, b) => (b.heard / b.total) - (a.heard / a.total));
+  const outOf5 = v => v === null ? '—' : v.toFixed(1);
+
+  $('feedteamnote').textContent =
+    'Sorted by how much of the book has answered, not by score — a team with one happy ' +
+    'reply out of nineteen clients is not ahead of a team with twelve mixed ones. Scores ' +
+    'from fewer than ' + FEEDBACK_MIN_N + ' clients are marked.';
+  $('feedteams').innerHTML =
+    `<thead><tr><th>Team</th><th class="num">Heard from</th><th class="num">Of book</th>` +
+    `<th class="num">Satisfaction</th><th class="num">Support</th>` +
+    `<th class="num">Recommend</th></tr></thead><tbody>` +
+    (teams.length ? teams.map(t =>
+      `<tr><td>${esc(t.lead)}${t.thin ? ' <span class="tk">thin</span>' : ''}</td>` +
+      `<td class="num${t.heard < t.total ? ' bad' : ''}">${t.heard} of ${t.total}</td>` +
+      `<td class="num">${t.revCoverage === null ? '—' : Math.round(t.revCoverage * 100) + '%'}</td>` +
+      `<td class="num">${outOf5(t.sat)}</td><td class="num">${outOf5(t.support)}</td>` +
+      `<td class="num">${outOf5(t.reco)}</td></tr>`).join('')
+      : `<tr><td colspan="6" class="dim">No team has a client in the book.</td></tr>`) +
+    `</tbody>`;
+
+  /* Every submission, not just the latest — the tab is small enough to show the
+     whole record, and a client that answered twice is worth seeing twice. */
+  const all = [];
+  for (const list of FEED_BY_CLIENT.values()) for (const r of list) all.push(r);
+  all.sort((a, b) => String(b.ts || '').localeCompare(String(a.ts || '')));
+
+  $('feedrespnote').textContent =
+    'Newest first, every submission including repeats. Only the top one per client feeds ' +
+    'the averages above; the older ones are kept here because a score that moved is the ' +
+    'most useful thing this sheet can tell you.';
+  $('feedresponses').innerHTML =
+    `<thead><tr><th>Client</th><th>Team</th><th>When</th><th class="num">Satisfaction</th>` +
+    `<th>Support</th><th>Recommend</th><th>Efficiency</th><th>Uses most</th></tr></thead><tbody>` +
+    (all.length ? all.map(r => {
+      const stale = latestFeedback(r.client.n) !== r;
+      return `<tr${stale ? ' class="dim"' : ''}><td>${esc(r.client.n)}</td>` +
+        `<td>${esc(r.client.o || '—')}</td>` +
+        `<td>${esc(r.ts ? shortDate(r.ts) : r.rawTs || '—')}` +
+        `${stale ? ' <span class="tk">superseded</span>' : ''}</td>` +
+        `<td class="num${r.sat !== null && r.sat <= 2 ? ' bad' : ''}">` +
+        `${r.sat === null ? '—' : r.sat + '/5'}</td>` +
+        `<td>${esc(r.supRaw || '—')}</td><td>${esc(r.recoRaw || '—')}</td>` +
+        `<td>${esc(r.efRaw || '—')}</td><td>${esc(r.mods || '—')}</td></tr>`;
+    }).join('')
+      : `<tr><td colspan="8" class="dim">No response has been matched to a client in the ` +
+        `book yet.</td></tr>`) + `</tbody>`;
+
+  /* The free-text answers, verbatim. These are the reason the form is worth
+     running at all, and summarising them here would be inventing a finding. */
+  const asks = all.filter(r => r.improve || r.gaps || r.likes);
+  $('feedaskcard').hidden = !asks.length;
+  if (asks.length){
+    $('feedasknote').textContent =
+      'Word for word, as the client typed it. Nothing here is scored or summarised — the ' +
+      'wording is the point.';
+    $('feedasks').innerHTML =
+      `<thead><tr><th>Client</th><th>Wants improved</th><th>Missing modules</th>` +
+      `<th>Likes</th></tr></thead><tbody>` +
+      asks.map(r => `<tr><td>${esc(r.client.n)}</td><td>${esc(r.improve || '—')}</td>` +
+        `<td>${esc(r.gaps || '—')}</td><td>${esc(r.likes || '—')}</td></tr>`).join('') +
+      `</tbody>`;
+  }
+
+  /* Who has not spoken, largest first. Same reasoning as the never-scored table
+     on the adoption tab: these clients are excluded from every figure above, and
+     that is only defensible if the page names them. */
+  $('feedgapcard').hidden = !silent.length;
+  if (silent.length){
+    const rev = silent.reduce((n, c) => n + (c.r || 0), 0);
+    $('feedgapnote').textContent =
+      `${silent.length} clients carrying ${inr(rev)} have not answered the form, so no ` +
+      `figure on this page describes them. Chasing these is the first KPI here — a ` +
+      `satisfaction score drawn from whoever happened to reply can be improved by asking ` +
+      `fewer people, which is the one thing this measure must never reward.`;
+    $('feedgaps').innerHTML =
+      `<thead><tr><th>Client</th><th>Team</th><th class="num">Billing</th></tr></thead><tbody>` +
+      silent.slice().sort((a, b) => (b.r || 0) - (a.r || 0)).map(c =>
+        `<tr><td>${esc(c.n)}</td><td>${esc(c.o)}</td>` +
+        `<td class="num">${esc(inr(c.r || 0))}</td></tr>`).join('') + `</tbody>`;
+  }
+}
+
 /* Same rule as the book table: never round across the line, so a bar that has
    not reached the target cannot print as 100%. */
 const cap = (v, met) => v === null ? null
@@ -2040,6 +2549,10 @@ function renderMeter(){
     const compMet = r.compliance !== null && r.compliance >= 1;
     const bizMet  = r.revenue >= r.target;
     const adoptMet = r.adopt.adoption !== null && r.adopt.adoption >= ADOPTION_TARGET;
+    /* A thin sample never reads as "target met" — three replies cannot certify a
+       team however warm they are. It still shows; it just does not go green. */
+    const feedMet = r.feed.satisfaction !== null && !r.feed.thin &&
+                    r.feed.satisfaction >= FEEDBACK_TARGET;
     return `<div class="mcard">` +
       `<button type="button" class="info" data-card="${i}" aria-expanded="false" ` +
       `title="How this is worked out">i</button>` +
@@ -2054,6 +2567,12 @@ function renderMeter(){
              ? `${r.adopt.adopted}/${r.adopt.applicable} modules`
              : 'no client scored', adoptMet) +
       coverLine(r) +
+      dial('Client feedback', r.feed.satisfaction,
+           r.feed.sat === null
+             ? (FEED_ERROR ? 'not loaded' : 'no responses yet')
+             : `${r.feed.sat.toFixed(1)}/5 from ${r.feed.heard} ` +
+               `${r.feed.heard === 1 ? 'client' : 'clients'}`, feedMet) +
+      feedLine(r) +
       escLine(r) +
       `<div class="how" id="how${i}" hidden>${howHtml(r)}</div>` +
       `</div>`;
@@ -2069,8 +2588,19 @@ function renderMeter(){
     `Module adoption is ${esc(ADOPTION_QUARTER)}, a quarterly figure that does not ` +
     `move with the month picker, measured against a placeholder ` +
     `${Math.round(ADOPTION_TARGET * 100)}% until a real target is agreed. ` +
-    `The three are shown side by side, not blended: a team can be filing perfectly and ` +
+    `Client feedback is the average satisfaction score of the clients on that book who ` +
+    `have answered the feedback form, out of 5, against a placeholder ` +
+    `${Math.round(FEEDBACK_TARGET * 100)}%; clients who have not answered are left out ` +
+    `rather than counted as unhappy, so read it beside the "heard from" line under it. ` +
+    `The four are shown side by side, not blended: a team can be filing perfectly and ` +
     `still be short on business, and one number would hide which.` +
+    (FEED_ERROR ? ` <b>The feedback sheet did not load</b>, so that dial is empty on every ` +
+                  `card: ${esc(FEED_ERROR)}` : '') +
+    (FEED_UNMATCHED.length
+      ? ` <b>${FEED_UNMATCHED.length} ${FEED_UNMATCHED.length === 1 ? 'institution has' : 'institutions have'} ` +
+        `answered the form under a name the book does not have</b> and count towards nobody: ` +
+        `${FEED_UNMATCHED.map(esc).join(', ')}. Add them to <code>FEED_ALIAS</code> in index.html ` +
+        `if they are the same client under another name.` : '') +
     (ADOPT_UNMATCHED.length
       ? ` <b>${ADOPT_UNMATCHED.length} scored ${ADOPT_UNMATCHED.length === 1 ? 'client is' : 'clients are'} ` +
         `not in the book</b> and count towards nobody: ` +
@@ -2486,10 +3016,11 @@ const modeOf = src => src === 'scorecard' ? 'scorecard'
                     : src === 'clients'   ? 'clients'
                     : src === 'meter'     ? 'meter'
                     : src === 'adoption'  ? 'adoption'
+                    : src === 'feedback'  ? 'feedback'
                     : 'daily';
 
 function markSource(){
-  for (const g of ['sources','sources2','sources3','sources4'])
+  for (const g of ['sources','sources2','sources3','sources4','sources5'])
     for (const b of $(g).children)
       b.setAttribute('aria-pressed', String(b.dataset.src === SOURCE));
   const mode = modeOf(SOURCE);
@@ -2498,10 +3029,12 @@ function markSource(){
     (mode === 'scorecard' ? 'monthly scorecard'
      : mode === 'clients' ? 'client book'
      : mode === 'adoption' ? 'module adoption'
+     : mode === 'feedback' ? 'client feedback'
      : SOURCES[SOURCE].label);
   $('h1').innerHTML = mode === 'scorecard' ? 'Missed days, <em>counted</em>.'
                     : mode === 'clients'   ? 'Who owns <em>what</em>.'
                     : mode === 'adoption'  ? 'What they actually <em>use</em>.'
+                    : mode === 'feedback'  ? 'What the clients <em>say</em>.'
                     : 'Who <em>hasn\'t</em> filed.';
   const daily = mode === 'daily';
   $('lede').hidden = !daily;
@@ -2509,6 +3042,7 @@ function markSource(){
   $('clients').hidden   = mode !== 'clients';
   $('meter').hidden     = mode !== 'meter';
   $('adoption').hidden  = mode !== 'adoption';
+  $('feedback').hidden  = mode !== 'feedback';
   for (const id of DAILY_PANELS){ const el = $(id); if (el) el.hidden = !daily; }
   $('presets').hidden   = !daily;
   $('monthwrap').hidden = mode !== 'scorecard' && mode !== 'meter';
@@ -2516,7 +3050,7 @@ function markSource(){
   $('exempt').hidden    = !daily;
   /* Quarterly, and not per-person: neither the month picker nor the joined
      toggle changes a single figure on this tab, so neither is shown. */
-  $('joinedwrap').hidden = mode === 'clients' || mode === 'adoption';
+  $('joinedwrap').hidden = mode === 'clients' || mode === 'adoption' || mode === 'feedback';
   $('h1').innerHTML = mode === 'meter' ? 'Compliance and <em>business</em>.' : $('h1').innerHTML;
 }
 
@@ -2572,6 +3106,16 @@ function showActive(){
     showContent();
     $('fresh').textContent = `${ADOPT_BY_CLIENT.size} clients scored`;
     renderAdoption();
+    return;
+  }
+  /* Neither per-person nor per-month: the month picker and the joined toggle
+     change nothing here, so like the adoption tab neither is offered. */
+  if (SOURCE === 'feedback'){
+    showContent();
+    const n = [...FEED_BY_CLIENT.values()].reduce((a, l) => a + l.length, 0);
+    $('fresh').textContent = FEED_ERROR ? 'feedback sheet not loaded'
+      : `${n} ${n === 1 ? 'response' : 'responses'} · ${FEED_BY_CLIENT.size} clients`;
+    renderFeedback();
     return;
   }
   if (SOURCE === 'clients'){
@@ -2724,6 +3268,26 @@ async function load(){
     }
     buildAdoption();
 
+    /* Feedback joins on client names typed by the respondent, so like escalations
+       and adoption it waits for the book. It fails soft and, unlike adoption,
+       fails to nothing: there is no compiled snapshot of what clients think, and
+       inventing one would be worse than an empty tab. */
+    try {
+      const {rows, notes} = parseFeedback(await fetchRaw('feedback'));
+      FEEDBACK = rows;
+      FEEDBACK_NOTES = notes;
+      FEED_ASOF = iso(new Date());
+      FEED_LIVE = true;
+      FEED_ERROR = null;
+    } catch (e) {
+      FEEDBACK = FEEDBACK_FALLBACK;
+      FEEDBACK_NOTES = [];
+      FEED_ASOF = null;
+      FEED_LIVE = false;
+      FEED_ERROR = (e && e.message) || String(e);
+    }
+    buildFeedback();
+
     /* Escalations are an enrichment, not a foundation. If that sheet is not
        shared, or its shape changes, the compliance figures are still correct and
        must still render — so this failure is recorded and shown on the client
@@ -2807,7 +3371,7 @@ $('score').addEventListener('click', e => {
 });
 /* Every group's tabs share one handler — a new group needs its id here and
    nothing else. Binding per group is how a tab ends up silently inert. */
-for (const g of ['sources','sources2','sources3','sources4'])
+for (const g of ['sources','sources2','sources3','sources4','sources5'])
   $(g).addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b || b.dataset.src === SOURCE) return;
     SOURCE = b.dataset.src;

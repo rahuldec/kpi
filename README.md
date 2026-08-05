@@ -15,9 +15,11 @@ The page is **CS Team KPI** — the whole set of team metrics. Everything curren
 it measures one thing, whether people filed what they owe, so it sits in a group
 labelled **Compliance**:
 
-    CS Team KPI                                    <- fixed page title
-      Compliance                          Business        Overall
-        [ Internal ][ Client ][ Scorecard ]  [ Client book ]  [ KPI meter ]
+    CS Team KPI                                        <- fixed page title
+      Compliance                   Business       Product      Voice        Overall
+        [ Internal ][ Client ]       [ Client      [ ERP        [ Client     [ KPI
+        [ Scorecard ]                  book ]        module       feedback ]   meter ]
+                                                     adoption ]
 
 The page title and the group label never change. The headline below the tabs does —
 it names the view you are in. A second family of metrics is a second `.group` block
@@ -88,11 +90,11 @@ No build step, no backend, no runtime dependencies at all.
     browser  ->  /api/data  (this project)  ->  docs.google.com  ->  the sheet
 
 `api/data.js` is a serverless function on your own Vercel project. It takes
-`?src=internal`, `?src=client`, `?src=escalations`, `?src=book` or `?src=adoption`,
-fetches the matching sheet server-side and hands back raw CSV. The first three are
-Google Sheets fetched by id with the right tab discovered by its columns; `book` is a
-published-to-web CSV fetched by its full URL; `adoption` fetches several tabs by name
-and returns them together. The browser only ever talks to your own
+`?src=internal`, `?src=client`, `?src=escalations`, `?src=book`, `?src=adoption` or
+`?src=feedback`, fetches the matching sheet server-side and hands back raw CSV. The
+first three are Google Sheets fetched by id with the right tab discovered by its
+columns; `book` and `feedback` are published-to-web CSVs fetched by their full URLs;
+`adoption` fetches several tabs by name and returns them together. The browser only ever talks to your own
 domain, so cross-origin restrictions never apply — which is why this is a function
 and not a direct `fetch` to Google.
 
@@ -111,8 +113,12 @@ Authentication.
 ### Pointing at a different sheet or tab
 
 Project → Settings → Environment Variables: `SHEET_ID` / `SHEET_GID` for the internal
-tracker, `CLIENT_SHEET_ID` / `CLIENT_SHEET_GID` for the client one. No code change
-needed. Defaults are in `api/data.js`.
+tracker, `CLIENT_SHEET_ID` / `CLIENT_SHEET_GID` for the client one, `BOOK_CSV_URL` and
+`FEEDBACK_CSV_URL` for the two published CSVs, `ADOPTION_SHEET_ID` for the usage-score
+workbook. No code change needed. Defaults are in `api/data.js`.
+
+Republishing a sheet can mint a new link, so if a published source starts failing,
+check the URL before anything else — the error on the page names the variable to set.
 
 ## Deploy
 
@@ -178,8 +184,11 @@ one on screen, so a spreadsheet can total it.
 
 ## KPI meter
 
-**Overall -> KPI meter** puts the three halves on one screen: a card per team with a
-compliance dial, a business dial and a module adoption dial.
+**Overall -> KPI meter** puts the four measures on one screen: a card per team with a
+compliance dial, a business dial, a module adoption dial and a client feedback dial —
+side by side, never blended. Under the adoption and feedback dials sit their coverage
+lines, because both are averages over whichever clients have been measured and neither
+dial can show its own denominator.
 
 ### Choosing months
 
@@ -422,6 +431,82 @@ book, map it here on evidence rather than resemblance. Anything that still does 
 resolve is **named on the meter note** rather than dropped, because an unmatched
 client is revenue counting towards nobody.
 
+## Client feedback
+
+**Voice -> Client feedback** is the only source on this dashboard the CS team does
+not write. Calls, book and adoption are all our record of our own work; this is the
+client saying whether any of it landed. It comes from the **Okie Dokie Feedback
+Form**'s own responses tab, published to the web as CSV and read as `?src=feedback`.
+
+Four of the form's questions become measures: support quality, overall satisfaction
+(1-5), whether they would recommend, and — the one the CS team actually controls —
+how many of its clients have answered at all.
+
+### Coverage is the first number, not the last
+
+The tab leads with how much of the book has been heard from, and the satisfaction
+score comes second. That order is deliberate. A satisfaction average can be improved
+by asking fewer people, which is the one thing this measure must never reward, and a
+large green percentage at the top of the page is read as the finding no matter what
+the note underneath it says.
+
+Clients who have not answered are left out of every average rather than counted as
+dissatisfied. Silence is not a bad review. They are all named at the foot of the tab,
+largest first, for the same reason the never-scored clients are named on the adoption
+tab: excluding them is only defensible if the page says who they are.
+
+### Thin samples are marked, and never go green
+
+Below three responses a team's average is a couple of opinions, not a measurement.
+The figure still shows — hiding it is its own distortion — but it is labelled
+**thin**, the dial does not read as target met however warm the replies, and the team
+table is sorted by coverage rather than by score so one happy reply cannot outrank
+twelve mixed ones.
+
+The 80% target (4 out of 5) is a placeholder, exactly like the adoption one. Nobody
+has agreed it and the page says so.
+
+### The institution field is the weak link
+
+Every other join on this page is between two of our own sheets. This one matches on
+an institution name the respondent typed themselves, so a client can answer under a
+spelling the book does not have — and then their feedback counts towards nobody. Those
+names are listed on the tab and on the KPI meter; map one to its client in
+`FEED_ALIAS` in `index.html` when you know the two are the same, and never because
+they merely look similar.
+
+**Fix this at the source if you can.** Make the institution question a dropdown fed
+from the client list rather than free text. That removes the whole class of problem,
+and it is the difference between feedback that can be attributed to an RM and feedback
+that cannot.
+
+### One client, one voice
+
+A client that answers repeatedly counts once, through its most recent response —
+otherwise an institution that fills the form monthly outvotes ten that answered once.
+Every submission is still listed on the tab, with the superseded ones marked, because
+a score that moved is the most useful thing this sheet can tell you.
+
+### Nothing is scored as zero when it is absent
+
+A blank answer, an option this page does not know, a row naming no institution, a
+satisfaction score outside 1-5 — each is reported on the page and left out of the
+arithmetic. With a sheet this small, quietly turning a non-answer into a bad score
+would move a team's number more than the real answers do. Answer options are listed
+in `SUPPORT_SCALE`, `RECO_SCALE` and `EFFICIENCY_SCALE`; add to them when the form
+gains an option, and the page will name any it meets in the meantime.
+
+Timestamps are read day-first, which is what the sheet uses. A row whose second field
+is over 12 is month-first, and it is corrected and reported rather than silently
+believed.
+
+### There is no compiled fallback, deliberately
+
+The book and the adoption grid both fall back to a snapshot built into the page when
+their sheet fails. This one falls back to nothing and says why. A snapshot of what
+clients think ages in a way a client list does not, and the two test submissions
+currently in the sheet, baked into the page, would read as findings.
+
 ## Client book
 
 The **Business -> Client book** tab shows who owns what: revenue by RM with each one's
@@ -659,11 +744,22 @@ entries loaded and when.
     node qa.js
     TZ=Asia/Kolkata node qa.js
 
-454 assertions with the network mocked: parsing (spacer rows above the header, quoted
+502 assertions with the network mocked: parsing (spacer rows above the header, quoted
 fields containing commas and newlines, blank assignees, case-variant names), every
 failure path (sheet not shared, network down, unparseable content), the date-window
 rules, cross-checks between the three places misses are counted, escaping of sheet
 content, the branding and embedded logo, the page title and metric grouping, the monthly scorecard and its CSV export, the coverage warning firing only for a month that really is outside the data, scorecard sorting (every column, both directions, exempt cells sinking, CSV matching the screen), the remembered view mode, range, tab and sort order, hidden people leaving no trace in any count while exempt people keep their row, the client book tab and its filters, the book column sitting beside compliance without altering it, lakh/crore formatting, pod resolution from first names with every failure reported on the page, the KPI meter (all three dials, degenerate rosters, and an invariant that meter compliance equals the pooled scorecard rows team by team), static hygiene (no duplicate ids, no dangling $() references, nothing declared and never used), the (i) panel agreeing with its dial down to the date count, and a sweep over every tab checking that what should be hidden is hidden in computed style rather than merely flagged, the source switch, the combined roster, per-tracker exemptions, the three view modes and their persistence, Sunday handling in Today/Yesterday, module adoption (a CSV round trip through the compiled snapshot, scratch rows dropped or reported but never counted, the team totals reconciling to the matched rows so nothing is double-counted or lost, ownership taken from the book rather than the tab with both sides of each disagreement named, coverage stated on every card, unscored clients excluded rather than zeroed, and three failure paths — an impossible score above its own denominator, a raw per-RM tab published by mistake, and an empty sheet — each falling back to the snapshot with the reason shown),
+client feedback (the form's questions found by fragment rather than by position, one
+client's repeat submissions collapsing to the latest while both stay visible, an
+institution outside the book counted towards nobody and named, an unknown answer
+option and an out-of-range score reported rather than scored, coverage taking the
+whole book as its denominator, teams ordered by coverage rather than by score, thin
+samples marked and never reading as target met, the never-answered table matching
+exactly the clients with no response and ordered by real revenue, and a failed sheet
+leaving an empty tab that says why rather than an invented figure), a sweep that
+clicks every tab in every group and checks the view actually moved — the bug that
+found, 5 Aug, was a group added to the render list but not to the click wiring, which
+renders perfectly and does nothing —
 inverted date ranges, and timezone independence. Run them after any change to the parser — the
 Asana form fields are expected to change once back-dated entries are blocked.
 

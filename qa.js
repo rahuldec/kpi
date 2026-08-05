@@ -138,8 +138,49 @@ const ADOPT_SHEET = (() => {
   return blocks.join('\n\n');
 })();
 
+/* The feedback form's responses tab. Headers are the questions themselves, at
+   full length and with the trailing spaces the real sheet carries, because that
+   is what the fragment matching has to survive.
+
+   Deliberately awkward: one client answers twice (the later one must win and the
+   earlier must still be visible), one institution is not in the book at all, one
+   row names no institution, one support answer is not an option this page knows,
+   and one satisfaction score is out of range. Every one of those must be
+   reported rather than scored or dropped. */
+const FEED_HEAD = [
+  'Timestamp',
+  'Name of the Institution?',
+  'Name and designation of the person filling the form? ',
+  'How user-friendly do you find the interface of the ERP system? ',
+  'Which ERP modules do you use most frequently ? *',
+  'Are there any features or modules you feel are missing or need improvement? If yes, please specify.',
+  'Has the ERP system improved the operational efficiency of your institution?',
+  'How would you rate the quality of customer support provided by Okie Dokie and How responsive has the customer support team been when addressing your issues?',
+  'What are the top 3 things you like about the ERP system? ',
+  'Is there any improvement which Okie Dokie requires? If Yes, in which areas?',
+  'Would you recommend Okie Dokie ERP to other educational institutions? ',
+  'How satisfied are you with the overall ERP system provided by Okie Dokie? '
+].map(h => `"${h}"`).join(',');
+
+const FEED_SHEET = [
+  FEED_HEAD,
+  // Sukhmeet's, answered twice — the June one must be superseded by the August one
+  '05/08/2026 16:16:08,Budha College Karnal,Karan,Extremely user-friendly,Fee Management,,Significantly improved,Excellent,"Speed, support, reports",Transport module,Highly Likely to Recommend,5',
+  '11/06/2026 09:02:00,Budha College Karnal,Karan,Somewhat user-friendly,Fee Management,,Improved,Good,Reports,Nothing,Likely to Recommend,3',
+  // Sukhmeet's second client
+  '04/08/2026 11:00:00,SIS Academy,Ramesh,Extremely user-friendly,Transport Management,Hostel module,Significantly improved,Good,"Attendance, fees",Faster tickets,Likely to Recommend,4',
+  // Kashish's, unhappy
+  '03/08/2026 10:00:00,Vedashree School,Sunita,Difficult,Student App,Exam module is missing,No change,Poor,Nothing much,Support response time,Unlikely to Recommend,2',
+  // an institution the client book has never heard of
+  '02/08/2026 10:00:00,Zzz Unknown Academy,Anon,Extremely user-friendly,SIS,,Improved,Excellent,All good,None,Highly Likely to Recommend,5',
+  // no institution — cannot be attached to any client
+  '01/08/2026 10:00:00,,Anon,Extremely user-friendly,SIS,,Improved,Excellent,,,Highly Likely to Recommend,5',
+  // an option this page does not know, and a score outside 1-5
+  '31/07/2026 10:00:00,OPS Karnal,Vinod,Extremely user-friendly,Library,,Improved,Stupendous,Good,None,Highly Likely to Recommend,9'
+].join('\n');
+
 function boot({ body = SHEET, clientBody = CLIENT_DEFAULT, escBody = ESC_SHEET,
-                bookBody = BOOK_SHEET, adoptBody = ADOPT_SHEET,
+                bookBody = BOOK_SHEET, adoptBody = ADOPT_SHEET, feedBody = FEED_SHEET,
                 status = 200, reject = false, store = null } = {}) {
   const errs = [], calls = [];
   // beforeParse installs the mock before the page's own <script> runs, so the
@@ -165,6 +206,7 @@ function boot({ body = SHEET, clientBody = CLIENT_DEFAULT, escBody = ESC_SHEET,
           text: () => Promise.resolve(
             src === 'escalations' ? escBody :
             src === 'adoption' ? adoptBody :
+            src === 'feedback' ? feedBody :
             src === 'book' ? bookBody :
             src === 'client' ? clientBody : body)
         });
@@ -709,11 +751,11 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
           tab().closest('.group')?.querySelector('.grouplabel')?.textContent === 'Business',
           tab().closest('.group')?.querySelector('.grouplabel')?.textContent);
     check('every group sits on one row',
-          doc.querySelectorAll('.groups > .group').length === 4,
+          doc.querySelectorAll('.groups > .group').length === 5,
           String(doc.querySelectorAll('.groups > .group').length));
     check('and each one is labelled', (() => {
       const l = [...doc.querySelectorAll('.groups > .group .grouplabel')].map(x => x.textContent);
-      return JSON.stringify(l) === JSON.stringify(['Compliance','Business','Product','Overall']);
+      return JSON.stringify(l) === JSON.stringify(['Compliance','Business','Product','Voice','Overall']);
     })(), [...doc.querySelectorAll('.groups > .group .grouplabel')].map(x => x.textContent).join());
 
     tab().click(); await settle();
@@ -1048,12 +1090,13 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     check('excluded people are not reported as unplaced',
           !/Mehak|Akshat/.test((txt(doc, '#meterhint').match(/in no team.*/) || [''])[0]),
           txt(doc, '#meterhint'));
-    check('each card carries all three dials',
-          cards.every(c => c.querySelectorAll('.dial').length === 3));
-    check('the dials are labelled compliance, business and adoption',
+    check('each card carries all four dials',
+          cards.every(c => c.querySelectorAll('.dial').length === 4));
+    check('the dials are labelled compliance, business, adoption and feedback',
           cards.every(c => {
             const l = [...c.querySelectorAll('.dial .lbl')].map(x => x.textContent);
-            return l[0] === 'Compliance' && l[1] === 'Business' && l[2] === 'Module adoption';
+            return l[0] === 'Compliance' && l[1] === 'Business' &&
+                   l[2] === 'Module adoption' && l[3] === 'Client feedback';
           }));
 
     const card = n => cards.find(c => c.querySelector('h4').textContent === n);
@@ -1081,7 +1124,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
 
     // the two are never blended into one figure
     check('no card shows a single combined score',
-          cards.every(c => c.querySelectorAll('.val').length === 3));
+          cards.every(c => c.querySelectorAll('.val').length === 4));
     check('the note says why they are not blended',
           /not blended/.test(txt(doc, '#meterhint')), txt(doc, '#meterhint'));
     check('the note names the month in full', /July 2026/.test(txt(doc, '#meterhint')),
@@ -1364,7 +1407,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     check('every card carries an escalation line',
           cards.every(c => c.querySelector('.escline')));
     check('escalations are not drawn as a dial — a count has no denominator',
-          cards.every(c => c.querySelectorAll('.track').length === 3));
+          cards.every(c => c.querySelectorAll('.track').length === 4));
 
     // Budha College Karnal and Vedashree School are Sukhmeet's and Kashish's in
     // the embedded book; the fixture opens one on each.
@@ -1648,7 +1691,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
   {
     const { doc, errs, calls } = boot(); await settle();
     check('boots with no JS errors', errs.length === 0, errs.join(' | '));
-    check('called the data endpoint for all five sheets', calls.length === 5 &&
+    check('called the data endpoint for all six sheets', calls.length === 6 &&
           calls.every(u => /^\/api\/data\?src=/.test(u)), calls.join());
     /* Order is load-bearing, not incidental: buildEscalations matches escalation
        names against the client book, so the book has to be in place first or the
@@ -1658,7 +1701,9 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
       /* Both adoption and escalations match against client names, so both must
          follow the book — neither may overtake it. */
       return src[0] === 'internal' && src[1] === 'client' && src[2] === 'book' &&
-             src.indexOf('adoption') > 2 && src.indexOf('escalations') > 2;
+             src.indexOf('adoption') > 2 && src.indexOf('escalations') > 2 &&
+             /* Feedback matches on client names too, so it may not overtake the book. */
+             src.indexOf('feedback') > 2;
     })(), calls.join());
     check('cache-busted the request', /[?&]t=\d+/.test(calls[0] || ''), calls[0]);
     check('content revealed', doc.getElementById('content').hidden === false);
@@ -1780,7 +1825,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
   {
     const { doc, calls } = boot(); await settle();
     doc.getElementById('refresh').click(); await settle();
-    check('refresh refetches every sheet', calls.length === 10, calls.length + ' calls');
+    check('refresh refetches every sheet', calls.length === 12, calls.length + ' calls');
   }
 
   // ── 7. internal consistency of the figures ─────────────────────
@@ -2154,6 +2199,223 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
           /client totals only/.test(first.textContent) ||
           doc.querySelectorAll('#adoptmodules tbody tr').length > 1,
           first.textContent.slice(0, 80));
+  }
+
+  // ── 12b-ii. every tab is actually wired ────────────────────────
+  {
+    /* The bug this exists to catch, found 5 Aug: the Voice group was added to the
+       list markSource walks but not to the list the click handler binds, so the
+       tab rendered perfectly and did nothing when clicked — the exact failure the
+       comment above that loop warns about. Listing the groups is not the same as
+       proving each one works, so this clicks every tab there is and checks the
+       view actually moved. A new group is now covered the day it is added. */
+    const { doc, win } = boot({ body: TEAM_INT, clientBody: TEAM_CLI }); await settle();
+    const tabs = [...doc.querySelectorAll('.groups button[data-src]')];
+    check('every group has at least one tab', tabs.length >= 6, String(tabs.length));
+    const dead = [];
+    for (const b of tabs){
+      const want = b.dataset.src;
+      /* Click away first, or a tab that is already current is skipped by the
+         handler and would pass without ever being bound. */
+      const other = tabs.find(x => x.dataset.src !== want);
+      other.click(); await settle();
+      b.click(); await settle();
+      const panel = doc.getElementById(win.eval(`modeOf(${JSON.stringify(want)})`)) ||
+                    doc.getElementById('chase');
+      if (win.eval('SOURCE') !== want || (panel && panel.hidden)) dead.push(want);
+    }
+    check('clicking any tab switches to it', dead.length === 0, 'inert: ' + dead.join());
+    check('and every tab is pressed only when current', (() => {
+      const cur = win.eval('SOURCE');
+      return tabs.every(b =>
+        b.getAttribute('aria-pressed') === String(b.dataset.src === cur));
+    })(), win.eval('SOURCE'));
+  }
+
+  // ── 12c. the client feedback tab ───────────────────────────────
+  {
+    const { doc, win } = boot({ body: TEAM_INT, clientBody: TEAM_CLI }); await settle();
+    const tab = doc.querySelector('#sources5 button[data-src="feedback"]');
+    check('the feedback tab exists in its own group',
+          tab?.closest('.group')?.querySelector('.grouplabel')?.textContent === 'Voice');
+    tab.click(); await settle();
+
+    check('the feedback panel is shown', doc.getElementById('feedback').hidden === false);
+    check('and every other panel is hidden',
+          ['meter','clients','adoption','scorecard','chase','boardsec'].every(id =>
+            doc.getElementById(id).hidden === true));
+    check('the month picker is not offered', doc.getElementById('monthwrap').hidden === true);
+    check('nor the joined toggle', doc.getElementById('joinedwrap').hidden === true);
+    check('the heading changes with the tab',
+          /say/.test(doc.getElementById('h1').textContent));
+
+    const rows = sel => [...doc.querySelectorAll(sel + ' tbody tr')]
+      .map(r => [...r.children].map(c => c.textContent.trim()));
+
+    /* One client answered twice. The averages must use the later response only —
+       otherwise an institution that fills the form monthly outvotes ten that
+       answered once — while both submissions stay visible. */
+    const resp = rows('#feedresponses');
+    check('every submission is listed, repeats included',
+          resp.filter(r => /Budha College Karnal/.test(r[0])).length === 2,
+          String(resp.length));
+    check('the superseded one is marked as such',
+          resp.filter(r => /superseded/.test(r[2])).length === 1,
+          resp.map(r => r[2]).join(' | '));
+    check('and it is the older one that is marked', (() => {
+      const b = resp.filter(r => /Budha College Karnal/.test(r[0]));
+      /* Guarded rather than indexed blind: when the table comes back short this
+         must report which assertion failed, not take the whole suite down with a
+         TypeError three sections from the cause. */
+      return b.length === 2 && /superseded/.test(b[1][2]) && !/superseded/.test(b[0][2]);
+    })(), resp.filter(r => /Budha/.test(r[0])).map(r => r[2] + '=' + r[3]).join(' | '));
+    const budha = () => resp.find(r => /Budha College Karnal/.test(r[0])) || [];
+    check('the day-first timestamp is read as a day, not a month',
+          /5 Aug/.test(budha()[2] || ''), budha()[2]);
+
+    /* The headline average is over the LATEST response per matched client:
+       Budha 5, SIS 4, Vedashree 2 — OPS Karnal's 9 is out of range and must not
+       be scored, and Zzz Unknown is not in the book at all. */
+    const sat = Number((txt(doc, '#feedtotals').match(/([\d.]+) of 5/) || [])[1]);
+    check('satisfaction averages the latest response per client',
+          Math.abs(sat - (5 + 4 + 2) / 3) < 0.05, String(sat));
+    check('an out-of-range score is not averaged in',
+          !/OPS Karnal: satisfaction reads "9", which is not 1-5/.test('') &&
+          /not 1-5/.test(txt(doc, '#feedhint')), txt(doc, '#feedhint'));
+    check('an unknown support option is reported, not scored',
+          /Stupendous/.test(txt(doc, '#feedhint')), txt(doc, '#feedhint'));
+    check('an institution outside the book counts towards nobody',
+          /Zzz Unknown Academy/.test(txt(doc, '#feedhint')), txt(doc, '#feedhint'));
+    check('and a response naming no institution is reported',
+          /names no institution/.test(txt(doc, '#feedhint')), txt(doc, '#feedhint'));
+
+    /* Coverage is the first thing on the tab, and it is the client count over the
+       whole book — not over the clients who happened to answer. */
+    const heard = (txt(doc, '#feedtotals').match(/(\d+) of (\d+) clients/) || []);
+    check('coverage counts the whole book as its denominator',
+          Number(heard[2]) === win.eval('CLIENTS.filter(c => c.o).length'),
+          heard.join('/'));
+    check('and only clients matched to the book count as heard',
+          Number(heard[1]) === 4, heard.join('/'));
+
+    // by team
+    const teams = rows('#feedteams');
+    check('the team table names every owner with clients',
+          teams.length === win.eval('new Set(CLIENTS.filter(c => c.o).map(c => c.o)).size'),
+          String(teams.length));
+    check('a team heard from nobody still has a row',
+          teams.some(r => /0 of \d+/.test(r[1])), teams.map(r => r[1]).join(' | '));
+    check('teams are ordered by how much of the book answered, not by score', (() => {
+      const frac = r => { const m = r[1].match(/(\d+) of (\d+)/); return Number(m[1]) / Number(m[2]); };
+      return teams.every((r, i) => i === 0 || frac(teams[i - 1]) >= frac(r));
+    })(), teams.map(r => r[0] + ' ' + r[1]).join(' | '));
+    check('a thin sample is marked as thin',
+          teams.some(r => /thin/.test(r[0])), teams.map(r => r[0]).join(' | '));
+    check('the team figures agree with feedForTeam', (() => {
+      const row = teams.find(r => /Kashish Goel/.test(r[0])) || [];
+      const f = win.eval('JSON.stringify((({heard,total,sat}) => ({heard,total,sat}))(feedForTeam("Kashish Goel")))');
+      const {heard: h, total: t, sat: sa} = JSON.parse(f);
+      return row[1] === `${h} of ${t}` && row[3] === (sa === null ? '—' : sa.toFixed(1));
+    })(), (teams.find(r => /Kashish Goel/.test(r[0])) || []).join('/'));
+
+    /* The clients who said nothing are the point of the tab. They must be named,
+       ordered by real revenue rather than by the printed lakh/crore string, and
+       must be exactly the owned clients with no response. */
+    const gaps = rows('#feedgaps');
+    check('every client not heard from is named',
+          gaps.length === win.eval('CLIENTS.filter(c => c.o).length') - 4,
+          String(gaps.length));
+    check('none of the ones who answered appear there',
+          !gaps.some(r => /Budha College Karnal|SIS Academy|Vedashree School|OPS Karnal/.test(r[0])),
+          gaps.slice(0, 4).map(r => r[0]).join(' | '));
+    check('and they are ordered by revenue, not by the printed string', (() => {
+      const rev = n => win.eval(`(CLIENTS.find(c => c.n === ${JSON.stringify(n)}) || {}).r || 0`);
+      return gaps.every((r, i) => i === 0 || rev(gaps[i - 1][0]) >= rev(r[0]));
+    })(), gaps.slice(0, 5).map(r => r[0] + ' ' + r[2]).join(' | '));
+    check('the note says silence is not counted as unhappy',
+          /not answered/.test(txt(doc, '#feedgapnote')), txt(doc, '#feedgapnote'));
+    check('and warns against improving the score by asking fewer people',
+          /asking\s+fewer people/.test(txt(doc, '#feedgapnote')), txt(doc, '#feedgapnote'));
+
+    // free text, verbatim
+    const asks = rows('#feedasks');
+    check('the free-text answers are shown word for word',
+          asks.some(r => r.includes('Support response time')),
+          asks.map(r => r.join('/')).join(' | '));
+    check('and a missing-module answer is not lost',
+          asks.some(r => /Exam module is missing/.test(r.join(' '))),
+          asks.map(r => r.join('/')).join(' | '));
+  }
+
+  // ── 12d. feedback on the KPI meter ─────────────────────────────
+  {
+    const { doc, win } = boot({ body: TEAM_INT, clientBody: TEAM_CLI }); await settle();
+    doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
+    const cards = [...doc.querySelectorAll('.mcard')];
+    const card = n => cards.find(c => new RegExp(n).test(c.querySelector('h4').textContent));
+    const dialOf = (c, i) => ({
+      lbl: c.querySelectorAll('.dial .lbl')[i].textContent,
+      val: c.querySelectorAll('.val')[i].textContent,
+      sub: c.querySelectorAll('.sub')[i].textContent,
+      met: c.querySelectorAll('.track')[i].classList.contains('met')
+    });
+
+    check('every card carries a heard-from line', cards.every(c => c.querySelectorAll('.covline').length === 2));
+    const sk = dialOf(card('Sukhmeet Singh'), 3);
+    check('the feedback dial reads out of five', /\/5 from \d+ client/.test(sk.sub), sk.sub);
+    check('and the percentage is that score over five',
+          sk.val === Math.min(99, Math.round(Number(sk.sub.match(/([\d.]+)\/5/)[1]) / 5 * 100)) + '%',
+          sk.sub + ' -> ' + sk.val);
+    /* Two replies out of a large book cannot certify a team, however warm they
+       are. The figure shows; it does not go green. */
+    check('a thin sample never reads as target met', sk.met === false, String(sk.met));
+    check('and the card says it is too few to read as a team score',
+          /too few/.test(card('Sukhmeet Singh').querySelectorAll('.covwho')[1].textContent),
+          card('Sukhmeet Singh').querySelectorAll('.covwho')[1].textContent);
+
+    const none = cards.find(c => /none of \d+/.test(c.querySelectorAll('.covline')[1].textContent));
+    check('a team nobody answered for shows no score rather than zero',
+          none && dialOf(none, 3).val === '—' && /no responses yet/.test(dialOf(none, 3).sub),
+          none ? dialOf(none, 3).val + ' ' + dialOf(none, 3).sub : 'no such card');
+
+    check('the info panel explains the denominator', (() => {
+      card('Sukhmeet Singh').querySelector('button.info').click();
+      return /clients replied/.test(card('Sukhmeet Singh').querySelector('.how').textContent);
+    })(), card('Sukhmeet Singh').querySelector('.how')?.textContent.slice(0, 120));
+    check('and names the clients it has not heard from',
+          /Not heard from/.test(card('Sukhmeet Singh').querySelector('.how').textContent));
+    check('and quotes what they asked for',
+          /Support response time|Transport module/.test(
+            card('Kashish Goel').querySelector('.how').textContent) ||
+          /asked for/.test(card('Sukhmeet Singh').querySelector('.how').textContent));
+    check('the hint names institutions the book does not have',
+          /Zzz Unknown Academy/.test(txt(doc, '#meterhint')), txt(doc, '#meterhint'));
+  }
+
+  // ── 12e. feedback failure paths ────────────────────────────────
+  {
+    /* No compiled fallback exists for this source and none should: a snapshot of
+       what clients think ages badly, and two test submissions baked into the page
+       would read as findings. An empty tab that says why is the correct failure. */
+    const { doc, errs } = boot({ body: TEAM_INT, clientBody: TEAM_CLI,
+                                feedBody: 'not,a,feedback,sheet\n1,2,3,4' });
+    await settle();
+    check('a feedback sheet of the wrong shape does not take the page down',
+          doc.getElementById('content').hidden === false && errs.length === 0, errs.join(' | '));
+    doc.querySelector('#sources5 button[data-src="feedback"]').click(); await settle();
+    check('the failure is stated on the tab',
+          /did not load/.test(txt(doc, '#feedhint')), txt(doc, '#feedhint'));
+    check('and nothing is invented in its place',
+          [...doc.querySelectorAll('#feedresponses tbody tr')].length === 1 &&
+          /No response/.test(txt(doc, '#feedresponses')), txt(doc, '#feedresponses'));
+    check('the coverage dial reads none rather than a percentage',
+          /0 of \d+ clients/.test(txt(doc, '#feedtotals')), txt(doc, '#feedtotals'));
+
+    doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
+    check('the meter says the sheet did not load',
+          /feedback sheet did not load/i.test(txt(doc, '#meterhint')), txt(doc, '#meterhint'));
+    check('and the compliance dials are unaffected',
+          /\d+\/\d+ entries/.test(txt(doc, '#meters')));
   }
 
   // ── 13. adoption failure paths ─────────────────────────────────
