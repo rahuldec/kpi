@@ -189,6 +189,10 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
 .escline.cool .n,.covline.cool .n{color:var(--faint);font-weight:500}
 .how .gaps{font-size:12.5px;line-height:1.5;color:var(--ink);margin:4px 0 0}
 .how .gaps.none{color:var(--faint)}
+/* The figure on the right of a coverage line, matching a dial's .sub exactly so
+   the four rows of a card line up down the same edge. */
+.escline .sub,.covline .sub{font-size:12.5px;color:var(--faint);margin-left:auto;
+  text-align:right;white-space:nowrap}
 .escwho,.covwho{font-size:12.5px;line-height:1.45;color:var(--miss);margin:5px 0 0 97px}
 .escwho.cool,.covwho.cool{color:var(--faint)}
 
@@ -2112,20 +2116,22 @@ function escDetail(r){
 function coverLine(r){
   const a = r.adopt;
   if (!a.total)
-    return `<p class="covwho cool">no clients in the book</p>`;
-  if (!a.scored)
-    return `<div class="covline hot"><span class="lbl">Scored</span>` +
-           `<span class="n">none of ${a.total}</span></div>` +
-           `<p class="covwho">no client on this book has been scored yet</p>`;
+    return `<div class="covline cool"><span class="lbl">Scored</span>` +
+           `<span class="n">no clients in the book</span></div>`;
 
+  /* One row, laid out like a dial: label, figure, and the money pushed right.
+     This used to spill a wrapped red sentence under every card — "covers ₹40.6L
+     of ₹67.9L — 60% of the book" — which is the arithmetic, and the arithmetic
+     belongs in the (i) panel. What has to stay on the card is the denominator
+     itself, because the dial above cannot show it. The revenue pair stays too:
+     it is the only place the business dial's book total is printed twice, which
+     is what caught the stale-BOOK bug. */
   const full = a.scored === a.total;
-  const revPct = a.coverage === null ? null : Math.round(a.coverage * 100);
   return `<div class="covline ${full ? 'cool' : 'hot'}">` +
          `<span class="lbl">Scored</span>` +
-         `<span class="n">${a.scored} of ${a.total} clients</span></div>` +
-         (full ? '' :
-           `<p class="covwho">covers ${esc(inr(a.revCovered))} of ${esc(inr(a.revTotal))}` +
-           `${revPct === null ? '' : ` — ${revPct}% of the book`}</p>`);
+         `<span class="n">${a.scored ? `${a.scored} of ${a.total} clients`
+                                     : `none of ${a.total}`}</span>` +
+         `<span class="sub">${esc(inr(a.revCovered))} of ${esc(inr(a.revTotal))}</span></div>`;
 }
 
 /* The feedback dial, shown working. The denominator matters more here than
@@ -2181,25 +2187,23 @@ function feedDetail(r){
 function feedLine(r){
   const f = r.feed;
   if (!f.total)
-    return `<p class="covwho cool">no clients in the book</p>`;
+    return `<div class="covline cool"><span class="lbl">Heard from</span>` +
+           `<span class="n">no clients in the book</span></div>`;
   if (FEED_ERROR)
     return `<div class="covline cool"><span class="lbl">Heard from</span>` +
-           `<span class="n">—</span></div>` +
-           `<p class="covwho cool">feedback sheet not loaded</p>`;
-  if (!f.heard)
-    return `<div class="covline hot"><span class="lbl">Heard from</span>` +
-           `<span class="n">none of ${f.total}</span></div>` +
-           `<p class="covwho">no client on this book has answered the form yet</p>`;
+           `<span class="n">—</span>` +
+           `<span class="sub">sheet not loaded</span></div>`;
 
+  /* Same shape as the Scored line above it. The thin-sample warning is not here:
+     it is a sentence, and a sentence on a card is clutter. The dial refuses to
+     read as target met on a thin sample, and the (i) panel says why in full —
+     which is where anyone asking the question will already be looking. */
   const full = f.heard === f.total;
-  const revPct = f.revCoverage === null ? null : Math.round(f.revCoverage * 100);
   return `<div class="covline ${full ? 'cool' : 'hot'}"><span class="lbl">Heard from</span>` +
-         `<span class="n">${f.heard} of ${f.total} clients</span></div>` +
-         `<p class="covwho${full ? ' cool' : ''}">` +
-         (f.thin ? `too few to read as a team score. ` : '') +
-         (full ? `every client on this book has answered`
-               : `${esc(inr(f.revHeard))} of ${esc(inr(f.revTotal))}` +
-                 `${revPct === null ? '' : ` — ${revPct}% of the book`}`) + `</p>`;
+         `<span class="n">${f.heard ? `${f.heard} of ${f.total} clients`
+                                    : `none of ${f.total}`}</span>` +
+         (f.heard ? `<span class="sub">${esc(inr(f.revHeard))} of ${esc(inr(f.revTotal))}</span>`
+                  : '') + `</div>`;
 }
 
 function escLine(r){

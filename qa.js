@@ -1126,7 +1126,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
 
     const card = n => cards.find(c => c.querySelector('h4').textContent === n);
     const val = (c, i) => c.querySelectorAll('.val')[i].textContent;
-    const sub = (c, i) => c.querySelectorAll('.sub')[i].textContent;
+    const sub = (c, i) => c.querySelectorAll('.dial .sub')[i].textContent;
 
     // Business must agree with the book table, which is the same source
     check('business is the book over the target',
@@ -1297,7 +1297,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
           /internal calls/.test(how) && /client calls/.test(how));
 
     // the explanation must not be able to disagree with the dial it explains
-    const dialSub = sultan.querySelectorAll('.sub')[0].textContent;   // "N/M entries"
+    const dialSub = sultan.querySelectorAll('.dial .sub')[0].textContent;   // "N/M entries"
     const m = dialSub.match(/(\d+)\/(\d+)/);
     check('the panel arithmetic matches the dial',
           new RegExp(`${m[2]} expected`).test(how) && new RegExp(`${m[1]} filed`).test(how),
@@ -1974,7 +1974,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     const cards = [...doc.querySelectorAll('.mcard')];
     const card = n => cards.find(c => c.querySelector('h4').textContent === n);
     const dialVal = (c, i) => c.querySelectorAll('.val')[i].textContent;
-    const dialSub = (c, i) => c.querySelectorAll('.sub')[i].textContent;
+    const dialSub = (c, i) => c.querySelectorAll('.dial .sub')[i].textContent;
 
     // the round trip: the published CSV must read back as the snapshot
     check('the published sheet is read, not the built-in copy',
@@ -2044,13 +2044,19 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
 
     // coverage: the denominator the dial cannot show has to be on the card
     check('every card states how much of the book was scored',
-          cards.every(c => c.querySelector('.covline, .covwho')));
+          cards.every(c => c.querySelector('.covline')));
+    /* The card carries the denominator and the money, and nothing else. The
+       arithmetic sentence that used to sit under it moved into the (i) panel —
+       a card people read at a glance cannot afford a wrapped paragraph per dial. */
+    check('and does it in one row, not a paragraph',
+          !cards.some(c => c.querySelector('.covwho')),
+          (cards.find(c => c.querySelector('.covwho')) || {textContent: ''}).textContent);
     check('a partly-scored team is flagged',
           !!card('Mansi Rana').querySelector('.covline.hot'),
           card('Mansi Rana').querySelector('.covline')?.textContent);
     check('and names the revenue behind the gap',
-          /of ₹/.test(card('Mansi Rana').querySelector('.covwho')?.textContent || ''),
-          card('Mansi Rana').querySelector('.covwho')?.textContent);
+          /of ₹/.test(card('Mansi Rana').querySelector('.covline .sub')?.textContent || ''),
+          card('Mansi Rana').querySelector('.covline .sub')?.textContent);
 
     /* Unscored clients must be absent from the ratio, not zero. Scoring them as
        zero would make a team that simply has not been assessed look failing. */
@@ -2078,13 +2084,13 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
        printed the same team's total beside it. */
     check('the business dial and the adoption card agree on the book', (() => {
       return cards.every(c => {
-        const biz = (c.querySelectorAll('.sub')[1].textContent.match(/^₹([\d.]+)L/) || [])[1];
-        const cov = (c.querySelector('.covwho')?.textContent.match(/of ₹([\d.]+)L/) || [])[1];
+        const biz = (c.querySelectorAll('.dial .sub')[1].textContent.match(/^₹([\d.]+)L/) || [])[1];
+        const cov = (c.querySelector('.covline .sub')?.textContent.match(/of ₹([\d.]+)L/) || [])[1];
         return !cov || !biz || cov === biz;
       });
     })(), cards.map(c => c.querySelector('h4').textContent + ':' +
-          c.querySelectorAll('.sub')[1].textContent + '|' +
-          (c.querySelector('.covwho')?.textContent || '')).join(' ~ ').slice(0, 200));
+          c.querySelectorAll('.dial .sub')[1].textContent + '|' +
+          (c.querySelector('.covline .sub')?.textContent || '')).join(' ~ ').slice(0, 200));
 
     // a team with no book is off this view entirely, as with business
     check('teams with no client book are still excluded',
@@ -2393,7 +2399,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     const dialOf = (c, i) => ({
       lbl: c.querySelectorAll('.dial .lbl')[i].textContent,
       val: c.querySelectorAll('.val')[i].textContent,
-      sub: c.querySelectorAll('.sub')[i].textContent,
+      sub: c.querySelectorAll('.dial .sub')[i].textContent,
       met: c.querySelectorAll('.track')[i].classList.contains('met')
     });
 
@@ -2424,9 +2430,15 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     /* Two replies out of a large book cannot certify a team, however warm they
        are. The figure shows; it does not go green. */
     check('a thin sample never reads as target met', sk.met === false, String(sk.met));
-    check('and the card says it is too few to read as a team score',
-          /too few/.test(card('Sukhmeet Singh').querySelectorAll('.covwho')[1].textContent),
-          card('Sukhmeet Singh').querySelectorAll('.covwho')[1].textContent);
+    /* The warning itself belongs in the (i) panel, not on the card — the card
+       shows the refusal (the dial does not go green) and the panel explains it. */
+    check('and the card does not carry the explanation as a sentence',
+          !/too few/.test(card('Sukhmeet Singh').textContent),
+          card('Sukhmeet Singh').textContent.slice(0, 120));
+    check('while the panel still says why in full', (() => {
+      card('Sukhmeet Singh').querySelector('button.info').click();
+      return /Fewer than 3 replies/.test(card('Sukhmeet Singh').querySelector('.how').textContent);
+    })());
 
     const none = cards.find(c => /none of \d+/.test(c.querySelectorAll('.covline')[1].textContent));
     check('a team nobody answered for shows no score rather than zero',
