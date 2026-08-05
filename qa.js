@@ -82,7 +82,12 @@ const BOOK_SHEET = (() => {
    whatever the snapshot says, the parser has to read back out of a real CSV
    unchanged. Two rows of scratch are included because a real sheet accumulates
    them, and neither may reach a dial. */
-const ADOPT_ROWS = JSON.parse(HTML.match(/const ADOPTION_FALLBACK = (\[.*?\]);/s)[1]);
+const ADOPT_ROWS = JSON.parse(HTML.match(/const ADOPTION_FALLBACK = (\[.*?\]);/s)[1])
+  /* The page stores the module grid and derives the totals from it, so the
+     fixture derives them the same way rather than keeping a second copy. */
+  .map(r => ({...r, s: (r.m.match(/1/g) || []).length,
+                    a: (r.m.match(/1/g) || []).length + (r.m.match(/0/g) || []).length}));
+const ADOPT_MODULES = JSON.parse(HTML.match(/const ADOPTION_MODULES = (\[.*?\]);/s)[1]);
 const ADOPT_SHEET = (() => {
   const q = v => /[",]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
   const head = 'RM,Quarter,As Of,Client,Ownership,Modules Adopted,Modules Applicable,Adoption %';
@@ -666,8 +671,12 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
           tab().closest('.group')?.querySelector('.grouplabel')?.textContent === 'Business',
           tab().closest('.group')?.querySelector('.grouplabel')?.textContent);
     check('every group sits on one row',
-          doc.querySelectorAll('.groups > .group').length === 3,
+          doc.querySelectorAll('.groups > .group').length === 4,
           String(doc.querySelectorAll('.groups > .group').length));
+    check('and each one is labelled', (() => {
+      const l = [...doc.querySelectorAll('.groups > .group .grouplabel')].map(x => x.textContent);
+      return JSON.stringify(l) === JSON.stringify(['Compliance','Business','Product','Overall']);
+    })(), [...doc.querySelectorAll('.groups > .group .grouplabel')].map(x => x.textContent).join());
 
     tab().click(); await settle();
     check('book panel shown', doc.getElementById('clients').hidden === false);
@@ -1996,6 +2005,102 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
       const live = win.eval(`CLIENTS.filter(c=>c.o==='Mansi Rana').reduce((n,c)=>n+(c.r||0),0)`);
       return win.eval(`adoptForTeam('Mansi Rana').revTotal`) === live;
     })());
+  }
+
+  // ── 12b. the ERP module adoption tab ───────────────────────────
+  {
+    const { doc, win } = boot({ body: TEAM_INT, clientBody: TEAM_CLI }); await settle();
+    const tab = doc.querySelector('#sources4 button[data-src="adoption"]');
+    check('the adoption tab exists in its own group',
+          tab?.closest('.group')?.querySelector('.grouplabel')?.textContent === 'Product');
+    tab.click(); await settle();
+
+    check('the adoption panel is shown', doc.getElementById('adoption').hidden === false);
+    check('and every other panel is hidden',
+          ['meter','clients','scorecard','chase','boardsec'].every(id =>
+            doc.getElementById(id).hidden === true));
+    /* Quarterly and not per-person: controls that cannot change a figure here
+       must not be offered, or they imply the numbers respond to them. */
+    check('the month picker is not offered', doc.getElementById('monthwrap').hidden === true);
+    check('nor the joined toggle', doc.getElementById('joinedwrap').hidden === true);
+    check('the heading changes with the tab',
+          /use/.test(doc.getElementById('h1').textContent));
+
+    const rows = sel => [...doc.querySelectorAll(sel + ' tbody tr')]
+      .map(r => [...r.children].map(c => c.textContent.trim()));
+
+    // by module
+    const mods = rows('#adoptmodules');
+    check('every module that applies to somebody is listed',
+          mods.length > 0 && mods.length <= ADOPT_MODULES.length, `${mods.length}`);
+    check('weakest module first', (() => {
+      const p = mods.map(r => parseInt(r[3]));
+      return p.every((v, i) => i === 0 || p[i - 1] <= v);
+    })(), mods.slice(0, 3).map(r => r[0] + ' ' + r[3]).join(' / '));
+    check('a module nobody uses is marked, not merely listed',
+          [...doc.querySelectorAll('#adoptmodules tbody tr')]
+            .filter(r => r.children[3].textContent.trim() === '0%')
+            .every(r => r.children[3].classList.contains('bad')));
+    check('module counts never exceed what the module applies to',
+          mods.every(r => Number(r[1]) <= Number(r[2])));
+
+    // by team — must be the same arithmetic as the KPI meter's dial
+    const teams = rows('#adoptteams');
+    check('the team table agrees with adoptForTeam', teams.every(r => {
+      const t = win.eval(`JSON.stringify(adoptForTeam(${JSON.stringify(r[0])}))`);
+      const o = JSON.parse(t);
+      return Number(r[1]) === o.adopted && Number(r[2]) === o.applicable;
+    }), teams.map(r => r.join(':')).join(' ~ ').slice(0, 160));
+    check('and states how much of each book was scored',
+          teams.every(r => /^\d+ of \d+$/.test(r[4])), teams.map(r => r[4]).join());
+
+    // the totals across the two tables have to be the same number
+    check('team rows sum to the overall figure', (() => {
+      const sum = teams.reduce((n, r) => n + Number(r[1]), 0);
+      const all = win.eval(`[...ADOPT_BY_CLIENT.values()].reduce((n,r)=>n+r.s,0)`);
+      return sum === all;
+    })());
+    check('and so do the module rows', (() => {
+      const sum = mods.reduce((n, r) => n + Number(r[1]), 0);
+      const all = win.eval(`[...ADOPT_BY_CLIENT.values()].reduce((n,r)=>n+r.s,0)`);
+      return sum === all;
+    })(), mods.reduce((n, r) => n + Number(r[1]), 0) + ' vs ' +
+      win.eval(`[...ADOPT_BY_CLIENT.values()].reduce((n,r)=>n+r.s,0)`));
+
+    // every scored client, and every unscored one, named
+    check('one row per scored client',
+          rows('#adoptclients').length === win.eval('ADOPT_BY_CLIENT.size'));
+    const gaps = rows('#adoptgaps');
+    check('the never-scored table names exactly the clients with no score', (() => {
+      const want = win.eval(`CLIENTS.filter(c=>c.o && !ADOPT_BY_CLIENT.has(c.n)).length`);
+      return gaps.length === want;
+    })(), `${gaps.length}`);
+    /* Compare against the underlying figures, not the printed ones: inr() prints
+       lakh and crore, so parsing the digits out of the cell would rank ₹95,000
+       above ₹13.7L. */
+    check('largest gap first', (() => {
+      const v = gaps.map(r => win.eval(
+        `(CLIENTS.find(c=>c.n===${JSON.stringify(r[0])})||{}).r || 0`));
+      return v.every((x, i) => i === 0 || v[i - 1] >= x);
+    })(), gaps.slice(0, 3).map(r => r[0] + ' ' + r[2]).join(' / '));
+    check('and the page says they are excluded rather than zeroed',
+          /not counted as zero/.test(doc.getElementById('adoptgapnote').textContent));
+    check('the header says which quarter, not which month',
+          /Quarter I/.test(doc.getElementById('adopthint').textContent));
+  }
+
+  {
+    /* The published stacked tab carries client totals only. The module table
+       cannot be built from it, and must say so rather than render empty — an
+       empty table reads as "no modules are used". */
+    const { doc } = boot({ body: TEAM_INT, clientBody: TEAM_CLI });
+    await settle();
+    doc.querySelector('#sources4 button[data-src="adoption"]').click(); await settle();
+    const first = doc.querySelector('#adoptmodules tbody tr');
+    check('with live client totals the module table explains itself',
+          /client totals only/.test(first.textContent) ||
+          doc.querySelectorAll('#adoptmodules tbody tr').length > 1,
+          first.textContent.slice(0, 80));
   }
 
   // ── 13. adoption failure paths ─────────────────────────────────

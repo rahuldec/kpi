@@ -405,6 +405,12 @@ table.board td{
 table.board td:first-child{text-align:left;font-weight:500}
 table.board tr:last-child td{border-bottom:0}
 table.board td.dim{color:var(--faint)}
+/* A row-scale version of the dial track, so a long table reads at a glance
+   without asking anyone to compare percentages down a column. */
+.minibar{display:block;width:100%;max-width:120px;height:6px;border-radius:3px;
+  background:var(--hair);overflow:hidden}
+.minibar>span{display:block;height:100%;border-radius:3px;background:var(--brand)}
+.minibar>span.low{background:var(--miss)}
 table.board td.bad{color:var(--miss);font-weight:600}
 
 /* sortable headers — the button carries the click so the keyboard gets it too */
@@ -499,6 +505,13 @@ footer b{color:var(--body);font-weight:600}
     </div>
 
     <div class="group">
+      <span class="grouplabel">Product</span>
+      <div class="sources" id="sources4">
+        <button type="button" data-src="adoption">ERP module adoption</button>
+      </div>
+    </div>
+
+    <div class="group">
       <span class="grouplabel">Overall</span>
       <div class="sources" id="sources3">
         <button type="button" data-src="meter">KPI meter</button>
@@ -558,6 +571,34 @@ footer b{color:var(--body);font-weight:600}
       <h3>Team KPI</h3>
       <p class="hint" id="meterhint"></p>
       <div class="meters" id="meters"></div>
+    </div>
+  </section>
+
+  <section id="adoption" hidden>
+    <div class="card">
+      <h3>Where it stands</h3>
+      <p class="hint" id="adopthint"></p>
+      <div class="meters" id="adopttotals"></div>
+    </div>
+    <div class="card">
+      <h3>By module</h3>
+      <p class="targetnote" id="adoptmodnote"></p>
+      <table class="board" id="adoptmodules"></table>
+    </div>
+    <div class="card">
+      <h3>By team</h3>
+      <p class="targetnote" id="adoptteamnote"></p>
+      <table class="board" id="adoptteams"></table>
+    </div>
+    <div class="card">
+      <h3>Every scored client</h3>
+      <p class="targetnote" id="adoptclientnote"></p>
+      <table class="board" id="adoptclients"></table>
+    </div>
+    <div class="card" id="adoptgapcard">
+      <h3>Never scored</h3>
+      <p class="targetnote" id="adoptgapnote"></p>
+      <table class="board" id="adoptgaps"></table>
     </div>
   </section>
 
@@ -680,7 +721,24 @@ let BOOK_ERROR = null;
    disagrees with the book. Do not reintroduce tab-based attribution. */
 const ADOPTION_FALLBACK_ASOF = '2026-08-04';
 const ADOPTION_QUARTER = 'Quarter I';
-const ADOPTION_FALLBACK = [{"n":"LNT B.Ed College","rm":"Sukhmeet Singh","s":6,"a":6},{"n":"Manav Mangal School Faridabad","rm":"Sukhmeet Singh","s":6,"a":6},{"n":"SD International","rm":"Sukhmeet Singh","s":8,"a":8},{"n":"SKS","rm":"Sukhmeet Singh","s":7,"a":7},{"n":"Shaheed Bhagat Singh","rm":"Sukhmeet Singh","s":6,"a":6},{"n":"Silver Spot Covent","rm":"Sukhmeet Singh","s":5,"a":5},{"n":"Vidya Training Institute","rm":"Amit Kumar","s":5,"a":5},{"n":"Mukand Shyama Public School","rm":"Sukhmeet Singh","s":16,"a":17},{"n":"Mukand MPS","rm":"Kashish Goel","s":15,"a":16},{"n":"Sahara Group","rm":"Amit Kumar","s":15,"a":16},{"n":"Vishvas Public School","rm":"Sukhmeet Singh","s":14,"a":15},{"n":"Cambridge World School","rm":"Sultan Malik","s":13,"a":14},{"n":"Pooja Modern Kurukshetra","rm":"Amit Kumar","s":13,"a":14},{"n":"Mukand MLPS","rm":"Sukhmeet Singh","s":18,"a":20},{"n":"OPS Ambala","rm":"Sukhmeet Singh","s":17,"a":19},{"n":"Shemford Futuristic School","rm":"Kashish Goel","s":14,"a":16},{"n":"Maharaja Agrasen Adarsh","rm":"Amit Kumar","s":18,"a":21},{"n":"Genesis School Karnal","rm":"Sukhmeet Singh","s":17,"a":20},{"n":"Mukand Swaraj Damla","rm":"Kashish Goel","s":17,"a":20},{"n":"SNCF Schools","rm":"Amit Kumar","s":17,"a":20},{"n":"Mukand Sushila","rm":"Sukhmeet Singh","s":16,"a":19},{"n":"Mukand JMIETI","rm":"Kashish Goel","s":21,"a":25},{"n":"Mukand JMIT","rm":"Kashish Goel","s":21,"a":25},{"n":"Tagore Group","rm":"Sultan Malik","s":14,"a":17},{"n":"MPPS School kkr","rm":"Sukhmeet Singh","s":17,"a":21},{"n":"BR International","rm":"Sultan Malik","s":16,"a":20},{"n":"Springdales, Ismailabad","rm":"Sultan Malik","s":16,"a":20},{"n":"Vishvas, Hisar","rm":"Sukhmeet Singh","s":12,"a":15},{"n":"Akshara","rm":"Sukhmeet Singh","s":15,"a":19},{"n":"Mukand Radaur Schools","rm":"Sukhmeet Singh","s":10,"a":13},{"n":"Cecil City & Cantt","rm":"Mansi Rana","s":13,"a":17},{"n":"RKSD College Kaithal","rm":"Sukhmeet Singh","s":13,"a":17},{"n":"Scholar Rosary Rohtak","rm":"Ankush Rana","s":16,"a":21},{"n":"DN College","rm":"Mansi Rana","s":12,"a":16},{"n":"Mavericks International KKR","rm":"Sultan Malik","s":12,"a":16},{"n":"Rational World School","rm":"Sultan Malik","s":12,"a":16},{"n":"Saraswati Sansthan S7","rm":"Sukhmeet Singh","s":9,"a":12},{"n":"SIS Academy","rm":"Sukhmeet Singh","s":11,"a":15},{"n":"BPR College","rm":"Sukhmeet Singh","s":8,"a":11},{"n":"Muni International Delhi","rm":"Sukhmeet Singh","s":8,"a":11},{"n":"SD APIIT","rm":"Sukhmeet Singh","s":8,"a":11},{"n":"Excel International Gohana","rm":"Ankush Rana","s":13,"a":18},{"n":"IsharJyot Degree College","rm":"Sukhmeet Singh","s":10,"a":14},{"n":"Mahavir Jain School Group","rm":"Kashish Goel","s":10,"a":14},{"n":"Lord Krishna Public School Ugala","rm":"Sukhmeet Singh","s":12,"a":17},{"n":"Rukmani BMAS","rm":"Sukhmeet Singh","s":12,"a":17},{"n":"IG College Ladwa","rm":"Kashish Goel","s":7,"a":10},{"n":"DAV College Ambala","rm":"Mansi Rana","s":9,"a":13},{"n":"Dhanna Bhagat School","rm":"Mansi Rana","s":13,"a":19},{"n":"Aryakulam International Munak","rm":"Ankush Rana","s":15,"a":22},{"n":"GITM Gurugram","rm":"Sultan Malik","s":18,"a":27},{"n":"Rukmani MRRA Barara Road","rm":"Sukhmeet Singh","s":12,"a":18},{"n":"Tallentian Officers Academy","rm":"Sultan Malik","s":2,"a":3},{"n":"Rishikul World Academy","rm":"Amit Kumar","s":11,"a":17},{"n":"TSUS Rohtak","rm":"Sultan Malik","s":9,"a":14},{"n":"Oxford","rm":"Sukhmeet Singh","s":7,"a":11},{"n":"Mukand SJPP","rm":"Kashish Goel","s":12,"a":19},{"n":"Navyug Kurukshetra","rm":"Mansi Rana","s":12,"a":19},{"n":"Mukand TIMT","rm":"Mansi Rana","s":18,"a":29},{"n":"Shah Satnam Sirsa","rm":"Sukhmeet Singh","s":13,"a":21},{"n":"Rpdav","rm":"Sukhmeet Singh","s":8,"a":13},{"n":"Lal Bahadur Shastri Bilaspur","rm":"Mansi Rana","s":19,"a":31},{"n":"Puneet EDPS","rm":"Sukhmeet Singh","s":9,"a":15},{"n":"Rukmani AKMV","rm":"Kashish Goel","s":9,"a":15},{"n":"SPS Convent School","rm":"Ankush Rana","s":12,"a":20},{"n":"Little Angel, Karnal","rm":"Sukhmeet Singh","s":11,"a":19},{"n":"IBMR Business School","rm":"Amit Kumar","s":12,"a":21},{"n":"Mukand MLNC","rm":"Mansi Rana","s":17,"a":30},{"n":"Masonic Public","rm":"Amit Kumar","s":14,"a":25},{"n":"Gurukul KKR","rm":"Mansi Rana","s":11,"a":20},{"n":"Arya College Panipat","rm":"Sultan Malik","s":12,"a":22},{"n":"DAV Girls Yamuna Nagar","rm":"Ankush Rana","s":12,"a":22},{"n":"GNKITM-TC","rm":"Mansi Rana","s":15,"a":28},{"n":"Vidya Public School","rm":"Amit Kumar","s":8,"a":15},{"n":"OPS Int","rm":"Kashish Goel","s":11,"a":21},{"n":"GNKC","rm":"Mansi Rana","s":14,"a":27},{"n":"Bharat College of Law","rm":"Sukhmeet Singh","s":7,"a":14},{"n":"Cambridge","rm":"Amit Kumar","s":8,"a":16},{"n":"GGDSD College Palwal","rm":"Amit Kumar","s":7,"a":14},{"n":"GGSCOP Ynr","rm":"Mansi Rana","s":16,"a":32},{"n":"Geeta Niketan Vidyapeeth","rm":"Sukhmeet Singh","s":6,"a":12},{"n":"Mukand VMLG","rm":"Sukhmeet Singh","s":9,"a":18},{"n":"Prachya School","rm":"Amit Kumar","s":7,"a":14},{"n":"Bharat Public School","rm":"Sukhmeet Singh","s":6,"a":13},{"n":"DAV College Pehowa","rm":"Mansi Rana","s":6,"a":13},{"n":"GNKC Karnal","rm":"Mansi Rana","s":6,"a":13},{"n":"GVM Girls College Sonipat","rm":"Kashish Goel","s":6,"a":13},{"n":"PKG College","rm":"Kashish Goel","s":11,"a":24},{"n":"Guru Nanak Kurukshetra","rm":"Sukhmeet Singh","s":5,"a":11},{"n":"SA Jain College + AIMT","rm":"Kashish Goel","s":7,"a":16},{"n":"Cambridge Field Global Panipat","rm":"Sultan Malik","s":10,"a":23},{"n":"SD College Panipat","rm":"Kashish Goel","s":6,"a":15},{"n":"SD Modern Hansi","rm":"Ankush Rana","s":6,"a":15},{"n":"DAV College Cheeka","rm":"Sultan Malik","s":7,"a":18},{"n":"Partap Public School Kunjpura","rm":"Mansi Rana","s":7,"a":18},{"n":"DIMT Law College","rm":"Ankush Rana","s":6,"a":16},{"n":"Greenfield Public School","rm":"Kashish Goel","s":8,"a":22},{"n":"Ideal College","rm":"Ankush Rana","s":6,"a":18},{"n":"IB College Panipat","rm":"Kashish Goel","s":4,"a":13},{"n":"Baba Shravan Nath","rm":"Sukhmeet Singh","s":3,"a":10},{"n":"Kalp Vriksh School Nissing","rm":"Mansi Rana","s":5,"a":19},{"n":"Swastik Bal Vikas Panipat","rm":"Kashish Goel","s":5,"a":21},{"n":"SD Kanya Ambala","rm":"Mansi Rana","s":4,"a":18},{"n":"IAMR Group","rm":"Amit Kumar","s":7,"a":38},{"n":"UARSchool Gharaunda","rm":"Ankush Rana","s":4,"a":24},{"n":"HIMT Group Noida","rm":"Amit Kumar","s":5,"a":38},{"n":"Imperial Public School Delhi","rm":"Mansi Rana","s":2,"a":16},{"n":"Mukand Analytics","rm":"Mansi Rana","s":0,"a":1},{"n":"Puneet Public School, Shahdra","rm":"Sultan Malik","s":0,"a":1},{"n":"SDGI Global University","rm":"Ankush Rana","s":0,"a":1},{"n":"Wisdom Kurukshetra","rm":"Ankush Rana","s":0,"a":1}];
+/* The union of every module named across the six RM tabs, ordered by how many
+   clients they apply to. Module sets differ per RM, so this is a union, not any
+   one tab's list. */
+const ADOPTION_MODULES = ["SIS","Fee Management","Student App","Online Payments PG integration","Student Certificates","Academic Portal by Okie Dokie","Student Attendance","Employee Management","Admission Module","Student Diary - Homework, Assignment","Student Diary - Circular, Notice","Front Desk","Transport Management","SMS, WhatsApp Integartion","Student Queries","Library","Class Test","Student Feedback","Biometric Integration","HRMS - Leaves Management","HRMS - Salary Computation","Website updation","Collect Other income","Webtabs","Internal Exam","Email Communication","Employee Annoucements","Placement Management","Alumni Management","Lesson Plan","Books Chapter Proceeding","Research Publication","Activities Management","Faculty Feedback","GPS Integartion","Hostel Management","Timetable Setup","Transport Attendance","DMC Marks Entry","Hostel Gatepass","Mess Management","Hostel Attendance","Image Gallery"];
+
+/* One row per scored client. `m` is a mask over ADOPTION_MODULES, one character
+   each: 1 adopted, 0 applicable but unused, - not sold to this client. Storing
+   the grid rather than the two totals costs about 8KB and is what lets the
+   module tab answer "who has not taken up X" instead of only "how is this team
+   doing" — the actionable question, since a module nobody uses is a product or
+   onboarding problem, not an RM one. */
+const ADOPTION_FALLBACK = [{"n":"LNT B.Ed College","rm":"Sukhmeet Singh","m":"11--1--11--1-------------------------------"},{"n":"Manav Mangal School Faridabad","rm":"Sukhmeet Singh","m":"11--1--11---1------------------------------"},{"n":"SD International","rm":"Sukhmeet Singh","m":"11111--11---1------------------------------"},{"n":"SKS","rm":"Sukhmeet Singh","m":"11-11--1---11------------------------------"},{"n":"Shaheed Bhagat Singh","rm":"Sukhmeet Singh","m":"11111-------1------------------------------"},{"n":"Silver Spot Covent","rm":"Sukhmeet Singh","m":"1111---------1-----------------------------"},{"n":"Vidya Training Institute","rm":"Amit Kumar","m":"1111---------1-----------------------------"},{"n":"Mukand Shyama Public School","rm":"Sukhmeet Singh","m":"1111-011111111--1---111--------------------"},{"n":"Mukand MPS","rm":"Kashish Goel","m":"1111011111-111----111----------------------"},{"n":"Sahara Group","rm":"Amit Kumar","m":"11111111111111--10-------------------------"},{"n":"Vishvas Public School","rm":"Sukhmeet Singh","m":"11111011111111--1--------------------------"},{"n":"Cambridge World School","rm":"Sultan Malik","m":"111--11--11110-11-1--1---------------------"},{"n":"Pooja Modern Kurukshetra","rm":"Amit Kumar","m":"11111-11110111----1------------------------"},{"n":"Mukand MLPS","rm":"Sukhmeet Singh","m":"11111011111111-1-0111-1--------------------"},{"n":"OPS Ambala","rm":"Sukhmeet Singh","m":"1111111111111101-01--1---------------------"},{"n":"Shemford Futuristic School","rm":"Kashish Goel","m":"111-111111111110-0-------------------------"},{"n":"Maharaja Agrasen Adarsh","rm":"Amit Kumar","m":"1111111-111111111-0--11-----------0--0-----"},{"n":"Genesis School Karnal","rm":"Sukhmeet Singh","m":"111111111111110-10110----------------------"},{"n":"Mukand Swaraj Damla","rm":"Kashish Goel","m":"1111011111-1111100111----------------------"},{"n":"SNCF Schools","rm":"Amit Kumar","m":"--11-111-11111111001111---0----------------"},{"n":"Mukand Sushila","rm":"Sukhmeet Singh","m":"11111111111111-10-100----------------------"},{"n":"Mukand JMIETI","rm":"Kashish Goel","m":"11110-111---11-1--111--101-11---11-11--00--"},{"n":"Mukand JMIT","rm":"Kashish Goel","m":"11110-111---11-1--111--101-11---11-11--00--"},{"n":"Tagore Group","rm":"Sultan Malik","m":"1111111-11101-0-1-1--1---------------0-----"},{"n":"MPPS School kkr","rm":"Sukhmeet Singh","m":"1111111111101101001--1------------1--------"},{"n":"BR International","rm":"Sultan Malik","m":"1111111-111011011-1--1------------0--0-----"},{"n":"Springdales, Ismailabad","rm":"Sultan Malik","m":"1111111-111111101-00--------------1--0-----"},{"n":"Vishvas, Hisar","rm":"Sukhmeet Singh","m":"11111011110011--1--------------------------"},{"n":"Akshara","rm":"Sukhmeet Singh","m":"111111111101111-00-0-1---------------------"},{"n":"Mukand Radaur Schools","rm":"Sukhmeet Singh","m":"1111101110------0----11--------------------"},{"n":"Cecil City & Cantt","rm":"Mansi Rana","m":"111111111111--1-00----0---0----------------"},{"n":"RKSD College Kaithal","rm":"Sukhmeet Singh","m":"11111101101-1101---0-----1-----------------"},{"n":"Scholar Rosary Rohtak","rm":"Ankush Rana","m":"1111111111101-10100---1---0--------1-------"},{"n":"DN College","rm":"Mansi Rana","m":"11111111-00--101-0----------1---------1----"},{"n":"Mavericks International KKR","rm":"Sultan Malik","m":"1111111-11101---1-0--00--------------------"},{"n":"Rational World School","rm":"Sultan Malik","m":"1111111-01101-0-1----1---------------0-----"},{"n":"Saraswati Sansthan S7","rm":"Sukhmeet Singh","m":"11111--110011--0---------------------------"},{"n":"SIS Academy","rm":"Sukhmeet Singh","m":"11111111-00011--10-------------------------"},{"n":"BPR College","rm":"Sukhmeet Singh","m":"11111--1--00-0-1-------1-------------------"},{"n":"Muni International Delhi","rm":"Sukhmeet Singh","m":"1111-101-0011------------------------------"},{"n":"SD APIIT","rm":"Sukhmeet Singh","m":"111--011-00--1-1----1----------------------"},{"n":"Excel International Gohana","rm":"Ankush Rana","m":"1111011111111-1-00----0---0----------------"},{"n":"IsharJyot Degree College","rm":"Sukhmeet Singh","m":"111110110-0110-1---------------------------"},{"n":"Mahavir Jain School Group","rm":"Kashish Goel","m":"1111011101--1---1-0---------------0--------"},{"n":"Lord Krishna Public School Ugala","rm":"Sukhmeet Singh","m":"1111101101111-0100-------------------------"},{"n":"Rukmani BMAS","rm":"Sukhmeet Singh","m":"1111101111101-0-00---1---------------------"},{"n":"IG College Ladwa","rm":"Kashish Goel","m":"11111--10----0-1--------0------------------"},{"n":"DAV College Ambala","rm":"Mansi Rana","m":"1111-101101--100---------------------------"},{"n":"Dhanna Bhagat School","rm":"Mansi Rana","m":"111111110110101100----0--------------------"},{"n":"Aryakulam International Munak","rm":"Ankush Rana","m":"1111111111111-1010000-0---0----------------"},{"n":"GITM Gurugram","rm":"Sultan Malik","m":"1111111--0001-01--11---01--0-100--011--111-"},{"n":"Rukmani MRRA Barara Road","rm":"Sukhmeet Singh","m":"111101111110100-00---1---------------------"},{"n":"Tallentian Officers Academy","rm":"Sultan Malik","m":"11-0---------------------------------------"},{"n":"Rishikul World Academy","rm":"Amit Kumar","m":"11111111-1110-0000----------------0--------"},{"n":"TSUS Rohtak","rm":"Sultan Malik","m":"1010111--1101--01-0------------------------"},{"n":"Oxford","rm":"Sukhmeet Singh","m":"1101100110--1------------------------------"},{"n":"Mukand SJPP","rm":"Kashish Goel","m":"11011--11----0-1---11--001-11-------0--00--"},{"n":"Navyug Kurukshetra","rm":"Mansi Rana","m":"111111100111110-00----0---0----------------"},{"n":"Mukand TIMT","rm":"Mansi Rana","m":"111111111000-001-0111--01--00-0011-11------"},{"n":"Shah Satnam Sirsa","rm":"Sukhmeet Singh","m":"11101111111-100100-1-0----0-------0--------"},{"n":"Rpdav","rm":"Sukhmeet Singh","m":"1111-001-00-11--0----1---------------------"},{"n":"Lal Bahadur Shastri Bilaspur","rm":"Mansi Rana","m":"1111111111110111-0000--011-0010000-1-------"},{"n":"Puneet EDPS","rm":"Sukhmeet Singh","m":"1111100110011---0-0------------------------"},{"n":"Rukmani AKMV","rm":"Kashish Goel","m":"111100110----0-1----0--011-----------------"},{"n":"SPS Convent School","rm":"Ankush Rana","m":"1111111111101-0-0000--0---0----------------"},{"n":"Little Angel, Karnal","rm":"Sukhmeet Singh","m":"11011001000111--001--11--------------------"},{"n":"IBMR Business School","rm":"Amit Kumar","m":"1111111--100--01--00---01--0-100----1------"},{"n":"Mukand MLNC","rm":"Mansi Rana","m":"111111111000-101-0100--10--0000011-11------"},{"n":"Masonic Public","rm":"Amit Kumar","m":"11111111101011010000-10---0-----0-0--------"},{"n":"Gurukul KKR","rm":"Mansi Rana","m":"1-1-11111001-0110010-00------------0-------"},{"n":"Arya College Panipat","rm":"Sultan Malik","m":"1111111-1-0--000--10---101-0-000------1----"},{"n":"DAV Girls Yamuna Nagar","rm":"Ankush Rana","m":"1111010110001001-0100--------------1-----1-"},{"n":"GNKITM-TC","rm":"Mansi Rana","m":"111101110001-101-0111--0-1-0010000---------"},{"n":"Vidya Public School","rm":"Amit Kumar","m":"1111-0011000110-0--------------------------"},{"n":"OPS Int","rm":"Kashish Goel","m":"111111110100110000000----------------------"},{"n":"GNKC","rm":"Mansi Rana","m":"111101111000-001-0111----1-0100000---------"},{"n":"Bharat College of Law","rm":"Sukhmeet Singh","m":"110110011000-1--------------0--------------"},{"n":"Cambridge","rm":"Amit Kumar","m":"11111000-00011--00---1---------------------"},{"n":"GGDSD College Palwal","rm":"Amit Kumar","m":"11101111000---00-0-------------------------"},{"n":"GGSCOP Ynr","rm":"Mansi Rana","m":"111101110001-10100111001-100010000---------"},{"n":"Geeta Niketan Vidyapeeth","rm":"Sukhmeet Singh","m":"110-1001000-1--------1---------------------"},{"n":"Mukand VMLG","rm":"Sukhmeet Singh","m":"11110001100--101-0------01--0--------------"},{"n":"Prachya School","rm":"Amit Kumar","m":"11110001-00011--0--------------------------"},{"n":"Bharat Public School","rm":"Sukhmeet Singh","m":"110-1001-00011--0--------------------------"},{"n":"DAV College Pehowa","rm":"Mansi Rana","m":"1100-0-1-00---0--0-11-----------------1----"},{"n":"GNKC Karnal","rm":"Mansi Rana","m":"111110--0000--0--0-----1-------------------"},{"n":"GVM Girls College Sonipat","rm":"Kashish Goel","m":"11--0--10----0-1--100--00-------------1----"},{"n":"PKG College","rm":"Kashish Goel","m":"110101011--00100-0111--000-0-1------0------"},{"n":"Guru Nanak Kurukshetra","rm":"Sukhmeet Singh","m":"110-1001000-1------------------------------"},{"n":"SA Jain College + AIMT","rm":"Kashish Goel","m":"110100011----0-1---00--001-----------------"},{"n":"Cambridge Field Global Panipat","rm":"Sultan Malik","m":"11101110-110100-1-00-0-0--0--0-------0----0"},{"n":"SD College Panipat","rm":"Kashish Goel","m":"111100010----0-1---00--00------------------"},{"n":"SD Modern Hansi","rm":"Ankush Rana","m":"1-1-01100110--0-0000-----------------------"},{"n":"DAV College Cheeka","rm":"Sultan Malik","m":"1101000--00---01--111--00-----00-----------"},{"n":"Partap Public School Kunjpura","rm":"Mansi Rana","m":"1111110000001-0-00----0---0----------------"},{"n":"DIMT Law College","rm":"Ankush Rana","m":"111100001001-000-0-------------------------"},{"n":"Greenfield Public School","rm":"Kashish Goel","m":"1111011000011000000--00---0----------------"},{"n":"Ideal College","rm":"Ankush Rana","m":"111100100010-000-0-----------0---0---------"},{"n":"IB College Panipat","rm":"Kashish Goel","m":"110100-10----0----000--------0-------------"},{"n":"Baba Shravan Nath","rm":"Sukhmeet Singh","m":"110--000-00-1---0--------------------------"},{"n":"Kalp Vriksh School Nissing","rm":"Mansi Rana","m":"1100000100001-0-0010--0--------------------"},{"n":"Swastik Bal Vikas Panipat","rm":"Kashish Goel","m":"110010010000100000000----------------------"},{"n":"SD Kanya Ambala","rm":"Mansi Rana","m":"111000000000-10-00----0---0----------------"},{"n":"IAMR Group","rm":"Amit Kumar","m":"1110111010000000-0000--000-000000000000000-"},{"n":"UARSchool Gharaunda","rm":"Ankush Rana","m":"10001000000001000000010---0----------------"},{"n":"HIMT Group Noida","rm":"Amit Kumar","m":"1000001000000001-0100--000-000000000100000-"},{"n":"Imperial Public School Delhi","rm":"Mansi Rana","m":"110000000000--0-00----0--------------------"},{"n":"Mukand Analytics","rm":"Mansi Rana","m":"--------0----------------------------------"},{"n":"Puneet Public School, Shahdra","rm":"Sultan Malik","m":"--------0----------------------------------"},{"n":"SDGI Global University","rm":"Ankush Rana","m":"--------0----------------------------------"},{"n":"Wisdom Kurukshetra","rm":"Ankush Rana","m":"--------0----------------------------------"}];
+/* s and a are derived from the mask, never stored beside it: two copies of the
+   same fact drift, and the mask is the one that can be checked against a sheet. */
+for (const r of ADOPTION_FALLBACK){
+  r.s = (r.m.match(/1/g) || []).length;
+  r.a = r.s + (r.m.match(/0/g) || []).length;
+}
 
 /* Names the scorecards spell differently from the book. Evidence, not
    resemblance: "Cambridge" sits on Amit Kumar's tab and Cambridge Delhi is the
@@ -703,6 +761,12 @@ let ADOPTION_ASOF = ADOPTION_FALLBACK_ASOF;
 let ADOPT_LIVE = false;
 let ADOPT_ERROR = null;
 let ADOPT_BY_CLIENT = new Map(), ADOPT_UNMATCHED = [];
+/* Client name -> module mask, always from the compiled grid. The published tab
+   carries per-client totals only, so module detail cannot come from it; drawing
+   the module table from the snapshot regardless is what keeps the most useful
+   cut on the page after the live feed is switched on. Where the two disagree
+   about a client's totals, the page says so instead of showing both silently. */
+let ADOPT_GRID = new Map(), ADOPT_DRIFT = [];
 
 /* Lowercased owner -> {clients, revenue}. The Clients sheet and the trackers now
    spell people the same way, so this joins on name; anyone not an owner is simply
@@ -839,7 +903,8 @@ const SOURCES = {
   client:    {label: 'CS Client Call Tracker',         noun: 'client calls'},
   scorecard: {label: 'CS Team — monthly scorecard',    noun: 'calls'},
   clients:   {label: 'CS client book',                 noun: 'calls'},
-  meter:     {label: 'CS team KPI meter',              noun: 'calls'}
+  meter:     {label: 'CS team KPI meter',              noun: 'calls'},
+  adoption:  {label: 'ERP module adoption',            noun: 'calls'}
 };
 const TRACKERS = ['internal','client'];
 const MONTH_KEY = 'kpi.months';
@@ -1093,13 +1158,26 @@ function parseAdoption(text){
    because a silently unmatched client is revenue missing from a dial. */
 function buildAdoption(){
   ADOPT_BY_CLIENT = new Map(); ADOPT_UNMATCHED = [];
+  ADOPT_GRID = new Map(); ADOPT_DRIFT = [];
   const byName = new Map();
   for (const c of CLIENTS) byName.set(eNorm(c.n), c);
+  const resolve = n => byName.get(eNorm(ADOPTION_ALIAS[n.trim().toLowerCase()] || n));
+
   for (const row of ADOPTION){
-    const alias = ADOPTION_ALIAS[row.n.trim().toLowerCase()] || row.n;
-    const c = byName.get(eNorm(alias));
+    const c = resolve(row.n);
     if (!c){ ADOPT_UNMATCHED.push(row.n); continue; }
     ADOPT_BY_CLIENT.set(c.n, {...row, client: c});
+  }
+  for (const row of ADOPTION_FALLBACK){
+    const c = resolve(row.n);
+    if (!c) continue;
+    ADOPT_GRID.set(c.n, row.m);
+    /* Only meaningful once a live sheet is in play: the compiled grid and the
+       published totals describe the same quarter, so a difference means one of
+       them was not updated. */
+    const live = ADOPT_BY_CLIENT.get(c.n);
+    if (ADOPT_LIVE && live && (live.s !== row.s || live.a !== row.a))
+      ADOPT_DRIFT.push(`${c.n}: sheet ${live.s}/${live.a}, built-in grid ${row.s}/${row.a}`);
   }
 }
 
@@ -1676,22 +1754,163 @@ function setMonths(list){
   if (SOURCE === 'meter') renderMeter(); else renderScorecard();
 }
 
+/* The module adoption tab. Everything here is Quarter I and none of it moves
+   with the month picker; the header says so rather than leaving the reader to
+   wonder why the figures do not change.
+
+   Order is deliberate: totals, then modules, then teams, then clients. The
+   module cut is the one that can be acted on centrally — a module at 0/52 is
+   the same conversation with every RM at once — whereas the team cut mostly
+   reflects which clients each RM happens to have. */
+function renderAdoption(){
+  const scored = [...ADOPT_BY_CLIENT.values()];
+  const pooled = scored.reduce((n, r) => n + r.s, 0);
+  const applic = scored.reduce((n, r) => n + r.a, 0);
+  const owners = [...new Set(CLIENTS.map(c => c.o).filter(Boolean))];
+  const teams = owners.map(o => ({lead: o, ...adoptForTeam(o)}))
+                      .filter(t => t.total)
+                      .sort((a, b) => (b.adoption ?? -1) - (a.adoption ?? -1));
+
+  const bookTotal = CLIENTS.reduce((n, c) => n + (c.r || 0), 0);
+  const covered = scored.reduce((n, r) => n + (r.client.r || 0), 0);
+  const unscored = CLIENTS.filter(c => c.o && !ADOPT_BY_CLIENT.has(c.n));
+
+  $('adopthint').innerHTML =
+    `${esc(ADOPTION_QUARTER)} as at ${esc(pretty(ADOPTION_ASOF))}. A client counts a ` +
+    `module only where it applies to them — modules never sold are left out of both ` +
+    `sides, an unused one counts against. Ownership is the client book's, so these are ` +
+    `the RM's team figures whichever tab the scoring was typed on. ` +
+    (ADOPT_LIVE ? `Read from the published sheet.`
+                : `Read from the copy built into this page` +
+                  (ADOPT_ERROR ? `, because the live sheet failed: ${esc(ADOPT_ERROR)}` : '') + `.`);
+
+  /* Two dials, not one. The adoption figure describes only the clients somebody
+     scored; the coverage figure says how much of the business that is. Showing
+     the first without the second is how a partial exercise starts being read as
+     a complete one. */
+  $('adopttotals').innerHTML =
+    `<div class="mcard"><h4>Overall adoption</h4>` +
+    dial('Modules in use', applic ? pooled / applic : null,
+         `${pooled} of ${applic} applicable`, applic && pooled / applic >= ADOPTION_TARGET) +
+    `<p class="covwho cool">Across ${scored.length} scored ` +
+    `${scored.length === 1 ? 'client' : 'clients'}, ${ADOPTION_MODULES.length} modules.</p></div>` +
+    `<div class="mcard"><h4>How much of the book this covers</h4>` +
+    dial('Revenue scored', bookTotal ? covered / bookTotal : null,
+         `${esc(inr(covered))} of ${esc(inr(bookTotal))}`, unscored.length === 0) +
+    `<p class="covwho${unscored.length ? '' : ' cool'}">${scored.length} of ` +
+    `${CLIENTS.filter(c => c.o).length} clients in the book have been scored` +
+    (unscored.length ? `. The rest are listed at the foot of this page.` : `.`) + `</p></div>`;
+
+  const pct = (s, a) => a ? Math.round(s / a * 100) : null;
+  const bar = (s, a) => {
+    const p = pct(s, a);
+    return `<span class="minibar"><span style="width:${p === null ? 0 : p}%"` +
+           `${p !== null && p < 34 ? ' class="low"' : ''}></span></span>`;
+  };
+
+  /* Per module, pooled over every client it applies to. */
+  const perMod = ADOPTION_MODULES.map((name, i) => {
+    let s = 0, a = 0;
+    for (const r of scored){
+      const mask = ADOPT_GRID.get(r.client.n);
+      const ch = mask ? mask[i] : '-';
+      if (ch === '-') continue;
+      a++; if (ch === '1') s++;
+    }
+    return {name, s, a};
+  }).filter(m => m.a).sort((x, y) => (x.s / x.a) - (y.s / y.a) || y.a - x.a);
+
+  $('adoptmodnote').innerHTML =
+    `Across every client the module applies to. A module nobody has taken up is a ` +
+    `product or onboarding question rather than an RM one, which is why this table ` +
+    `comes before the team one. ` +
+    (ADOPT_LIVE
+      ? `The published sheet carries per-client totals only, so this breakdown is read ` +
+        `from the ${esc(ADOPTION_QUARTER)} grid compiled into the page` +
+        (ADOPT_DRIFT.length
+          ? `, and <b>${ADOPT_DRIFT.length} ${ADOPT_DRIFT.length === 1 ? 'client disagrees' : 'clients disagree'} ` +
+            `with the sheet</b>: ${ADOPT_DRIFT.map(esc).join('; ')}. Recompile the grid.`
+          : `; the two agree on every client's totals.`)
+      : ``);
+
+  $('adoptmodules').innerHTML =
+    `<thead><tr><th>Module</th><th class="num">In use</th><th class="num">Applies to</th>` +
+    `<th class="num">Rate</th><th></th></tr></thead><tbody>` +
+    (perMod.length ? perMod.map(m =>
+      `<tr><td>${esc(m.name)}</td><td class="num">${m.s}</td><td class="num">${m.a}</td>` +
+      `<td class="num${m.s === 0 ? ' bad' : ''}">${pct(m.s, m.a)}%</td>` +
+      `<td>${bar(m.s, m.a)}</td></tr>`).join('')
+      : `<tr><td colspan="5" class="dim">No module detail is available for these ` +
+        `clients.</td></tr>`) +
+    `</tbody>`;
+
+  $('adoptteamnote').textContent =
+    'Pooled the same way as the dial on the KPI meter. Read it next to the scored ' +
+    'column — a team that scored half its book is not comparable to one that scored all of it.';
+  $('adoptteams').innerHTML =
+    `<thead><tr><th>Team</th><th class="num">In use</th><th class="num">Applicable</th>` +
+    `<th class="num">Rate</th><th class="num">Scored</th><th class="num">Of book</th></tr></thead><tbody>` +
+    teams.map(t =>
+      `<tr><td>${esc(t.lead)}</td><td class="num">${t.adopted}</td>` +
+      `<td class="num">${t.applicable}</td>` +
+      `<td class="num">${t.adoption === null ? '—' : pct(t.adopted, t.applicable) + '%'}</td>` +
+      `<td class="num${t.scored < t.total ? ' bad' : ''}">${t.scored} of ${t.total}</td>` +
+      `<td class="num">${t.coverage === null ? '—' : Math.round(t.coverage * 100) + '%'}</td></tr>`)
+      .join('') + `</tbody>`;
+
+  $('adoptclientnote').textContent =
+    'Weakest first. The count in brackets is how many modules apply to that client, ' +
+    'which is why a low percentage on a client with three modules means less than one ' +
+    'on a client with thirty.';
+  const byClient = scored.slice().sort((a, b) => (a.s / a.a) - (b.s / b.a) || b.a - a.a);
+  $('adoptclients').innerHTML =
+    `<thead><tr><th>Client</th><th>Team</th><th class="num">In use</th>` +
+    `<th class="num">Rate</th><th></th></tr></thead><tbody>` +
+    byClient.map(r =>
+      `<tr><td>${esc(r.client.n)}</td><td>${esc(r.client.o || '—')}</td>` +
+      `<td class="num">${r.s} of ${r.a}</td>` +
+      `<td class="num${r.s === 0 ? ' bad' : ''}">${pct(r.s, r.a)}%</td>` +
+      `<td>${bar(r.s, r.a)}</td></tr>`).join('') + `</tbody>`;
+
+  /* The clients nobody scored, largest first. They are excluded from every
+     figure above rather than counted as zero, and that is only defensible if
+     the page shows exactly who they are. */
+  $('adoptgapcard').hidden = !unscored.length;
+  if (unscored.length){
+    const rev = unscored.reduce((n, c) => n + (c.r || 0), 0);
+    $('adoptgapnote').textContent =
+      `${unscored.length} clients carrying ${inr(rev)} were never scored, so no figure on ` +
+      `this page describes them. They are left out, not counted as zero — an unassessed ` +
+      `client scored as zero would make the team look like it had failed rather than ` +
+      `not yet been measured.`;
+    $('adoptgaps').innerHTML =
+      `<thead><tr><th>Client</th><th>Team</th><th class="num">Billing</th></tr></thead><tbody>` +
+      unscored.slice().sort((a, b) => (b.r || 0) - (a.r || 0)).map(c =>
+        `<tr><td>${esc(c.n)}</td><td>${esc(c.o)}</td>` +
+        `<td class="num">${esc(inr(c.r || 0))}</td></tr>`).join('') + `</tbody>`;
+  }
+}
+
+/* Same rule as the book table: never round across the line, so a bar that has
+   not reached the target cannot print as 100%. */
+const cap = (v, met) => v === null ? null
+  : met ? Math.max(100, Math.round(v * 100)) : Math.min(99, Math.round(v * 100));
+
+/* Hoisted out of renderMeter on 5 Aug so the adoption tab draws the same dial
+   rather than a second one that rounds differently. One definition is the only
+   way two views of the same number stay the same number. */
+function dial(label, value, sub, met){
+  const p = value === null ? null : cap(value, met);
+  const cls = p === null ? '' : met ? 'met' : (p < 60 ? 'low' : '');
+  return `<div class="dial"><span class="lbl">${esc(label)}</span>` +
+         `<span class="val">${p === null ? '—' : p + '%'}</span>` +
+         `<span class="sub">${esc(sub)}</span></div>` +
+         `<div class="track ${cls}"><i style="width:${Math.min(100, p || 0)}%"></i></div>`;
+}
+
 function renderMeter(){
   const {ym, rows, loose, excluded} = meterRows();
   const pct = v => v === null ? null : Math.round(v * 100);
-  /* Same rule as the book table: never round across the line, so a bar that has
-     not reached the target cannot print as 100%. */
-  const cap = (v, met) => v === null ? null
-    : met ? Math.max(100, Math.round(v * 100)) : Math.min(99, Math.round(v * 100));
-
-  const dial = (label, value, sub, met) => {
-    const p = value === null ? null : cap(value, met);
-    const cls = p === null ? '' : met ? 'met' : (p < 60 ? 'low' : '');
-    return `<div class="dial"><span class="lbl">${esc(label)}</span>` +
-           `<span class="val">${p === null ? '—' : p + '%'}</span>` +
-           `<span class="sub">${esc(sub)}</span></div>` +
-           `<div class="track ${cls}"><i style="width:${Math.min(100, p || 0)}%"></i></div>`;
-  };
 
   /* An empty grid is the worst thing this view can show: it looks like a loading
      state rather than a result. Say what happened and why. */
@@ -2156,10 +2375,11 @@ const DAILY_PANELS = ['chase','kpis','gridsec','boardsec','stripsec'];
 const modeOf = src => src === 'scorecard' ? 'scorecard'
                     : src === 'clients'   ? 'clients'
                     : src === 'meter'     ? 'meter'
+                    : src === 'adoption'  ? 'adoption'
                     : 'daily';
 
 function markSource(){
-  for (const g of ['sources','sources2','sources3'])
+  for (const g of ['sources','sources2','sources3','sources4'])
     for (const b of $(g).children)
       b.setAttribute('aria-pressed', String(b.dataset.src === SOURCE));
   const mode = modeOf(SOURCE);
@@ -2167,21 +2387,26 @@ function markSource(){
   document.title = 'CS Team KPI — ' +
     (mode === 'scorecard' ? 'monthly scorecard'
      : mode === 'clients' ? 'client book'
+     : mode === 'adoption' ? 'module adoption'
      : SOURCES[SOURCE].label);
   $('h1').innerHTML = mode === 'scorecard' ? 'Missed days, <em>counted</em>.'
                     : mode === 'clients'   ? 'Who owns <em>what</em>.'
+                    : mode === 'adoption'  ? 'What they actually <em>use</em>.'
                     : 'Who <em>hasn\'t</em> filed.';
   const daily = mode === 'daily';
   $('lede').hidden = !daily;
   $('scorecard').hidden = mode !== 'scorecard';
   $('clients').hidden   = mode !== 'clients';
   $('meter').hidden     = mode !== 'meter';
+  $('adoption').hidden  = mode !== 'adoption';
   for (const id of DAILY_PANELS){ const el = $(id); if (el) el.hidden = !daily; }
   $('presets').hidden   = !daily;
   $('monthwrap').hidden = mode !== 'scorecard' && mode !== 'meter';
   $('dates').hidden     = !daily || MODE !== 'custom';
   $('exempt').hidden    = !daily;
-  $('joinedwrap').hidden = mode === 'clients';
+  /* Quarterly, and not per-person: neither the month picker nor the joined
+     toggle changes a single figure on this tab, so neither is shown. */
+  $('joinedwrap').hidden = mode === 'clients' || mode === 'adoption';
   $('h1').innerHTML = mode === 'meter' ? 'Compliance and <em>business</em>.' : $('h1').innerHTML;
 }
 
@@ -2229,6 +2454,14 @@ function showActive(){
     showContent();
     $('fresh').textContent = `${POD_TEAM.size - NO_BOOK_TEAMS.length} teams`;
     renderMeter();
+    return;
+  }
+  /* Quarterly and self-contained: nothing here depends on the roster, the month
+     picker or the date range, so it renders straight from the joined data. */
+  if (SOURCE === 'adoption'){
+    showContent();
+    $('fresh').textContent = `${ADOPT_BY_CLIENT.size} clients scored`;
+    renderAdoption();
     return;
   }
   if (SOURCE === 'clients'){
@@ -2447,7 +2680,7 @@ $('score').addEventListener('click', e => {
 });
 /* Every group's tabs share one handler — a new group needs its id here and
    nothing else. Binding per group is how a tab ends up silently inert. */
-for (const g of ['sources','sources2','sources3'])
+for (const g of ['sources','sources2','sources3','sources4'])
   $(g).addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b || b.dataset.src === SOURCE) return;
     SOURCE = b.dataset.src;

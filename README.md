@@ -311,6 +311,43 @@ one (₹50L). Adoption has neither yet, so this number is asserted rather than d
 and both the card and the meter note say so. Change it in `index.html` once the
 business agrees one.
 
+### The ERP module adoption tab
+
+Its own tab under a **Product** group — adoption is neither this month's behaviour
+nor the standing book, so it sits beside them rather than inside either. Five
+sections, in this order:
+
+1. **Where it stands** — two dials, not one. Overall modules in use, and beside it how
+   much of the book that describes. The first without the second is how a partial
+   exercise starts being read as a complete one.
+2. **By module** — every module against the clients it applies to, weakest first. This
+   is the cut that can be acted on centrally: a module at 0 of 52 is one conversation
+   with the product, not fifty-two with RMs.
+3. **By team** — the same arithmetic as the KPI meter dial, with the scored column
+   beside it, because a team that scored half its book is not comparable to one that
+   scored all of it.
+4. **Every scored client** — weakest first, with how many modules apply to each, since
+   30% of three modules and 30% of thirty are different problems.
+5. **Never scored** — the clients no figure on the page describes, largest billing
+   first.
+
+The month picker and the joined toggle are hidden here. Neither changes a single
+figure on this tab, and offering a control that does nothing implies the numbers
+respond to it.
+
+### The module grid, and why it is compiled in
+
+Each client row carries `m`, a mask over `ADOPTION_MODULES` — one character per
+module, `1` adopted, `0` applicable but unused, `-` not sold to that client. The whole
+grid for 111 clients across 43 modules costs about 8KB, and it is what lets the page
+answer "who has not taken up X" rather than only "how is this team doing".
+
+The published stacked tab carries per-client totals only, so the **module table always
+reads the compiled grid**, live feed or not. Where the sheet and the grid disagree
+about a client's totals the page names the clients and says to recompile, rather than
+showing both and letting the reader pick. `s` and `a` are derived from the mask and
+never stored beside it — two copies of the same fact drift.
+
 ### Where the data lives
 
 The workbook keeps one tab per RM per quarter as the working and audit layer. The
@@ -580,7 +617,7 @@ entries loaded and when.
     node qa.js
     TZ=Asia/Kolkata node qa.js
 
-420 assertions with the network mocked: parsing (spacer rows above the header, quoted
+441 assertions with the network mocked: parsing (spacer rows above the header, quoted
 fields containing commas and newlines, blank assignees, case-variant names), every
 failure path (sheet not shared, network down, unparseable content), the date-window
 rules, cross-checks between the three places misses are counted, escaping of sheet
