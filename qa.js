@@ -281,6 +281,31 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     const tabs = [...HTML.matchAll(/data-src="([^"]+)"/g)].map(m => m[1]);
     check('every tab is a declared source',
           tabs.every(t => new RegExp(`\\b${t}:\\s*\\{`).test(HTML)), tabs.join());
+
+    /* The (i) panel builds its markup from a handful of short class names, and one
+       of them collided with a control elsewhere on the page: the date-range picker
+       was styled on a bare `.dates`, which also caught every <p class="dates"> in
+       the panel and made each one a non-wrapping inline-flex row. Consecutive
+       lines ran together and a long list overflowed the card sideways.
+
+       Nothing behavioural could see it — the text was all present and correct —
+       so this is a static rule instead: a class the panel uses may only be styled
+       inside `.how`, or by an id. Generic names shared between two components are
+       the collision; scoping is the fix. */
+    const css = HTML.slice(HTML.indexOf('<style>') + 7, HTML.indexOf('</style>'));
+    const PANEL_CLASSES = ['dates', 'sum', 'who2', 'tk', 'none', 'missed', 'gaps'];
+    const leaks = [];
+    for (const rule of css.split('}')){
+      const sel = rule.slice(rule.lastIndexOf('*/') + 1).split('{')[0];
+      if (!sel || !sel.trim()) continue;
+      for (const part of sel.split(',')){
+        const p = part.trim();
+        if (!p || p.startsWith('@')) continue;
+        if (p.includes('.how') || p.includes('#')) continue;
+        if (PANEL_CLASSES.some(c => new RegExp('\\.' + c + '\\b').test(p))) leaks.push(p);
+      }
+    }
+    check('no panel class is styled globally', leaks.length === 0, leaks.join(' | '));
   }
 
   // ── 1. no timesheet data is embedded ───────────────────────────

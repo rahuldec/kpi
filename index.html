@@ -164,8 +164,8 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
 .how .sum b{color:var(--ink);font-weight:600}
 .how .who2{font-weight:600;color:var(--ink);margin:11px 0 3px;font-size:13px}
 .how .who2:first-of-type{margin-top:0}
-.how .dates{margin:0 0 2px;color:var(--miss);font-variant-numeric:tabular-nums;
-  word-spacing:.15em}
+.how .dates{display:block;margin:0 0 2px;color:var(--miss);
+  font-variant-numeric:tabular-nums;word-spacing:.15em}
 .how .none{color:var(--body)}
 .how .tk{display:inline-block;min-width:64px;color:var(--faint);font-weight:500}
 
@@ -187,8 +187,8 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
 .escline .n,.covline .n{font-size:15px;font-weight:600;letter-spacing:-.012em}
 .escline.hot .n,.covline.hot .n{color:var(--miss)}
 .escline.cool .n,.covline.cool .n{color:var(--faint);font-weight:500}
-.gaps{font-size:12.5px;line-height:1.5;color:var(--ink);margin:4px 0 0}
-.gaps.none{color:var(--faint)}
+.how .gaps{font-size:12.5px;line-height:1.5;color:var(--ink);margin:4px 0 0}
+.how .gaps.none{color:var(--faint)}
 .escwho,.covwho{font-size:12.5px;line-height:1.45;color:var(--miss);margin:5px 0 0 97px}
 .escwho.cool,.covwho.cool{color:var(--faint)}
 
@@ -291,8 +291,14 @@ table.board th.num,table.board th.num button{justify-content:flex-end}
   background:var(--card);color:var(--ink);font-weight:600;
   box-shadow:0 1px 3px rgba(0,0,0,.1),0 0 0 .5px rgba(0,0,0,.04);
 }
-.dates{display:inline-flex;align-items:center;gap:10px}
-.dates[hidden]{display:none}
+/* The date-range control, and ONLY it. This was a bare `.dates` rule, which also
+   caught every <p class="dates"> in the (i) panel and made each one a
+   non-wrapping inline-flex row: consecutive lines ran together ("17 Julclient
+   calls") and a long list overflowed the card sideways instead of wrapping. The
+   control is a single element with an id, so it is styled by that id and cannot
+   reach anything else. */
+#dates{display:inline-flex;align-items:center;gap:10px}
+#dates[hidden]{display:none}
 .fresh{font-size:13px;color:var(--faint);white-space:nowrap;font-variant-numeric:tabular-nums}
 
 button.pill{
