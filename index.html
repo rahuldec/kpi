@@ -129,11 +129,16 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
 .mcard{border:1px solid var(--line);border-radius:13px;padding:16px 17px 15px}
 .mcard h4{font-size:16px;font-weight:600;letter-spacing:-.012em;color:var(--ink);margin:0 0 2px}
 .mcard .who{font-size:12.5px;color:var(--faint);margin:0 0 14px;line-height:1.45}
-.dial{display:flex;align-items:baseline;gap:9px;margin:0 0 4px}
+/* Every row on a card is label · (i) · figure · detail, and the detail is the
+   part that gives way. Adding a control to each row cost about 20px of width,
+   which is enough to break "4.0/5 from 2 clients" in a 300px column — so the row
+   wraps and the muted right-hand figure drops to a line of its own rather than
+   the label and value being pushed apart. Same rule on .covline below. */
+.dial{display:flex;align-items:baseline;gap:2px 9px;margin:0 0 4px;flex-wrap:wrap}
 .dial .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);
   width:88px;flex:none}
 .dial .val{font-size:19px;font-weight:600;letter-spacing:-.018em;font-variant-numeric:tabular-nums}
-.dial .sub{font-size:12.5px;color:var(--faint);margin-left:auto}
+.dial .sub{font-size:12.5px;color:var(--faint);margin-left:auto;text-align:right}
 .track{height:7px;border-radius:4px;background:var(--hair);overflow:hidden;margin:0 0 14px}
 .track i{display:block;height:100%;border-radius:4px;background:var(--brand)}
 .track.low i{background:var(--miss)}
@@ -157,6 +162,25 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
 }
 .info:hover{color:var(--brand);border-color:var(--brand)}
 .info[aria-expanded=true]{color:#fff;background:var(--brand);border-color:var(--brand)}
+
+/* An (i) per parameter, not only per card. The header button opens the panel at
+   the top; these open it at the section that explains that one row, which is
+   what someone staring at a single dial actually wants. Rendered only when the
+   section exists (renderMeter checks the built panel first), so a button here
+   can never open nothing.
+
+   It sits between the label and the figure rather than inside the label. The
+   label column is a fixed width shared by every row: a control inside it would
+   squeeze the labels that already wrap, and — less obviously — would change the
+   text of every .lbl, which the tests read to identify a dial. */
+.mi{
+  width:15px;height:15px;flex:none;padding:0;align-self:center;margin:0 -2px;
+  font:600 9.5px/1 ui-serif,Georgia,serif;color:var(--faint);cursor:pointer;
+  background:none;border:1px solid var(--line);border-radius:50%;
+  display:inline-flex;align-items:center;justify-content:center;opacity:.5;
+  transition:color .15s ease,border-color .15s ease,opacity .15s ease;
+}
+.mi:hover,.mi:focus-visible{color:var(--brand);border-color:var(--brand);opacity:1}
 
 /* ── the (i) dialog ─ */
 .modal{position:fixed;inset:0;z-index:60;display:flex;align-items:center;
@@ -186,6 +210,9 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
 .modal .how{margin:0;padding:0;border:0;background:none;font-size:13.5px}
 .modal .how h5{margin:20px 0 9px;padding-top:16px;border-top:1px solid var(--hair)}
 .modal .how h5:first-child{margin-top:16px;padding-top:0;border-top:0}
+/* Opened from a row's (i): say which section was aimed at, so a reader dropped
+   into the middle of the panel can see they were sent there deliberately. */
+.modal .how h5.aim{color:var(--brand)}
 html.modalopen{overflow:hidden}
 @media (max-width:560px){
   .modal{padding:0}
@@ -209,7 +236,7 @@ html.modalopen{overflow:hidden}
 /* Escalations on a team card. Not a dial: a count of live problems has no
    denominator, and a progress bar would invite reading "2 of 5" into it. */
 .escline,.covline{
-  display:flex;align-items:baseline;gap:9px;margin:2px 0 0;
+  display:flex;align-items:baseline;gap:2px 9px;margin:2px 0 0;flex-wrap:wrap;
   padding-top:12px;border-top:1px solid var(--hair);
 }
 /* A coverage line describes the dial ABOVE it, so it must not be fenced off from
@@ -221,7 +248,13 @@ html.modalopen{overflow:hidden}
 .covline + .dial,.covwho + .dial{padding-top:14px;border-top:1px solid var(--hair)}
 .escline .lbl,.covline .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.07em;
   color:var(--faint);width:88px;flex:none}
-.escline .n,.covline .n{font-size:15px;font-weight:600;letter-spacing:-.012em}
+/* The figure reads as one phrase — "36 of 48 clients" — so it must never break
+   across lines the way it did when the money beside it was allowed to squeeze
+   it. Below about 300px of card the row wraps instead and the money drops to a
+   line of its own, still flush right; the value stays beside its label at every
+   width, which is the thing being read. */
+.escline .n,.covline .n{font-size:15px;font-weight:600;letter-spacing:-.012em;
+  white-space:nowrap}
 .escline.hot .n,.covline.hot .n{color:var(--miss)}
 .escline.cool .n,.covline.cool .n{color:var(--faint);font-weight:500}
 .how .gaps{font-size:12.5px;line-height:1.5;color:var(--ink);margin:4px 0 0}
@@ -2071,7 +2104,7 @@ function howHtml(r){
   }).join(' · ');
 
   const skipping = $('joined').checked;
-  let h = `<h5>How compliance is worked out</h5><p class="sum">` +
+  let h = `<h5 data-sec="compliance">How compliance is worked out</h5><p class="sum">` +
     `Every working day counts as one expected entry per tracker — two a day, ` +
     `Sundays excluded, Saturdays counted, and nothing counted for days that ` +
     `have not happened yet. ` +
@@ -2080,13 +2113,14 @@ function howHtml(r){
     `<b>${r.expected - r.filed} missed</b> — ` +
     `${r.expected ? Math.round(r.filed / r.expected * 100) : 0}%.</p>`;
 
+  h += bookDetail(r);
   h += adoptDetail(r);
   h += feedDetail(r);
   h += escDetail(r);
 
   if (!r.members.length) return h + `<p class="none">Nobody on this team has any expected days.</p>`;
 
-  h += `<h5>Days missed</h5><div class="missed">`;
+  h += `<h5 data-sec="missed">Days missed</h5><div class="missed">`;
   for (const m of r.members){
     h += `<p class="who2">${esc(m.name)}</p>`;
     let any = false;
@@ -2112,7 +2146,7 @@ function adoptDetail(r){
   if (!a.total) return '';
   const money = c => `${esc(c.n)} <span class="tk">${esc(inr(c.r || 0))}</span>`;
 
-  let h = `<h5>How module adoption is worked out</h5><p class="sum">` +
+  let h = `<h5 data-sec="adoption">How module adoption is worked out</h5><p class="sum">` +
     `Each scored client contributes the modules it has taken up out of the ones ` +
     `that apply to it; modules never sold to a client are left out of both sides. ` +
     `Summed across the team that is <b>${a.adopted} adopted</b> of ` +
@@ -2127,7 +2161,7 @@ function adoptDetail(r){
 
   if (a.missing.length){
     const rev = a.missing.reduce((n, c) => n + (c.r || 0), 0);
-    h += `<h5>Never scored — ${a.missing.length} of ${a.total} clients, ` +
+    h += `<h5 data-sec="scored">Never scored — ${a.missing.length} of ${a.total} clients, ` +
          `${esc(inr(rev))}</h5>` +
          `<p class="gaps">${a.missing.slice().sort((x, y) => (y.r || 0) - (x.r || 0))
             .map(money).join(' · ')}</p>` +
@@ -2136,6 +2170,33 @@ function adoptDetail(r){
   }
 
   return h;
+}
+
+/* The business dial, shown working. It was the one row on the card with no
+   section behind it, which stopped mattering the moment every row grew its own
+   (i). Two things here are invisible on the card and change how the figure reads:
+   the book is a snapshot with a date on it, and the target is not the same number
+   for every team once the scaled option is on. */
+function bookDetail(r){
+  const n = r.adopt.total;
+  const heads = r.team.length + 1;
+  const gap = r.target - r.revenue;
+  return `<h5 data-sec="business">How business is worked out</h5><p class="sum">` +
+    `The book is the total billing of every client the client book gives ` +
+    `<b>${esc(r.lead)}</b> as owner` +
+    (n ? ` — <b>${n} ${n === 1 ? 'client' : 'clients'}</b>` : '') +
+    `, <b>${esc(inr(r.revenue))}</b>, as at ${esc(pretty(CLIENTS_ASOF))}. ` +
+    `Assistants are not counted separately: a team works one book. ` +
+    `The target is ` +
+    (TARGET_SCALED
+      ? `scaled to team size — ${esc(inr(TARGET_FULL_TEAM))} for a full three, so ` +
+        `<b>${esc(inr(Math.round(r.target)))}</b> for ${heads} ` +
+        `${heads === 1 ? 'person' : 'people'}`
+      : `a flat <b>${esc(inr(TARGET_FULL_TEAM))}</b> per team, whatever its size`) +
+    ` — ` +
+    (gap > 0 ? `<b>${esc(inr(Math.round(gap)))} short</b>.`
+             : `<b>${esc(inr(Math.round(-gap)))} over</b>.`) +
+    `</p>`;
 }
 
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -2149,7 +2210,7 @@ function escDetail(r){
     const [y, m, day] = d.split('-');
     return ` — raised ${Number(day)} ${MONTHS_SHORT[Number(m) - 1]} ${y}`;
   };
-  let h = `<h5>Escalations</h5>`;
+  let h = `<h5 data-sec="escalations">Escalations</h5>`;
   const open = r.esc.filter(x => x.open.length);
   for (const x of open){
     h += `<p class="who2">${esc(x.client)}</p>`;
@@ -2168,10 +2229,10 @@ function escDetail(r){
 /* The adoption dial's denominator, said out loud. A team whose biggest accounts
    were never scored would otherwise show a confident percentage drawn from its
    small clients only — the failure this line exists to prevent. */
-function coverLine(r){
+function coverLine(r, info){
   const a = r.adopt;
   if (!a.total)
-    return `<div class="covline cool"><span class="lbl">Scored</span>` +
+    return `<div class="covline cool"><span class="lbl">Scored</span>${info || ''}` +
            `<span class="n">no clients in the book</span></div>`;
 
   /* One row, laid out like a dial: label, figure, and the money pushed right.
@@ -2183,7 +2244,7 @@ function coverLine(r){
      is what caught the stale-BOOK bug. */
   const full = a.scored === a.total;
   return `<div class="covline ${full ? 'cool' : 'hot'}">` +
-         `<span class="lbl">Scored</span>` +
+         `<span class="lbl">Scored</span>${info || ''}` +
          `<span class="n">${a.scored ? `${a.scored} of ${a.total} clients`
                                      : `none of ${a.total}`}</span>` +
          `<span class="sub">${esc(inr(a.revCovered))} of ${esc(inr(a.revTotal))}</span></div>`;
@@ -2198,16 +2259,16 @@ function feedDetail(r){
   const money = c => `${esc(c.n)} <span class="tk">${esc(inr(c.r || 0))}</span>`;
 
   if (FEED_ERROR)
-    return `<h5>How client feedback is worked out</h5>` +
+    return `<h5 data-sec="feedback">How client feedback is worked out</h5>` +
            `<p class="sum">The feedback sheet did not load, so no figure here describes ` +
            `this team's clients: ${esc(FEED_ERROR)}</p>`;
 
   if (!f.heard)
-    return `<h5>How client feedback is worked out</h5>` +
+    return `<h5 data-sec="feedback">How client feedback is worked out</h5>` +
            `<p class="sum">None of this team's ${f.total} clients has answered the feedback ` +
            `form, so there is no score — not a score of zero. Silence is not dissatisfaction.</p>`;
 
-  let h = `<h5>How client feedback is worked out</h5><p class="sum">` +
+  let h = `<h5 data-sec="feedback">How client feedback is worked out</h5><p class="sum">` +
     `The most recent response from each client that answered, averaged. ` +
     `<b>${f.heard} of ${f.total}</b> clients replied` +
     (f.responses > f.heard
@@ -2239,13 +2300,13 @@ function feedDetail(r){
 /* Coverage for the feedback dial, in the same shape as the adoption one. Two
    distinct empty states, deliberately: a team nobody has asked reads differently
    from a team asked and not answered, and both read differently from zero. */
-function feedLine(r){
+function feedLine(r, info){
   const f = r.feed;
   if (!f.total)
-    return `<div class="covline cool"><span class="lbl">Heard from</span>` +
+    return `<div class="covline cool"><span class="lbl">Heard from</span>${info || ''}` +
            `<span class="n">no clients in the book</span></div>`;
   if (FEED_ERROR)
-    return `<div class="covline cool"><span class="lbl">Heard from</span>` +
+    return `<div class="covline cool"><span class="lbl">Heard from</span>${info || ''}` +
            `<span class="n">—</span>` +
            `<span class="sub">sheet not loaded</span></div>`;
 
@@ -2254,27 +2315,27 @@ function feedLine(r){
      read as target met on a thin sample, and the (i) panel says why in full —
      which is where anyone asking the question will already be looking. */
   const full = f.heard === f.total;
-  return `<div class="covline ${full ? 'cool' : 'hot'}"><span class="lbl">Heard from</span>` +
+  return `<div class="covline ${full ? 'cool' : 'hot'}"><span class="lbl">Heard from</span>${info || ''}` +
          `<span class="n">${f.heard ? `${f.heard} of ${f.total} clients`
                                     : `none of ${f.total}`}</span>` +
          (f.heard ? `<span class="sub">${esc(inr(f.revHeard))} of ${esc(inr(f.revTotal))}</span>`
                   : '') + `</div>`;
 }
 
-function escLine(r){
+function escLine(r, info){
   if (ESC_ERROR)
-    return `<div class="escline cool"><span class="lbl">Escalations</span>` +
+    return `<div class="escline cool"><span class="lbl">Escalations</span>${info || ''}` +
            `<span class="n">—</span></div>` +
            `<p class="escwho cool">not loaded</p>`;
 
   const open = r.escOpen.reduce((n, x) => n + x.open.length, 0);
   const past = r.esc.reduce((n, x) => n + x.all.length, 0) - open;
   if (!open)
-    return `<div class="escline cool"><span class="lbl">Escalations</span>` +
+    return `<div class="escline cool"><span class="lbl">Escalations</span>${info || ''}` +
            `<span class="n">None open</span></div>` +
            (past ? `<p class="escwho cool">${past} resolved earlier</p>` : '');
 
-  return `<div class="escline hot"><span class="lbl">Escalations</span>` +
+  return `<div class="escline hot"><span class="lbl">Escalations</span>${info || ''}` +
          `<span class="n">${open} open</span></div>` +
          `<p class="escwho">${esc(r.escOpen.map(x => x.client).join(', '))}</p>`;
 }
@@ -2603,10 +2664,13 @@ const cap = (v, met) => v === null ? null
 /* Hoisted out of renderMeter on 5 Aug so the adoption tab draws the same dial
    rather than a second one that rounds differently. One definition is the only
    way two views of the same number stay the same number. */
-function dial(label, value, sub, met){
+function dial(label, value, sub, met, info){
   const p = value === null ? null : cap(value, met);
   const cls = p === null ? '' : met ? 'met' : (p < 60 ? 'low' : '');
-  return `<div class="dial"><span class="lbl">${esc(label)}</span>` +
+  /* `info` is markup, not text, and is always built by miBtn() — never by a
+     caller assembling its own button, or the "opens nothing" guard is bypassed.
+     The adoption tab draws the same dial with no info and gets no button. */
+  return `<div class="dial"><span class="lbl">${esc(label)}</span>${info || ''}` +
          `<span class="val">${p === null ? '—' : p + '%'}</span>` +
          `<span class="sub">${esc(sub)}</span></div>` +
          `<div class="track ${cls}"><i style="width:${Math.min(100, p || 0)}%"></i></div>`;
@@ -2638,28 +2702,46 @@ function renderMeter(){
        team however warm they are. It still shows; it just does not go green. */
     const feedMet = r.feed.satisfaction !== null && !r.feed.thin &&
                     r.feed.satisfaction >= FEEDBACK_TARGET;
+    /* Built once, before the card, because the row buttons are decided by what
+       is actually in it. A section can be absent for good reasons — a team with
+       no escalations, a team whose book is fully scored — and an (i) that opens
+       a dialog scrolled to nothing is worse than no (i) at all. */
+    const panel = howHtml(r);
+    const mi = (sec, label) => panel.includes(`data-sec="${sec}"`)
+      ? `<button type="button" class="mi" data-card="${i}" data-sec="${esc(sec)}" ` +
+        `title="How ${esc(label)} is worked out" ` +
+        `aria-label="How ${esc(label)} is worked out for ${esc(r.lead)}">i</button>`
+      : '';
+    /* The coverage line is explained by the never-scored list where there is
+       one, and by the adoption section where the book is fully scored. */
+    const scoredSec = panel.includes('data-sec="scored"') ? 'scored' : 'adoption';
+
     return `<div class="mcard">` +
       `<button type="button" class="info" data-card="${i}" aria-expanded="false" ` +
       `title="How this is worked out">i</button>` +
       `<h4>${esc(r.lead)}</h4>` +
       `<p class="who">${r.team.length ? esc(r.team.join(', ')) : 'no team recorded'}</p>` +
       dial('Compliance', r.compliance,
-           r.expected ? `${r.filed}/${r.expected} entries` : 'nothing expected', compMet) +
+           r.expected ? `${r.filed}/${r.expected} entries` : 'nothing expected', compMet,
+           mi('compliance', 'compliance')) +
       dial('Business', r.business,
-           `${inr(r.revenue)} of ${inr(Math.round(r.target))}`, bizMet) +
+           `${inr(r.revenue)} of ${inr(Math.round(r.target))}`, bizMet,
+           mi('business', 'business')) +
       dial('Module adoption', r.adopt.adoption,
            r.adopt.applicable
              ? `${r.adopt.adopted}/${r.adopt.applicable} modules`
-             : 'no client scored', adoptMet) +
-      coverLine(r) +
+             : 'no client scored', adoptMet,
+           mi('adoption', 'module adoption')) +
+      coverLine(r, mi(scoredSec, 'the scored share of the book')) +
       dial('Client feedback', r.feed.satisfaction,
            r.feed.sat === null
              ? (FEED_ERROR ? 'not loaded' : 'no responses yet')
              : `${r.feed.sat.toFixed(1)}/5 from ${r.feed.heard} ` +
-               `${r.feed.heard === 1 ? 'client' : 'clients'}`, feedMet) +
-      feedLine(r) +
-      escLine(r) +
-      `<div class="how" id="how${i}" hidden>${howHtml(r)}</div>` +
+               `${r.feed.heard === 1 ? 'client' : 'clients'}`, feedMet,
+           mi('feedback', 'client feedback')) +
+      feedLine(r, mi('feedback', 'who has been heard from')) +
+      escLine(r, mi('escalations', 'escalations')) +
+      `<div class="how" id="how${i}" hidden>${panel}</div>` +
       `</div>`;
   }).join('');
   /* Every card was just rebuilt, so anything the dialog is showing describes a
@@ -3483,7 +3565,9 @@ $('ctype').addEventListener('change',  e => { CFILTER.type  = e.target.value; re
    here cannot drift from the card it came from. Opening copies it in. */
 let HOW_TRIGGER = null;
 
-function openHow(i){
+let OPEN_SEC = null;
+
+function openHow(i, sec, trigger){
   const src = $('how' + i);
   const card = src.closest('.mcard');
   if (!src || !card) return;
@@ -3491,13 +3575,30 @@ function openHow(i){
   const who = card.querySelector('.who');
   $('howwho').textContent = who ? who.textContent : '';
   $('howwho').hidden = !who || !who.textContent;
-  $('howbody').innerHTML = `<div class="how">${src.innerHTML}</div>`;
+  const body = $('howbody');
+  body.innerHTML = `<div class="how">${src.innerHTML}</div>`;
   $('howmodal').hidden = false;
   document.documentElement.classList.add('modalopen');
-  HOW_TRIGGER = document.querySelector(`button.info[data-card="${i}"]`);
-  HOW_TRIGGER?.setAttribute('aria-expanded', 'true');
+  /* Focus goes back to whatever opened it, which is now sometimes a row button
+     rather than the card's own (i). Falling back to the card button keeps the
+     old behaviour for callers that pass nothing. */
+  HOW_TRIGGER = trigger || document.querySelector(`button.info[data-card="${i}"]`);
+  card.querySelector('button.info')?.setAttribute('aria-expanded', 'true');
   OPEN_CARD = i;
-  $('howbody').scrollTop = 0;
+
+  /* Opened from a row, the dialog lands on the section that explains that row.
+     The landing is recorded on the element and on the body rather than left to
+     scroll position alone: scrollTop is unassertable in a headless DOM, and a
+     reader arriving mid-document needs to see which heading they were sent to. */
+  const aim = sec ? body.querySelector(`[data-sec="${sec}"]`) : null;
+  OPEN_SEC = aim ? sec : null;
+  body.dataset.aim = OPEN_SEC || '';
+  body.scrollTop = 0;
+  if (aim){
+    aim.classList.add('aim');
+    const top = aim.getBoundingClientRect().top - body.getBoundingClientRect().top;
+    body.scrollTop = Math.max(0, top - 8);
+  }
   $('howclose').focus();
 }
 
@@ -3508,6 +3609,8 @@ function closeHow(){
   document.documentElement.classList.remove('modalopen');
   document.querySelectorAll('button.info[aria-expanded=true]')
     .forEach(b => b.setAttribute('aria-expanded', 'false'));
+  $('howbody').dataset.aim = '';
+  OPEN_SEC = null;
   /* Back to the button that opened it, or a keyboard user is dropped at the top
      of the document with no idea where they were. */
   HOW_TRIGGER?.focus();
@@ -3516,11 +3619,15 @@ function closeHow(){
 }
 
 $('meters').addEventListener('click', e => {
-  const b = e.target.closest('button.info'); if (!b) return;
+  const b = e.target.closest('button.info, button.mi'); if (!b) return;
   const i = b.dataset.card;
-  if (!$('howmodal').hidden && OPEN_CARD === i){ closeHow(); return; }
+  const sec = b.dataset.sec || null;
+  /* Clicking the same thing again closes it. Clicking a DIFFERENT row of a card
+     whose dialog is already open re-aims rather than closing — otherwise reading
+     one card's four sections in turn means eight clicks. */
+  if (!$('howmodal').hidden && OPEN_CARD === i && OPEN_SEC === sec){ closeHow(); return; }
   closeHow();
-  openHow(i);
+  openHow(i, sec, b);
 });
 $('howclose').addEventListener('click', closeHow);
 /* Anywhere off the sheet closes it — including the padding around it, which is

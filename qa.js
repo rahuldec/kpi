@@ -293,7 +293,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
        inside `.how`, or by an id. Generic names shared between two components are
        the collision; scoping is the fix. */
     const css = HTML.slice(HTML.indexOf('<style>') + 7, HTML.indexOf('</style>'));
-    const PANEL_CLASSES = ['dates', 'sum', 'who2', 'tk', 'none', 'missed', 'gaps'];
+    const PANEL_CLASSES = ['dates', 'sum', 'who2', 'tk', 'none', 'missed', 'gaps', 'aim'];
     const leaks = [];
     for (const rule of css.split('}')){
       const sel = rule.slice(rule.lastIndexOf('*/') + 1).split('{')[0];
@@ -2511,6 +2511,131 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
           /asked for/.test(card('Sukhmeet Singh').querySelector('.how').textContent));
     check('the hint names institutions the book does not have',
           /Zzz Unknown Academy/.test(txt(doc, '#meterhint')), txt(doc, '#meterhint'));
+  }
+
+  // ── 12d-ii. an (i) on every parameter ──────────────────────────
+  {
+    /* The card grew from two dials to six rows, and one (i) in the corner opened
+       a dialog that explained all of them in sequence. These buttons put the
+       explanation next to the figure it explains. Two rules matter more than the
+       placement: a button must never open a section that is not there, and it
+       must not disturb the row it sits in — the label, value and sub of a dial
+       are read positionally by the rest of this suite and by the eye. */
+    const { doc } = boot({ body: TEAM_INT, clientBody: TEAM_CLI }); await settle();
+    doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
+    const cards = [...doc.querySelectorAll('.mcard')];
+    const card = n => cards.find(c => new RegExp(n).test(c.querySelector('h4').textContent));
+    const body = doc.getElementById('howbody');
+    const sk = card('Sukhmeet Singh');
+    const closeAll = () => doc.getElementById('howclose').click();
+
+    check('the dials each carry their own (i)',
+          cards.every(c => [...c.querySelectorAll('.dial')].every(d => d.querySelector('button.mi'))),
+          String(cards.map(c => [...c.querySelectorAll('.dial')]
+            .filter(d => !d.querySelector('button.mi')).length)));
+    check('and so do the coverage lines',
+          cards.every(c => [...c.querySelectorAll('.covline')].every(l => l.querySelector('button.mi'))));
+    /* The card-level button is still there and is still the way to read the whole
+       panel — the row buttons are entry points into it, not a replacement. */
+    check('the card still has its own (i) as well',
+          cards.every(c => c.querySelector('button.info')));
+
+    /* The label column is a fixed width shared by every row and its text is how
+       a dial is identified. A control inside it would change both. */
+    check('no row button sits inside a label, value or sub',
+          !doc.querySelector('.lbl .mi, .val .mi, .sub .mi'));
+    check('the dial labels still read as their plain names',
+          [...sk.querySelectorAll('.dial .lbl')].map(x => x.textContent).join('|') ===
+          'Compliance|Business|Module adoption|Client feedback',
+          [...sk.querySelectorAll('.dial .lbl')].map(x => x.textContent).join('|'));
+
+    /* The guard that matters: renderMeter builds the panel first and only emits a
+       button for a section the panel actually contains. A team with nothing
+       escalated has no escalations section, so it must have no escalations (i). */
+    check('every row button names a section that exists in that card', cards.every(c => {
+      const panel = c.querySelector('.how');
+      return [...c.querySelectorAll('button.mi')]
+        .every(b => panel.querySelector(`[data-sec="${b.dataset.sec}"]`));
+    }));
+    check('and a row with no section behind it gets no button', cards.every(c => {
+      const has = !!c.querySelector('.how [data-sec="escalations"]');
+      return has === !!c.querySelector('.escline button.mi');
+    }), cards.map(c => `${c.querySelector('h4').textContent}:` +
+      `${!!c.querySelector('.how [data-sec="escalations"]')}` +
+      `/${!!c.querySelector('.escline button.mi')}`).join(' '));
+
+    /* Business had no section at all until these buttons existed — the dial was
+       the only one on the card with nothing behind it. */
+    check('business now has a section, and it agrees with its own dial', (() => {
+      const secs = [...sk.querySelectorAll('.how h5')].map(h => h.dataset.sec);
+      if (!secs.includes('business')) return false;
+      const sub = sk.querySelectorAll('.dial .sub')[1].textContent;     // "₹67.9L of ₹50L"
+      const panel = sk.querySelector('.how').textContent.replace(/\s+/g, ' ');
+      const [book, target] = sub.split(' of ');
+      return panel.includes(book.trim()) && panel.includes(target.trim());
+    })(), sk.querySelectorAll('.dial .sub')[1].textContent);
+
+    // clicking a row opens the dialog aimed at that row's section
+    const feedBtn = sk.querySelectorAll('.dial')[3].querySelector('button.mi');
+    feedBtn.click();
+    check('a row (i) opens the dialog', doc.getElementById('howmodal').hidden === false);
+    check('and lands on that row\'s section', body.dataset.aim === 'feedback', body.dataset.aim);
+    check('and marks the heading it was sent to',
+          body.querySelector('h5.aim')?.dataset.sec === 'feedback',
+          body.querySelector('h5.aim')?.textContent);
+    check('only one heading is marked', body.querySelectorAll('h5.aim').length === 1);
+
+    /* Reading a card's sections in turn must not mean closing and reopening
+       between each one. */
+    const compBtn = sk.querySelectorAll('.dial')[0].querySelector('button.mi');
+    compBtn.click();
+    check('a different row of the same card re-aims rather than closing',
+          doc.getElementById('howmodal').hidden === false && body.dataset.aim === 'compliance',
+          String(doc.getElementById('howmodal').hidden) + ' ' + body.dataset.aim);
+    compBtn.click();
+    check('and the same row again closes it', doc.getElementById('howmodal').hidden === true);
+    check('focus goes back to the row button that opened it',
+          doc.activeElement === compBtn);
+
+    // the coverage line points at the list of what is missing, where there is one
+    const covBtn = sk.querySelector('.covline button.mi');
+    covBtn.click();
+    check('the scored line opens the never-scored list',
+          body.dataset.aim === 'scored' &&
+          /Never scored/.test(body.querySelector('h5.aim').textContent),
+          body.dataset.aim + ' ' + (body.querySelector('h5.aim')?.textContent || ''));
+    closeAll();
+
+    /* The card button is unchanged: the whole panel, from the top, unaimed. */
+    sk.querySelector('button.info').click();
+    check('the card (i) still opens at the top with nothing singled out',
+          !body.dataset.aim && !body.querySelector('h5.aim'),
+          body.dataset.aim + ' ' + (body.querySelector('h5.aim')?.textContent || ''));
+    check('and still marks itself expanded',
+          sk.querySelector('button.info').getAttribute('aria-expanded') === 'true');
+    closeAll();
+    check('closing clears the aim',
+          !body.dataset.aim && body.innerHTML === '', body.dataset.aim);
+
+    /* A row (i) must leave the card's own button in a truthful state — it is the
+       one carrying aria-expanded for the whole card. */
+    feedBtn.click();
+    check('a row (i) marks the card expanded too',
+          sk.querySelector('button.info').getAttribute('aria-expanded') === 'true');
+    closeAll();
+    check('and clears it again',
+          doc.querySelectorAll('button.info[aria-expanded=true]').length === 0);
+
+    /* The reason this work started: "36 of 48 clients" was breaking after "48"
+       because the money beside it was allowed to squeeze it. Nothing headless can
+       measure a line break, so the rule is asserted statically. */
+    const css = HTML.slice(HTML.indexOf('<style>') + 7, HTML.indexOf('</style>'));
+    check('a coverage figure is not allowed to break mid-phrase',
+          /\.escline \.n,\.covline \.n\{[^}]*white-space:nowrap/s.test(css));
+    check('and the row wraps instead, so the money moves rather than the value',
+          /\.escline,\.covline\{[^}]*flex-wrap:wrap/s.test(css));
+    check('a dial row wraps by the same rule, now that it carries a control too',
+          /\.dial\{[^}]*flex-wrap:wrap/s.test(css));
   }
 
   // ── 12e. feedback failure paths ────────────────────────────────

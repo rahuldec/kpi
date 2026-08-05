@@ -258,6 +258,29 @@ computed. Escape, the backdrop and the close button all shut it, focus returns t
 the button that opened it, and any re-render closes it rather than leaving stale
 arithmetic on screen.
 
+**Every row has its own (i) as well.** The card button opens the panel at the top;
+the small button beside each parameter — compliance, business, module adoption,
+scored, client feedback, heard from, escalations — opens the same dialog scrolled to
+the section that explains that one row, with the heading it landed on marked. There
+is one panel and one set of arithmetic; these are entry points into it, not a second
+copy. Clicking another row of a card that is already open re-aims rather than
+closing, so reading a card's sections in turn is four clicks and not eight.
+
+A row button is only drawn when the section behind it exists — a team with nothing
+escalated has no escalations section and so no escalations (i). `renderMeter()`
+builds the panel first and checks it, which is the only way that guarantee holds as
+sections come and go. Business had no section at all until this went in: it is the
+one figure on the card whose two inputs are invisible there, because the book is a
+dated snapshot and the target is not the same number for every team once the scaled
+option is on. It says both.
+
+Adding a control to each row cost about 20px, which is enough to break
+"4.0/5 from 2 clients" in a 300px column. So every row on a card now wraps the same
+way: the label and the figure stay together on one line at any width, and the muted
+right-hand detail drops to a line of its own rather than the value being squeezed
+into a break mid-phrase. That is what "36 of 48 / clients" was — the value losing to
+the money beside it.
+
 **The four are not blended into one score.** Compliance is this month's behaviour,
 business is the standing book, adoption is last quarter's product usage; a team can be
 filing perfectly and still be far short on revenue, and a single averaged figure hides
@@ -752,11 +775,11 @@ entries loaded and when.
     node qa.js
     TZ=Asia/Kolkata node qa.js
 
-523 assertions with the network mocked: parsing (spacer rows above the header, quoted
+547 assertions with the network mocked: parsing (spacer rows above the header, quoted
 fields containing commas and newlines, blank assignees, case-variant names), every
 failure path (sheet not shared, network down, unparseable content), the date-window
 rules, cross-checks between the three places misses are counted, escaping of sheet
-content, the branding and embedded logo, the page title and metric grouping, the monthly scorecard and its CSV export, the coverage warning firing only for a month that really is outside the data, scorecard sorting (every column, both directions, exempt cells sinking, CSV matching the screen), the remembered view mode, range, tab and sort order, hidden people leaving no trace in any count while exempt people keep their row, the client book tab and its filters, the book column sitting beside compliance without altering it, lakh/crore formatting, pod resolution from first names with every failure reported on the page, the KPI meter (all three dials, degenerate rosters, and an invariant that meter compliance equals the pooled scorecard rows team by team), static hygiene (no duplicate ids, no dangling $() references, nothing declared and never used), the (i) panel agreeing with its dial down to the date count, and a sweep over every tab checking that what should be hidden is hidden in computed style rather than merely flagged, the source switch, the combined roster, per-tracker exemptions, the three view modes and their persistence, Sunday handling in Today/Yesterday, module adoption (a CSV round trip through the compiled snapshot, scratch rows dropped or reported but never counted, the team totals reconciling to the matched rows so nothing is double-counted or lost, ownership taken from the book rather than the tab with both sides of each disagreement named, coverage stated on every card, unscored clients excluded rather than zeroed, and three failure paths — an impossible score above its own denominator, a raw per-RM tab published by mistake, and an empty sheet — each falling back to the snapshot with the reason shown),
+content, the branding and embedded logo, the page title and metric grouping, the monthly scorecard and its CSV export, the coverage warning firing only for a month that really is outside the data, scorecard sorting (every column, both directions, exempt cells sinking, CSV matching the screen), the remembered view mode, range, tab and sort order, hidden people leaving no trace in any count while exempt people keep their row, the client book tab and its filters, the book column sitting beside compliance without altering it, lakh/crore formatting, pod resolution from first names with every failure reported on the page, the KPI meter (all three dials, degenerate rosters, and an invariant that meter compliance equals the pooled scorecard rows team by team), static hygiene (no duplicate ids, no dangling $() references, nothing declared and never used), the (i) panel agreeing with its dial down to the date count, a per-parameter (i) on every dial and coverage line that names a section the panel actually contains and none where it does not, aiming and re-aiming the dialog without closing it, and the coverage figure being forbidden to break mid-phrase, and a sweep over every tab checking that what should be hidden is hidden in computed style rather than merely flagged, the source switch, the combined roster, per-tracker exemptions, the three view modes and their persistence, Sunday handling in Today/Yesterday, module adoption (a CSV round trip through the compiled snapshot, scratch rows dropped or reported but never counted, the team totals reconciling to the matched rows so nothing is double-counted or lost, ownership taken from the book rather than the tab with both sides of each disagreement named, coverage stated on every card, unscored clients excluded rather than zeroed, and three failure paths — an impossible score above its own denominator, a raw per-RM tab published by mistake, and an empty sheet — each falling back to the snapshot with the reason shown),
 client feedback (the form's questions found by fragment rather than by position, one
 client's repeat submissions collapsing to the latest while both stay visible, an
 institution outside the book counted towards nobody and named, an unknown answer
