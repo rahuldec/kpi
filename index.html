@@ -175,6 +175,13 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
   display:flex;align-items:baseline;gap:9px;margin:2px 0 0;
   padding-top:12px;border-top:1px solid var(--hair);
 }
+/* A coverage line describes the dial ABOVE it, so it must not be fenced off from
+   it. With three dials the top rule was merely odd; with four it was wrong — the
+   adoption "Scored" line sat immediately above the Client feedback dial and read
+   as feedback's own coverage. The rule moves to the start of the next dial, so
+   each block is dial -> track -> its coverage line. */
+.covline{border-top:0;padding-top:6px}
+.covline + .dial,.covwho + .dial{padding-top:14px;border-top:1px solid var(--hair)}
 .escline .lbl,.covline .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.07em;
   color:var(--faint);width:88px;flex:none}
 .escline .n,.covline .n{font-size:15px;font-weight:600;letter-spacing:-.012em}

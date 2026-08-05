@@ -2373,6 +2373,24 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     });
 
     check('every card carries a heard-from line', cards.every(c => c.querySelectorAll('.covline').length === 2));
+    /* A coverage line describes the dial above it. Assert the pairing structurally
+       rather than trusting the reading order: with four dials, a line that drifts
+       away from its own dial lands directly above someone else's and is read as
+       theirs — which is exactly what the top rule made it look like. */
+    check('each coverage line sits with the dial it describes', cards.every(c => {
+      const kids = [...c.children];
+      return [...c.querySelectorAll('.covline')].every(l => {
+        const i = kids.indexOf(l);
+        return i > 1 && kids[i - 1].classList.contains('track') &&
+               kids[i - 2].classList.contains('dial');
+      });
+    }));
+    check('and the adoption line follows the adoption dial, not the feedback one',
+          cards.every(c => {
+            const kids = [...c.children];
+            const first = kids.indexOf(c.querySelector('.covline'));
+            return kids[first - 2].querySelector('.lbl').textContent === 'Module adoption';
+          }));
     const sk = dialOf(card('Sukhmeet Singh'), 3);
     check('the feedback dial reads out of five', /\/5 from \d+ client/.test(sk.sub), sk.sub);
     check('and the percentage is that score over five',
