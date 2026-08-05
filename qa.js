@@ -2262,6 +2262,11 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     check('the superseded one is marked as such',
           resp.filter(r => /superseded/.test(r[2])).length === 1,
           resp.map(r => r[2]).join(' | '));
+    check('the client name cell in every table holds only the name', (() => {
+      const names = [...doc.querySelectorAll('#feedresponses tbody tr, #feedteams tbody tr')]
+        .map(r => r.children[0].textContent.trim());
+      return names.every(n => !/\b(thin|superseded)\b/i.test(n));
+    })());
     check('and it is the older one that is marked', (() => {
       const b = resp.filter(r => /Budha College Karnal/.test(r[0]));
       /* Guarded rather than indexed blind: when the table comes back short this
@@ -2309,13 +2314,20 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
       const frac = r => { const m = r[1].match(/(\d+) of (\d+)/); return Number(m[1]) / Number(m[2]); };
       return teams.every((r, i) => i === 0 || frac(teams[i - 1]) >= frac(r));
     })(), teams.map(r => r[0] + ' ' + r[1]).join(' | '));
-    check('a thin sample is marked as thin',
-          teams.some(r => /thin/.test(r[0])), teams.map(r => r[0]).join(' | '));
+    /* The marker qualifies the score and must never sit in the name cell — it
+       rendered unstyled there and read as part of the person's name
+       ("Sukhmeet Singh thin"), which is how it was found. */
+    check('a thin sample is marked on the score, not the team name',
+          teams.some(r => /thin/.test(r[3])) && teams.every(r => !/thin/i.test(r[0])),
+          teams.map(r => r[0] + ' / ' + r[3]).join(' | '));
+    check('no qualifier is ever concatenated onto a name cell',
+          teams.every(r => !/thin|superseded/i.test(r[0])), teams.map(r => r[0]).join(' | '));
     check('the team figures agree with feedForTeam', (() => {
       const row = teams.find(r => /Kashish Goel/.test(r[0])) || [];
       const f = win.eval('JSON.stringify((({heard,total,sat}) => ({heard,total,sat}))(feedForTeam("Kashish Goel")))');
       const {heard: h, total: t, sat: sa} = JSON.parse(f);
-      return row[1] === `${h} of ${t}` && row[3] === (sa === null ? '—' : sa.toFixed(1));
+      return row[1] === `${h} of ${t}` &&
+             (row[3] || '').startsWith(sa === null ? '—' : sa.toFixed(1));
     })(), (teams.find(r => /Kashish Goel/.test(r[0])) || []).join('/'));
 
     /* The clients who said nothing are the point of the tab. They must be named,

@@ -412,6 +412,15 @@ table.board td.dim{color:var(--faint)}
 .minibar>span{display:block;height:100%;border-radius:3px;background:var(--brand)}
 .minibar>span.low{background:var(--miss)}
 table.board td.bad{color:var(--miss);font-weight:600}
+/* A qualifier on a figure, not part of it. `.tk` was styled only inside the info
+   panel, so the same span in a table rendered as plain text and ran straight on
+   from the cell's own words — "Sukhmeet Singh thin" read as somebody's name.
+   Anything that qualifies a value uses this instead, and it never sits in the
+   same cell as a name. */
+.mark{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;
+  border:1px solid var(--hair);
+  font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--faint);vertical-align:1px}
 
 /* sortable headers — the button carries the click so the keyboard gets it too */
 table.board th button{
@@ -2440,10 +2449,14 @@ function renderFeedback(){
     `<th class="num">Satisfaction</th><th class="num">Support</th>` +
     `<th class="num">Recommend</th></tr></thead><tbody>` +
     (teams.length ? teams.map(t =>
-      `<tr><td>${esc(t.lead)}${t.thin ? ' <span class="tk">thin</span>' : ''}</td>` +
+      /* The qualifier belongs on the number it qualifies. It is the satisfaction
+         score that rests on two replies, not the person. */
+      `<tr><td>${esc(t.lead)}</td>` +
       `<td class="num${t.heard < t.total ? ' bad' : ''}">${t.heard} of ${t.total}</td>` +
       `<td class="num">${t.revCoverage === null ? '—' : Math.round(t.revCoverage * 100) + '%'}</td>` +
-      `<td class="num">${outOf5(t.sat)}</td><td class="num">${outOf5(t.support)}</td>` +
+      `<td class="num">${outOf5(t.sat)}` +
+      `${t.thin ? '<span class="mark">thin</span>' : ''}</td>` +
+      `<td class="num">${outOf5(t.support)}</td>` +
       `<td class="num">${outOf5(t.reco)}</td></tr>`).join('')
       : `<tr><td colspan="6" class="dim">No team has a client in the book.</td></tr>`) +
     `</tbody>`;
@@ -2466,7 +2479,7 @@ function renderFeedback(){
       return `<tr${stale ? ' class="dim"' : ''}><td>${esc(r.client.n)}</td>` +
         `<td>${esc(r.client.o || '—')}</td>` +
         `<td>${esc(r.ts ? shortDate(r.ts) : r.rawTs || '—')}` +
-        `${stale ? ' <span class="tk">superseded</span>' : ''}</td>` +
+        `${stale ? '<span class="mark">superseded</span>' : ''}</td>` +
         `<td class="num${r.sat !== null && r.sat <= 2 ? ' bad' : ''}">` +
         `${r.sat === null ? '—' : r.sat + '/5'}</td>` +
         `<td>${esc(r.supRaw || '—')}</td><td>${esc(r.recoRaw || '—')}</td>` +
