@@ -15,15 +15,41 @@ The page is **CS Team KPI** — the whole set of team metrics. Everything curren
 it measures one thing, whether people filed what they owe, so it sits in a group
 labelled **Compliance**:
 
-    CS Team KPI                                        <- fixed page title
-      Compliance                   Business       Product      Voice        Overall
-        [ Internal ][ Client ]       [ Client      [ ERP        [ Client     [ KPI
-        [ Scorecard ]                  book ]        module       feedback ]   meter ]
-                                                     adoption ]
+    ┌──────────────────────┬────────────────────────────────────────┐
+    │ Okie Dokie           │  <- eyebrow                            │
+    │                      │  Compliance and business.  <- headline │
+    │ CS Team KPI          │  lede                                  │
+    │ Team metrics, …      │  ┌──────────────────────────────────┐  │
+    │                      │  │ months  skip-days      Refresh   │  │
+    │ COMPLIANCE           │  └──────────────────────────────────┘  │
+    │  Internal team calls │  ┌───────────┐ ┌───────────┐           │
+    │  Client calls        │  │ team card │ │ team card │           │
+    │  Scorecard           │  └───────────┘ └───────────┘           │
+    │ BUSINESS             │                                        │
+    │  Client book         │                                        │
+    │ PRODUCT              │                                        │
+    │  ERP module adoption │                                        │
+    │ VOICE                │                                        │
+    │  Client feedback     │                                        │
+    │ ────────────────     │                                        │
+    │ OVERALL              │                                        │
+    │  KPI meter           │                                        │
+    └──────────────────────┴────────────────────────────────────────┘
 
-The page title and the group label never change. The headline below the tabs does —
-it names the view you are in. A second family of metrics is a second `.group` block
-in `index.html` with its own label and its own tabs; nothing else has to move.
+The five groups used to sit side by side on one horizontal rule above the content,
+under a 64px page title. That cost roughly 350px of height before a single figure
+appeared, and it put **Overall** at the far right of a row of peers when it is not a
+peer — it is where the four beside it land. In the rail each label sits over its own
+tabs, Overall is pinned to the foot behind a rule, and the first card starts near the
+top of the window.
+
+The rail is 264px. Below 1000px there is no room for it beside a card grid, so it
+returns to the top of the page and lays the groups out along a row again; Overall
+loses its pin there, because a row has no foot to pin it to.
+
+The page title and the group labels never change. The headline in the content column
+does — it names the view you are in. A second family of metrics is a second `.group`
+block in `index.html` with its own label and its own tabs; nothing else has to move.
 
 Two trackers behind the first two tabs:
 
@@ -775,7 +801,7 @@ entries loaded and when.
     node qa.js
     TZ=Asia/Kolkata node qa.js
 
-547 assertions with the network mocked: parsing (spacer rows above the header, quoted
+558 assertions with the network mocked: parsing (spacer rows above the header, quoted
 fields containing commas and newlines, blank assignees, case-variant names), every
 failure path (sheet not shared, network down, unparseable content), the date-window
 rules, cross-checks between the three places misses are counted, escaping of sheet
@@ -791,7 +817,10 @@ leaving an empty tab that says why rather than an invented figure), a sweep that
 clicks every tab in every group and checks the view actually moved — the bug that
 found, 5 Aug, was a group added to the render list but not to the click wiring, which
 renders perfectly and does nothing —
-inverted date ranges, and timezone independence. Run them after any change to the parser — the
+the navigation rail (every tab inside it, the content column outside it, Overall
+last, and static checks for the column direction, the pin that holds Overall at the
+foot and the narrow-window rule that puts the horizontal strip back), inverted date
+ranges, and timezone independence. Run them after any change to the parser — the
 Asana form fields are expected to change once back-dated entries are blocked.
 
 ## Known limitations
@@ -804,3 +833,19 @@ These are open, not fixed:
 - "Never missed a day" counts anyone with a clean sheet, including someone whose first
   entry is the last day of the range. Read it alongside the Filed column.
 - Public holidays and leave are not modelled. Both read as missed days.
+
+### Two tests that had rotted on the calendar
+
+Both were failing on the untouched file before this change, and neither was a defect
+in the page:
+
+- **"changing To re-renders"** set the To field to a hardcoded `2026-08-07`. That was
+  forward of the default range when it was written and stopped being forward on 7 Aug
+  2026, at which point the test quietly stopped testing anything and then failed. It
+  now steps forward from whatever To currently holds.
+- **"crossing midnight moves the day on"** winds the clock forward 24 hours. Run on a
+  Saturday that lands on Sunday, `todayWorking()` correctly walks back to the
+  Saturday, the day does not move, and the test failed — every Saturday, for a page
+  behaving exactly as specified. It now steps over Sunday.
+
+Worth the general note: a date literal in a test has an expiry date on it.

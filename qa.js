@@ -570,6 +570,46 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
           txt(doc, '#h1'));
   }
 
+  // ── 1e3. the navigation is a rail, not a strip ─────────────────
+  {
+    /* The groups used to sit side by side on one rule above the content. They
+       are a column beside it now. What matters is not the direction for its own
+       sake: the tabs must all live in the rail, the content must NOT (or it
+       scrolls inside a 100vh column and the cards are lost), and Overall must
+       be last so the rail reads four inputs then the roll-up. */
+    const { doc } = boot(); await settle();
+    const rail = doc.querySelector('.rail');
+    check('there is a rail', !!rail);
+    check('the rail holds the masthead, the title and the groups',
+          !!rail?.querySelector('.masthead') && !!rail?.querySelector('h1') &&
+          !!rail?.querySelector('.groups'));
+    check('every tab is in the rail',
+          [...doc.querySelectorAll('button[data-src]')].every(b => rail?.contains(b)),
+          String([...doc.querySelectorAll('button[data-src]')].filter(b => !rail?.contains(b)).length) + ' outside');
+    check('the content column is beside the rail, not inside it',
+          !!doc.querySelector('.wrap') && !rail?.contains(doc.querySelector('.wrap')));
+    check('both sit in one shell',
+          doc.querySelector('.shell')?.contains(rail) &&
+          doc.querySelector('.shell')?.contains(doc.querySelector('.wrap')));
+
+    const labels = [...doc.querySelectorAll('.groups > .group .grouplabel')].map(x => x.textContent);
+    check('Overall is the last group, so it reads as the roll-up',
+          labels[labels.length - 1] === 'Overall', labels.join());
+
+    /* Static, because jsdom does not lay anything out: the column direction,
+       the pin that pushes Overall to the foot, and the narrow-window rule that
+       puts the strip back. Losing any one of them is a silent regression. */
+    const css = HTML.slice(HTML.indexOf('<style>') + 7, HTML.indexOf('</style>'));
+    check('the groups stack', /\.groups\{[^}]*flex-direction:column/.test(css));
+    check('the last group is pinned to the foot',
+          /\.groups > \.group:last-child\{[^}]*margin:auto 0 0/.test(css));
+    check('the tabs stack too', /\.sources\{[^}]*flex-direction:column/.test(css));
+    check('a narrow window gets the strip back',
+          /@media \(max-width:1000px\)\{[\s\S]*?\.groups\{[^}]*flex-direction:row/.test(css));
+    check('the selected marker is on the leading edge, not a bottom underline',
+          /aria-pressed=true\]::after\{[^}]*width:3px/.test(css));
+  }
+
   // ── 1f. scorecard ───────────────────────────────────────────────
   {
     const { doc } = boot(); await settle();
@@ -775,7 +815,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     check('the book tab lives in its own group',
           tab().closest('.group')?.querySelector('.grouplabel')?.textContent === 'Business',
           tab().closest('.group')?.querySelector('.grouplabel')?.textContent);
-    check('every group sits on one row',
+    check('there are five groups and no more',
           doc.querySelectorAll('.groups > .group').length === 5,
           String(doc.querySelectorAll('.groups > .group').length));
     check('and each one is labelled', (() => {
@@ -1927,7 +1967,13 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     const before = figs(doc).join();
     // From is the wrong lever here: with "skip days before first entry" on,
     // widening backwards adds no expected days. Moving To forward does.
-    doc.getElementById('to').value = '2026-08-07';
+    // Forward of whatever To currently holds, not a fixed date: this was
+    // written as '2026-08-07', which stopped being forward on 7 Aug 2026 and
+    // silently turned the test into a no-op that then failed.
+    const to = doc.getElementById('to');
+    const fwd = new Date(to.value + 'T00:00:00');
+    fwd.setDate(fwd.getDate() + 7);
+    to.value = fwd.toISOString().slice(0, 10);
     doc.getElementById('to').dispatchEvent(new win.Event('change'));
     check('changing To re-renders', figs(doc).join() !== before);
     // The toggle only has anything to skip across a multi-day window, so switch
@@ -2767,9 +2813,14 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
 
     /* Wind the page's idea of "now" forward a day and poke the rollover check
        the way returning to the tab would. */
+    /* One day forward is not always one WORKING day forward: run on a Saturday,
+       +24h lands on Sunday, todayWorking() walks back to the Saturday, and the
+       day correctly does not move — the test failed every Saturday for a page
+       that was behaving. Step over Sunday. */
     win.eval(`(() => {
       const real = Date;
-      const shifted = new Date(Date.now() + 86400000);
+      let shifted = new Date(Date.now() + 86400000);
+      if (shifted.getDay() === 0) shifted = new Date(shifted.getTime() + 86400000);
       globalThis.Date = class extends real {
         constructor(...a){ return a.length ? new real(...a) : new real(shifted); }
         static now(){ return shifted.getTime(); }
