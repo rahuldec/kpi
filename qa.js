@@ -344,6 +344,48 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
           b.doc.getElementById('asof').className === 'bad');
     check('a failed book does not take the compliance side down',
           b.doc.getElementById('content').hidden === false);
+
+    /* The notice above lives inside the client book panel. Every other place the
+       book supplies a figure — the business dial on the meter, its (i) section,
+       the scorecard's Book and Team columns — showed the snapshot with nothing
+       to say it was one. CLIENTS_ASOF silently becomes the snapshot's date, so
+       "as at 3 August" reads as a deliberate as-of rather than a failure: a
+       plausible, dated, wrong number, which is exactly the stale-BOOK shape.
+       A reader who never opens the book tab must still be told. */
+    /* A roster the PODS map recognises, so the meter renders cards rather than
+       its "no teams to show" state — the default fixture has nobody in a team. */
+    const bt = boot({ body: teamSheet(), clientBody: teamSheet(TEAM_PEOPLE, 500),
+                      bookBody: 'nothing,useful\n1,2' });
+    await settle();
+    bt.doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
+    const mh = txt(bt.doc, '#meterhint');
+    check('the meter says the business dials are the snapshot',
+          /live client book did not load/i.test(mh), mh.slice(0, 120));
+    check('and gives the reason there too', /Client Name/.test(mh), mh.slice(0, 200));
+
+    bt.doc.querySelector('#meters .mcard button.mi[data-sec="business"]')?.click();
+    await settle();
+    const bd = txt(bt.doc, '#howbody');
+    check('the business (i) section says it is the snapshot',
+          /snapshot built into this page/i.test(bd), bd.slice(0, 160));
+
+    bt.doc.querySelector('#sources button[data-src="scorecard"]').click(); await settle();
+    const sn = txt(bt.doc, '#scorenote');
+    check('the scorecard says its Book column is the snapshot',
+          /live client book unavailable/i.test(sn), sn);
+    check('and says compliance is unaffected by it',
+          /compliance figures are unaffected/i.test(sn), sn);
+
+    /* The mirror of all this: a working book must stay silent everywhere. A
+       warning that is always on is a warning nobody reads. */
+    const g = boot({ body: teamSheet(), clientBody: teamSheet(TEAM_PEOPLE, 500) });
+    await settle();
+    g.doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
+    check('a live book says nothing on the meter',
+          !/did not load/i.test(txt(g.doc, '#meterhint')));
+    g.doc.querySelector('#sources button[data-src="scorecard"]').click(); await settle();
+    check('a live book says nothing on the scorecard',
+          !/unavailable/i.test(txt(g.doc, '#scorenote')), txt(g.doc, '#scorenote'));
   }
 
   // ── 1a3. the published book parses back to the snapshot ────────

@@ -2257,6 +2257,12 @@ function bookDetail(r){
     ` — ` +
     (gap > 0 ? `<b>${esc(inr(Math.round(gap)))} short</b>.`
              : `<b>${esc(inr(Math.round(-gap)))} over</b>.`) +
+    /* When the live book fails, CLIENTS_ASOF quietly becomes the snapshot's date
+       and the sentence above still reads as a deliberate as-of — a plausible,
+       dated, wrong figure, which is the exact shape of the stale-BOOK bug. Say
+       it outright, in the same words the adoption section uses. */
+    (BOOK_LIVE ? '' : ` Read from the snapshot built into this page` +
+      (BOOK_ERROR ? ` because the live book failed: ${esc(BOOK_ERROR)}` : '') + `.`) +
     `</p>`;
 }
 
@@ -2825,6 +2831,9 @@ function renderMeter(){
     `rather than counted as unhappy, so read it beside the "heard from" line under it. ` +
     `The four are shown side by side, not blended: a team can be filing perfectly and ` +
     `still be short on business, and one number would hide which.` +
+    (BOOK_LIVE ? '' : ` <b>The live client book did not load</b>, so every business ` +
+                  `dial here is the snapshot taken ${esc(pretty(CLIENTS_ASOF))}, not ` +
+                  `today's book: ${esc(BOOK_ERROR || 'not loaded')}`) +
     (FEED_ERROR ? ` <b>The feedback sheet did not load</b>, so that dial is empty on every ` +
                   `card: ${esc(FEED_ERROR)}` : '') +
     (FEED_UNMATCHED.length
@@ -3087,7 +3096,13 @@ function renderScorecard(){
   const totExp = rows.reduce((s,r)=>s+r.expected,0);
   $('scorenote').textContent =
     `${monthsLabel()} · ${live.length} of ${days.length} working days elapsed · ` +
-    `${totMissed} missed of ${totExp} expected entries`;
+    `${totMissed} missed of ${totExp} expected entries` +
+    /* The Book and Team columns come off the same CLIENTS as the meter, so this
+       tab is the third place a failed book shows a stale figure without saying
+       so. Compliance itself is unaffected — the wording has to separate them. */
+    (BOOK_LIVE ? '' : ` · live client book unavailable, so the Book and Team ` +
+      `columns are the snapshot taken ${pretty(CLIENTS_ASOF)} — the missed and ` +
+      `compliance figures are unaffected`);
 }
 
 function downloadCsv(){

@@ -801,7 +801,7 @@ entries loaded and when.
     node qa.js
     TZ=Asia/Kolkata node qa.js
 
-558 assertions with the network mocked: parsing (spacer rows above the header, quoted
+565 assertions with the network mocked: parsing (spacer rows above the header, quoted
 fields containing commas and newlines, blank assignees, case-variant names), every
 failure path (sheet not shared, network down, unparseable content), the date-window
 rules, cross-checks between the three places misses are counted, escaping of sheet
@@ -849,3 +849,44 @@ in the page:
   behaving exactly as specified. It now steps over Sunday.
 
 Worth the general note: a date literal in a test has an expiry date on it.
+
+
+## A failed book was only loud on its own tab
+
+Found 8 Aug 2026 while checking a "sheets not loading" report.
+
+When the published client book fails, `CLIENTS` falls back to the compiled snapshot
+and `CLIENTS_ASOF` quietly becomes the snapshot's date. The client book tab shouted
+about it correctly — `LIVE BOOK UNAVAILABLE`, in red, with the reason. Nowhere else
+did. The business dial on the KPI meter, its (i) section, and the scorecard's Book
+and Team columns all showed snapshot money, and the (i) panel's "as at 3 August 2026"
+read as a deliberate as-of rather than as a failure.
+
+That is the same shape as the stale-`BOOK` bug of 5 Aug — a plausible, dated, wrong
+number — arriving through a different door. The notice was in the right place for
+whoever wired the book up and the wrong place for whoever reads the meter.
+
+All three now say it, in the wording the adoption section already used for its own
+fallback. The scorecard's version separates the two halves explicitly, because a
+failed book does not touch compliance and the note must not imply it does. A working
+book still says nothing anywhere: a warning that is always on is a warning nobody
+reads, and qa asserts the silence as well as the noise.
+
+### Which sheet is not loading
+
+`qa.js` cannot answer this — it mocks the network, so it tests what the page does
+*with* a failure, never whether one is happening. The live answer is in the API,
+which returns either CSV or a JSON body carrying `error`, `hint` and `attempted`:
+
+    /api/data?src=internal
+    /api/data?src=client
+    /api/data?src=book
+    /api/data?src=escalations
+    /api/data?src=feedback
+    /api/data?src=adoption&rms=Mansi%20Rana,Kashish%20Goel
+
+Adoption needs the `rms` parameter — the page sends it from the client book, and an
+empty list is itself reported rather than guessed at.
+
+Before chasing any of it, hard-reload. Browser caching on this repo has looked like
+a data problem three times now.
