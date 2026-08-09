@@ -801,7 +801,7 @@ entries loaded and when.
     node qa.js
     TZ=Asia/Kolkata node qa.js
 
-631 assertions with the network mocked: parsing (spacer rows above the header, quoted
+638 assertions with the network mocked: parsing (spacer rows above the header, quoted
 fields containing commas and newlines, blank assignees, case-variant names), every
 failure path (sheet not shared, network down, unparseable content), the date-window
 rules, cross-checks between the three places misses are counted, escaping of sheet
@@ -1201,3 +1201,44 @@ on that axis and should not be able to move on it. The rule is lifted again belo
 1000px, where the rail becomes a row and sideways is the point.
 
 Each of the three fixes fails 2 assertions if reverted.
+
+
+## `hidden` was not hidden — 9 Aug 2026
+
+Three rounds of screenshots showed text from one view overlapping another, in a
+narrow column, in a font nothing on the page uses. Two wrong diagnoses first (the
+`<p>` nesting, then the notice strip's own CSS). The screenshot that settled it
+showed something else entirely: a **From/To date range on the KPI meter tab**, a
+control that ships with the `hidden` attribute and has no business on that view.
+
+That was the tell. Every scrap of the overlapping text is content the page has
+already set `hidden` on. It was rendering anyway.
+
+`hidden` is only a UA-stylesheet `display:none`. **Any author rule that sets
+`display` on the same element beats it on specificity**, and the element renders —
+at whatever width its own container gives it, over the top of whatever is
+genuinely open. This stylesheet had four `[hidden]` guards scattered through it,
+each added when its own case was discovered. One blanket rule replaces the need
+to remember:
+
+    [hidden]{display:none !important}
+
+qa asserts the rule exists, and separately that no display rule targets a
+sometimes-hidden element without a `[hidden]` guard of its own — so the next one
+added is caught rather than rediscovered from a screenshot.
+
+### And the control that gave it away
+
+`markSource()` computed the right condition:
+
+    $('dates').hidden = !daily || MODE !== 'custom';
+
+then `markMode()` ran afterwards and overwrote it with `MODE !== 'custom'` alone.
+A persisted `custom` range therefore unhid the date pair on every tab. Two
+functions writing the same property, one of them knowing less than the other.
+
+Generalise, and it is the same shape as the `setMonths()` dispatch bug earlier
+today: **when two functions write the same piece of state, the one that runs last
+wins, whether or not it knows enough to.**
+
+Reverting either fix fails 2 assertions.

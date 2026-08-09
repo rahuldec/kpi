@@ -618,6 +618,63 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
           txt(doc, '#h1'));
   }
 
+  // ── 1e3b. hidden means hidden ───────────────────────────────────
+  {
+    /* A panel the page has closed must not paint over one it has opened.
+       `hidden` is only a UA `display:none`, so ANY author rule setting display
+       on that element wins on specificity and renders it anyway — which looks
+       like text from another view overlapping the current one, at whatever width
+       its own container gives it.
+
+       Asserted two ways because jsdom applies no cascade: the blanket rule must
+       exist, and no element that ships hidden may be targeted by a display rule
+       without a [hidden] guard of its own. */
+    const css = HTML.slice(HTML.indexOf('<style>'), HTML.indexOf('</style>'));
+    check('hidden is enforced against the cascade',
+          /\[hidden\]\{display:none ?!important\}/.test(css));
+
+    const { doc } = boot(); await settle();
+    const shipped = [...doc.querySelectorAll('[hidden]')];
+    check('and there are elements relying on it', shipped.length > 0);
+
+    const unguarded = [];
+    for (const rule of css.split('}')){
+      const sel = rule.slice(rule.lastIndexOf('*/') + 1).split('{')[0]
+        .replace(/\/\*[\s\S]*?\*\//g, '').trim();
+      const body = rule.split('{')[1] || '';
+      if (!sel || sel.startsWith('/') || !/display\s*:/.test(body)) continue;
+      if (/\[hidden\]/.test(sel)) continue;
+      for (const el of shipped){
+        if (!el.id) continue;
+        if (new RegExp('#' + el.id + '(?![-\\w])').test(sel)) unguarded.push(`${sel} -> #${el.id}`);
+      }
+    }
+    check('no display rule targets a sometimes-hidden element unguarded',
+          unguarded.length === 0, unguarded.join(' | '));
+  }
+
+  // ── 1e3c. the range control belongs to the daily views ──────────
+  {
+    /* markSource() worked this out correctly and markMode() then overwrote it
+       with MODE alone, so a persisted 'custom' range put a From/To pair on the
+       KPI meter — a tab with no use for one. Two functions writing the same
+       property, one of them knowing less. */
+    const { doc, win } = boot(); await settle();
+    win.eval("applyMode('custom', false)"); await settle();
+    check('a custom range shows the control on a daily view',
+          doc.getElementById('dates').hidden === false);
+    doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
+    check('and hides it again on the meter',
+          doc.getElementById('dates').hidden === true,
+          'the date range is showing on a tab that cannot use it');
+    win.eval('markMode()');
+    check('and markMode does not put it back',
+          doc.getElementById('dates').hidden === true);
+    doc.querySelector('#sources button[data-src="internal"]').click(); await settle();
+    check('but it returns when a daily view does',
+          doc.getElementById('dates').hidden === false);
+  }
+
   // ── 1e4. the selection pill ─────────────────────────────────────
   {
     /* Decoration over the top of the list, never the mechanism. jsdom reports

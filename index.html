@@ -206,6 +206,12 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
 /* ── the (i) dialog ─ */
 .modal{position:fixed;inset:0;z-index:60;display:flex;align-items:center;
   justify-content:center;padding:24px}
+/* `hidden` means hidden — no exceptions, no per-rule guards to remember.
+   An author `display:` beats the UA stylesheet's `[hidden]{display:none}` on
+   specificity, so any rule setting display on an element that is sometimes
+   hidden will render it anyway. That is a whole class of bug where a closed
+   panel paints on top of an open one, and it is not worth rediscovering. */
+[hidden]{display:none !important}
 .modal[hidden]{display:none}
 .modalback{position:absolute;inset:0;background:rgba(24,20,18,.42)}
 .sheet{
@@ -3774,7 +3780,12 @@ function markSource(){
 function markMode(){
   for (const b of $('presets').children)
     b.setAttribute('aria-pressed', String(b.dataset.mode === MODE));
-  $('dates').hidden = MODE !== 'custom';
+  /* MODE is not the only thing that decides this. The range control belongs to
+     the daily views, and this line used to unhide it on whatever tab happened to
+     be open — so a persisted 'custom' mode put a From/To pair on the KPI meter,
+     which has no use for one. markSource() had the correct condition; this
+     overwrote it afterwards. */
+  $('dates').hidden = MODE !== 'custom' || modeOf(SOURCE) !== 'daily';
 }
 
 function applyMode(mode, remember){
