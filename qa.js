@@ -1359,12 +1359,16 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     /* Cap the standing text only. Capping the whole hint would have measured the
        warnings, which are the part that must NOT be trimmed — a page with a lot
        wrong is supposed to say a lot. */
-    /* STATIC, and it has to be. jsdom's innerHTML setter happily nests a <p>
-       inside a <p>; a real browser's parser closes the outer one at the first
-       block child, so the notice list escaped its container and rendered on top
-       of the paragraph. Every DOM assertion in this suite passed while the page
-       was visibly broken. The only way to catch it is to check the source: a
-       container that gets block-level content must not be a <p>. */
+    /* Invalid nesting, checked statically because no DOM assertion can see it.
+       A <p> cannot contain a <p> or a <ul>: parsing THAT FROM SOURCE closes the
+       outer one at the first block child. Setting it via innerHTML does not —
+       the fragment parser's stack holds only the root, so there is no open <p>
+       in button scope to close, and the children stay put. jsdom and a browser
+       agree on both halves of that.
+
+       Which is worth writing down, because it means this was NOT the cause of
+       the overlapping notice strip it was first blamed for. It is still invalid
+       markup and still worth pinning; it is not a rendering bug. */
     for (const id of ['meterhint', 'adopthint', 'feedhint', 'visithint']){
       const m = HTML.match(new RegExp(`<(\\w+)([^>]*)id="${id}"`));
       check(`#${id} is not a <p> — it takes block content`,

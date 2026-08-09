@@ -343,10 +343,16 @@ html.modalopen{overflow:hidden}
    parse a wall to find out whether anything was actually wrong. One line each,
    with the level in the marker rather than in the wording. */
 #meterhint .period{margin:0}
-#meterhint .notices{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:1px;
-  border:1px solid var(--hair);border-radius:12px;overflow:hidden;background:var(--hair)}
-#meterhint .notices li{background:var(--card);padding:10px 14px 10px 32px;position:relative;
+/* Ordinary block flow, and deliberately nothing cleverer. The first version drew
+   its separators as a 1px grid gap over a tinted background, with overflow
+   hidden to clip the corners — three mechanisms cooperating to produce a line
+   between two rows. Real borders need none of them, and a list of warnings is
+   not the place to spend a layout trick. */
+#meterhint .notices{list-style:none;margin:12px 0 0;padding:0;
+  border:1px solid var(--hair);border-radius:12px}
+#meterhint .notices li{padding:10px 14px 10px 32px;position:relative;
   font-size:13px;line-height:1.5;color:var(--body)}
+#meterhint .notices li + li{border-top:1px solid var(--hair)}
 #meterhint .notices li::before{content:'';position:absolute;left:14px;top:16px;
   width:7px;height:7px;border-radius:50%;background:var(--faint)}
 #meterhint .notices li.bad::before{background:var(--miss)}

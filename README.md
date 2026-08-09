@@ -1158,25 +1158,34 @@ deleting the pill element fails 4.
 
 ## Two bugs from the notice strip and the pill — 9 Aug 2026
 
-### `<p>` cannot contain `<p>`, and the whole suite missed it
+### A wrong diagnosis, recorded because it was acted on
 
-`#meterhint` was `<p class="hint">`. The rebuilt notice strip put a `<p>` and a
-`<ul>` inside it. A browser's parser closes the outer `<p>` at the first block
-child, so the list escaped its container and rendered on top of the paragraph —
-two blocks of text overlapping in a narrow column.
+`#meterhint` was `<p class="hint">` and the rebuilt notice strip put a `<p>` and
+a `<ul>` inside it. That is invalid, and it was blamed for the overlapping render
+in the screenshots. **It was not the cause.**
 
-**Every DOM assertion passed while the page was visibly broken.** jsdom's
-`innerHTML` setter does not run the same parsing rules; it nests a `<p>` inside a
-`<p>` without complaint. So no test that reads the rendered DOM could ever have
-caught this, and writing one would have given false confidence.
+A `<p>` does get closed at its first block child — when the markup is parsed
+*from source*. This content arrives through `innerHTML`, and the fragment parsing
+algorithm sets up a stack containing only the root element, so there is no open
+`<p>` in button scope to close and the children stay where they were put. jsdom
+and a browser agree, and both were checked before this paragraph was written
+rather than after.
 
-The guard is static instead: for each hint container, the tag in the source must
-not be `p`. All four are `<div class="hint">` now — the other three only hold
-inline content today, but the next block element added to any of them would have
-repeated this.
+The containers are `<div class="hint">` anyway, because the nesting was invalid
+regardless, and qa pins it statically — no DOM assertion can see it either way.
+But it fixed nothing visible, and the note that said it did was wrong.
 
-Generalise: **when the test environment's parser is more forgiving than a
-browser's, the DOM is the wrong place to assert.** Check the source.
+Lesson, and it is the second time in this file: **a diagnosis that explains the
+symptom is not the same as a diagnosis that was tested.** The earlier one cost
+two wrong fixes before Ctrl+Shift+R turned out to be the answer.
+
+### The notice strip drew its own separators three ways
+
+What replaced it: `display:grid` with `gap:1px` over a tinted background, plus
+`overflow:hidden` to clip the corners — three mechanisms cooperating to draw a
+line between two rows. It is now `border-top` on `li + li` and nothing else.
+Ordinary block flow has the fewest ways to collapse, and a list of warnings is
+not where to spend a layout trick.
 
 ### The pill was positioned twice, and the rail scrolled sideways
 
