@@ -657,6 +657,20 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
           doc.querySelector('#sources button[data-src="internal"]')
              .getAttribute('aria-pressed') === 'false');
 
+    /* The pill was offset twice — `left:8px` in the CSS and the same 8px taken
+       off the transform — which put it wide of the tab and stretched the rail's
+       scroll width until the rail scrolled sideways. `.groups` is the offset
+       parent, so a child's offsetLeft is already relative to it, padding and
+       all. One source of truth for the position, and the column must not be
+       able to scroll on an axis it has no content on. */
+    check('the pill is positioned once, by the transform only',
+          /\.navpill\{[^}]*left:0/.test(css) &&
+          !/pill\.style\.transform[^;]*- 8/.test(HTML), 'the 8px is applied twice');
+    check('and the position comes straight from the offset parent',
+          !/on\.offsetLeft - groups\.offsetLeft/.test(HTML));
+    check('a vertical rail cannot scroll sideways',
+          /\.groups\{[^}]*overflow-x:hidden/.test(css));
+
     check('motion is dropped for anyone who asked for that',
           /prefers-reduced-motion:reduce\)\{[\s\S]{0,120}\.navpill\.ready\{transition:opacity/.test(css));
   }
@@ -1345,6 +1359,18 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     /* Cap the standing text only. Capping the whole hint would have measured the
        warnings, which are the part that must NOT be trimmed — a page with a lot
        wrong is supposed to say a lot. */
+    /* STATIC, and it has to be. jsdom's innerHTML setter happily nests a <p>
+       inside a <p>; a real browser's parser closes the outer one at the first
+       block child, so the notice list escaped its container and rendered on top
+       of the paragraph. Every DOM assertion in this suite passed while the page
+       was visibly broken. The only way to catch it is to check the source: a
+       container that gets block-level content must not be a <p>. */
+    for (const id of ['meterhint', 'adopthint', 'feedhint', 'visithint']){
+      const m = HTML.match(new RegExp(`<(\\w+)([^>]*)id="${id}"`));
+      check(`#${id} is not a <p> — it takes block content`,
+            m && m[1].toLowerCase() !== 'p', m ? `<${m[1]}>` : 'not found');
+    }
+
     check('the methodology essay is gone', (() => {
       const t = txt(doc, '#meterhint');
       return !/summed across the team rather than averaged/.test(t) &&

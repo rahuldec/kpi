@@ -391,7 +391,7 @@ table.board th.num,table.board th.num button{justify-content:flex-end}
    rather than as one caption in a row of five. */
 .groups{
   display:flex;flex-direction:column;align-items:stretch;
-  flex:1 1 auto;min-height:0;overflow-y:auto;
+  flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;
   margin:0 -8px;padding:0 8px;position:relative;
 }
 .group{margin:0 0 8px}
@@ -407,7 +407,7 @@ table.board th.num,table.board th.num button{justify-content:flex-end}
    the end is what makes it feel like the pill arrived somewhere rather than
    faded there. */
 .navpill{
-  position:absolute;left:8px;top:0;width:0;height:0;border-radius:9px;
+  position:absolute;left:0;top:0;width:0;height:0;border-radius:9px;
   background:var(--brand-soft);pointer-events:none;opacity:0;z-index:0;
 }
 .navpill.ready{opacity:1;transition:
@@ -710,6 +710,7 @@ footer b{color:var(--body);font-weight:600}
     flex-direction:row;flex-wrap:wrap;align-items:flex-end;gap:8px 34px;
     overflow:visible;margin:0;padding:0;
   }
+  .groups{overflow-x:visible}
   .group{margin:0}
   .groups > .group:last-child{margin:0;padding-top:0;border-top:0}
   .grouplabel{padding:0 10px}
@@ -839,7 +840,7 @@ footer b{color:var(--body);font-weight:600}
   <section id="meter" hidden>
     <div class="card">
       <h3>Team KPI</h3>
-      <p class="hint" id="meterhint"></p>
+      <div class="hint" id="meterhint"></div>
       <div class="meters" id="meters"></div>
     </div>
   </section>
@@ -847,7 +848,7 @@ footer b{color:var(--body);font-weight:600}
   <section id="adoption" hidden>
     <div class="card">
       <h3>Where it stands</h3>
-      <p class="hint" id="adopthint"></p>
+      <div class="hint" id="adopthint"></div>
       <div class="meters" id="adopttotals"></div>
     </div>
     <div class="card">
@@ -875,7 +876,7 @@ footer b{color:var(--body);font-weight:600}
   <section id="feedback" hidden>
     <div class="card">
       <h3>Where it stands</h3>
-      <p class="hint" id="feedhint"></p>
+      <div class="hint" id="feedhint"></div>
       <div class="meters" id="feedtotals"></div>
     </div>
     <div class="card">
@@ -903,7 +904,7 @@ footer b{color:var(--body);font-weight:600}
   <section id="visits" hidden>
     <div class="card">
       <h3>Where it stands</h3>
-      <p class="hint" id="visithint"></p>
+      <div class="hint" id="visithint"></div>
       <div class="meters" id="visittotals"></div>
     </div>
     <div class="card">
@@ -3705,11 +3706,14 @@ function moveNavPill(animate){
   const groups = document.querySelector('.groups');
   const on = groups && groups.querySelector('button[aria-pressed=true]');
   if (!pill || !on || typeof on.offsetWidth !== 'number' || !on.offsetWidth) return;
-  const x = on.offsetLeft - groups.offsetLeft + groups.scrollLeft;
-  const y = on.offsetTop - groups.offsetTop + groups.scrollTop;
+  /* `.groups` is position:relative, so it is the offset parent — these are
+     already relative to it, padding included. Subtracting its own offsets as
+     well put the pill wide of the tab and stretched the rail's scroll width. */
+  const x = on.offsetLeft;
+  const y = on.offsetTop;
   pill.style.width  = on.offsetWidth + 'px';
   pill.style.height = on.offsetHeight + 'px';
-  pill.style.transform = `translate(${x - 8}px, ${y}px)`;
+  pill.style.transform = `translate(${x}px, ${y}px)`;
   /* The pill is placed before it is allowed to animate, so the first paint does
      not show it flying in from the corner. */
   if (animate === false){

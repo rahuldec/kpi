@@ -801,7 +801,7 @@ entries loaded and when.
     node qa.js
     TZ=Asia/Kolkata node qa.js
 
-624 assertions with the network mocked: parsing (spacer rows above the header, quoted
+631 assertions with the network mocked: parsing (spacer rows above the header, quoted
 fields containing commas and newlines, blank assignees, case-variant names), every
 failure path (sheet not shared, network down, unparseable content), the date-window
 rules, cross-checks between the three places misses are counted, escaping of sheet
@@ -1154,3 +1154,41 @@ the pill never positioned*: positioning does not throw, the pill stays
 unpositioned rather than parking in the corner, the fallback marker still draws,
 and tabs still switch. Hiding the fallback unconditionally fails 2 assertions;
 deleting the pill element fails 4.
+
+
+## Two bugs from the notice strip and the pill — 9 Aug 2026
+
+### `<p>` cannot contain `<p>`, and the whole suite missed it
+
+`#meterhint` was `<p class="hint">`. The rebuilt notice strip put a `<p>` and a
+`<ul>` inside it. A browser's parser closes the outer `<p>` at the first block
+child, so the list escaped its container and rendered on top of the paragraph —
+two blocks of text overlapping in a narrow column.
+
+**Every DOM assertion passed while the page was visibly broken.** jsdom's
+`innerHTML` setter does not run the same parsing rules; it nests a `<p>` inside a
+`<p>` without complaint. So no test that reads the rendered DOM could ever have
+caught this, and writing one would have given false confidence.
+
+The guard is static instead: for each hint container, the tag in the source must
+not be `p`. All four are `<div class="hint">` now — the other three only hold
+inline content today, but the next block element added to any of them would have
+repeated this.
+
+Generalise: **when the test environment's parser is more forgiving than a
+browser's, the DOM is the wrong place to assert.** Check the source.
+
+### The pill was positioned twice, and the rail scrolled sideways
+
+`left:8px` in the CSS, and the same 8px subtracted again from the transform.
+They did not cancel: `.groups` is `position:relative`, so it is the offset parent
+and a child's `offsetLeft` already includes its padding. The pill sat 8px wide of
+its tab — far enough right to stretch the rail's scroll width and give a vertical
+column a horizontal scrollbar.
+
+One source of truth for the position now (the transform), and `.groups` sets
+`overflow-x:hidden` in the column layout, because a vertical rail has no content
+on that axis and should not be able to move on it. The rule is lifted again below
+1000px, where the rail becomes a row and sideways is the point.
+
+Each of the three fixes fails 2 assertions if reverted.
