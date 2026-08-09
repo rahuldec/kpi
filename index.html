@@ -337,6 +337,22 @@ html.modalopen{overflow:hidden}
   text-align:right;white-space:nowrap}
 .how .vlist{margin-top:4px}
 .board tr.flat td{color:var(--faint)}
+
+/* ── the meter's notice strip ─────────────────────────────────────────────────
+   Warnings were a paragraph, so they read as more prose and the reader had to
+   parse a wall to find out whether anything was actually wrong. One line each,
+   with the level in the marker rather than in the wording. */
+#meterhint .period{margin:0}
+#meterhint .notices{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:1px;
+  border:1px solid var(--hair);border-radius:12px;overflow:hidden;background:var(--hair)}
+#meterhint .notices li{background:var(--card);padding:10px 14px 10px 32px;position:relative;
+  font-size:13px;line-height:1.5;color:var(--body)}
+#meterhint .notices li::before{content:'';position:absolute;left:14px;top:16px;
+  width:7px;height:7px;border-radius:50%;background:var(--faint)}
+#meterhint .notices li.bad::before{background:var(--miss)}
+#meterhint .notices li.warn::before{background:var(--brand)}
+#meterhint .notices li b{color:var(--ink);font-weight:600}
+#meterhint .notices li code{font-size:12px}
 .escwho,.covwho{font-size:12.5px;line-height:1.45;color:var(--miss);margin:5px 0 0 97px}
 .escwho.cool,.covwho.cool{color:var(--faint)}
 
@@ -376,17 +392,42 @@ table.board th.num,table.board th.num button{justify-content:flex-end}
 .groups{
   display:flex;flex-direction:column;align-items:stretch;
   flex:1 1 auto;min-height:0;overflow-y:auto;
-  margin:0 -8px;padding:0 8px;
+  margin:0 -8px;padding:0 8px;position:relative;
 }
-.group{margin:0 0 14px}
+.group{margin:0 0 8px}
+
+/* ── the selection ────────────────────────────────────────────────────────────
+   One pill for the whole rail rather than a background on each tab, so moving
+   between tabs is a movement rather than one thing switching off and another
+   switching on. It is decoration over the top of the list — the tab itself still
+   carries aria-pressed, and if the script never positions this, nothing about
+   the navigation stops working.
+
+   The curve matters more than the duration: ease-out overshooting slightly at
+   the end is what makes it feel like the pill arrived somewhere rather than
+   faded there. */
+.navpill{
+  position:absolute;left:8px;top:0;width:0;height:0;border-radius:9px;
+  background:var(--brand-soft);pointer-events:none;opacity:0;z-index:0;
+}
+.navpill.ready{opacity:1;transition:
+  transform .46s cubic-bezier(.22,1.2,.36,1),
+  height .34s cubic-bezier(.22,1,.36,1),
+  width .34s cubic-bezier(.22,1,.36,1),
+  opacity .2s ease}
+.navpill::before{
+  content:'';position:absolute;left:0;top:6px;bottom:6px;width:3px;
+  background:var(--brand);border-radius:0 3px 3px 0;
+}
+.sources button{z-index:1}
 /* Overall is not a sixth family — it is where the four above it land. Pinned to
    the foot behind a rule, the column reads inputs first, then the roll-up. */
 .groups > .group:last-child{
   margin:auto 0 0;padding-top:16px;border-top:1px solid var(--hair);
 }
 .grouplabel{
-  display:block;font-size:11px;font-weight:600;text-transform:uppercase;
-  letter-spacing:.09em;color:var(--deep);margin:0 0 6px;padding:0 10px;
+  display:block;font-size:10px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.1em;color:var(--faint);margin:0 0 2px;padding:0 10px;
 }
 
 /* ── hero ─────────────────────────────────────────────────────────────────── */
@@ -410,17 +451,20 @@ table.board th.num,table.board th.num button{justify-content:flex-end}
    edge and the row itself takes a tint. */
 .sources{display:flex;flex-direction:column;gap:1px;margin:0}
 .sources button{
-  font:inherit;font-size:15px;font-weight:500;letter-spacing:-.014em;
+  font:inherit;font-size:14.5px;font-weight:500;letter-spacing:-.014em;
   border:0;background:none;color:var(--body);cursor:pointer;text-align:left;
-  padding:8px 10px;border-radius:9px;position:relative;
-  transition:color .2s ease,background .2s ease;
+  padding:7px 10px;border-radius:9px;position:relative;
+  transition:color .2s ease;
 }
-.sources button:hover{color:var(--ink);background:var(--page)}
-.sources button[aria-pressed=true]{color:var(--ink);font-weight:600;background:var(--brand-soft)}
+.sources button:hover{color:var(--ink)}
+.sources button[aria-pressed=true]{color:var(--ink);font-weight:600}
+/* The fallback marker, for anything that never runs the positioning script — a
+   tab must never be unmarked. It hides itself the moment the pill is live. */
 .sources button[aria-pressed=true]::after{
   content:'';position:absolute;left:0;top:6px;bottom:6px;right:auto;width:3px;height:auto;
   background:var(--brand);border-radius:0 3px 3px 0;
 }
+.groups.piloted .sources button[aria-pressed=true]::after{display:none}
 
 /* ── controls ─────────────────────────────────────────────────────────────── */
 .controls{
@@ -650,6 +694,9 @@ footer b{color:var(--body);font-weight:600}
    to the top of the page and lays its groups out along a row again — the layout
    this replaced. Overall loses its pin here: in a row there is no foot to pin
    it to, and it simply sits last. */
+@media (prefers-reduced-motion:reduce){
+  .navpill.ready{transition:opacity .2s ease}
+}
 @media (max-width:1000px){
   .shell{display:block}
   .rail{
@@ -694,6 +741,7 @@ footer b{color:var(--body);font-weight:600}
   <p class="tagline">Team metrics, recomputed from the trackers every time this page is opened.</p>
 
   <div class="groups">
+      <span class="navpill" aria-hidden="true"></span>
     <div class="group">
       <span class="grouplabel" id="grouplabel">Compliance</span>
       <div class="sources" id="sources">
@@ -3173,54 +3221,67 @@ function renderMeter(){
   OPEN_CARD = null;
 
   const running = MONTHS.includes(thisMonth());
+  /* This was six sentences of methodology followed by whatever warnings applied,
+     as one paragraph. The methodology has been reachable from every dial's own
+     (i) since the per-row buttons went in, so on the page it was restating what
+     the reader could already ask for — and it pushed the warnings, which are the
+     part nobody can get anywhere else, into the middle of a wall of text where
+     they read as more prose.
+
+     What is left is the period, and the things that are wrong. A notice here
+     always means something needs a decision or a rename; when nothing does, the
+     strip is a single quiet line. */
+  const notices = [];
+  const notice = (level, head, body) => notices.push({level, head, body});
+
+  if (!BOOK_LIVE)
+    notice('bad', 'Live client book did not load',
+      `every business dial is the snapshot taken ${esc(pretty(CLIENTS_ASOF))}, not ` +
+      `today's book — ${esc(BOOK_ERROR || 'not loaded')}`);
+  if (FEED_ERROR)
+    notice('bad', 'Feedback sheet did not load',
+      `that dial is empty on every card — ${esc(FEED_ERROR)}`);
+  if (FEED_UNMATCHED.length)
+    notice('warn',
+      `${FEED_UNMATCHED.length} ${FEED_UNMATCHED.length === 1 ? 'institution' : 'institutions'} ` +
+      `answered under a name the book does not have`,
+      `${FEED_UNMATCHED.map(esc).join(', ')} — count towards nobody. ` +
+      `Add to <code>FEED_ALIAS</code> if they are the same client under another name.`);
+  if (ADOPT_UNMATCHED.length)
+    notice('warn',
+      `${ADOPT_UNMATCHED.length} scored ${ADOPT_UNMATCHED.length === 1 ? 'client is' : 'clients are'} not in the book`,
+      `${ADOPT_UNMATCHED.map(esc).join(', ')} — count towards nobody. ` +
+      `Add to <code>ADOPTION_ALIAS</code> if they are the same client under another name.`);
+  if (ESC_UNMATCHED.length)
+    notice('warn',
+      `${ESC_UNMATCHED.length} escalation${ESC_UNMATCHED.length === 1 ? '' : 's'} ` +
+      `could not be matched to a client`,
+      `${ESC_UNMATCHED.map(esc).join(', ')} — ${ESC_UNMATCHED.length === 1 ? 'is' : 'are'} ` +
+      `on nobody's card. Add to <code>ESC_ALIAS</code> if the book spells the client differently.`);
+  if (VISIT_UNPLACED.length)
+    notice('warn',
+      `${VISIT_UNPLACED.length} name${VISIT_UNPLACED.length === 1 ? '' : 's'} on the visits ` +
+      `${VISIT_UNPLACED.length === 1 ? 'is' : 'are'} not on the roster`,
+      `${VISIT_UNPLACED.map(esc).join(', ')} — count towards nobody.`);
+  if (excluded)
+    notice('info',
+      `${esc(NO_BOOK_TEAMS.join(', '))}${NO_BOOK_TEAMS.length === 1 ? "'s team is" : ' teams are'} not shown here`,
+      `no client book to measure against, so ${excluded} ` +
+      `${excluded === 1 ? 'person is' : 'people are'} left out of these figures ` +
+      `while still counting on the scorecard.`);
+  if (loose)
+    notice('info', `${loose} ${loose === 1 ? 'person is' : 'people are'} in no team`,
+      `counted in neither` + (POD_GAPS.length ? `: ${POD_GAPS.map(esc).join('. ')}` : '') + `.`);
+
   $('meterhint').innerHTML =
-    `Compliance is ${esc(monthsLabel())}${running ? ' to date' : ''} — entries filed ` +
-    `against entries expected, summed across the team rather than averaged, so a ` +
-    `member with fifty expected days counts for fifty. Business is the standing book ` +
-    `against ${TARGET_SCALED ? 'a target scaled to team size' : `<b>${esc(inr(TARGET_FULL_TEAM))} per team</b>`}. ` +
-    `Module adoption is ${esc(ADOPTION_QUARTER)}, a quarterly figure that does not ` +
-    `move with the month picker, measured against a placeholder ` +
-    `${Math.round(ADOPTION_TARGET * 100)}% until a real target is agreed. ` +
-    `Client feedback is the average satisfaction score of the clients on that book who ` +
-    `have answered the feedback form, out of 5, against a placeholder ` +
-    `${Math.round(FEEDBACK_TARGET * 100)}%; clients who have not answered are left out ` +
-    `rather than counted as unhappy, so read it beside the "heard from" line under it. ` +
-    `The four are shown side by side, not blended: a team can be filing perfectly and ` +
-    `still be short on business, and one number would hide which.` +
-    (BOOK_LIVE ? '' : ` <b>The live client book did not load</b>, so every business ` +
-                  `dial here is the snapshot taken ${esc(pretty(CLIENTS_ASOF))}, not ` +
-                  `today's book: ${esc(BOOK_ERROR || 'not loaded')}`) +
-    (FEED_ERROR ? ` <b>The feedback sheet did not load</b>, so that dial is empty on every ` +
-                  `card: ${esc(FEED_ERROR)}` : '') +
-    (FEED_UNMATCHED.length
-      ? ` <b>${FEED_UNMATCHED.length} ${FEED_UNMATCHED.length === 1 ? 'institution has' : 'institutions have'} ` +
-        `answered the form under a name the book does not have</b> and count towards nobody: ` +
-        `${FEED_UNMATCHED.map(esc).join(', ')}. Add them to <code>FEED_ALIAS</code> in index.html ` +
-        `if they are the same client under another name.` : '') +
-    (ADOPT_UNMATCHED.length
-      ? ` <b>${ADOPT_UNMATCHED.length} scored ${ADOPT_UNMATCHED.length === 1 ? 'client is' : 'clients are'} ` +
-        `not in the book</b> and count towards nobody: ` +
-        `${ADOPT_UNMATCHED.map(esc).join(', ')}. Add them to <code>ADOPTION_ALIAS</code> ` +
-        `in index.html if they are the same client under another name.` : '') +
-    /* This list already existed, but only inside the client book panel. An
-       escalation that matches nothing is absent from every team card with
-       nothing to say it was dropped, which reads as "no escalation" rather than
-       as "we could not place one". The other two unmatched lists are reported
-       here already; this one was the odd one out. */
-    (ESC_UNMATCHED.length
-      ? ` <b>${ESC_UNMATCHED.length} escalation${ESC_UNMATCHED.length === 1 ? '' : 's'} ` +
-        `could not be matched to a client</b> and ${ESC_UNMATCHED.length === 1 ? 'is' : 'are'} ` +
-        `on nobody's card: ${ESC_UNMATCHED.map(esc).join(', ')}. Add ` +
-        `${ESC_UNMATCHED.length === 1 ? 'it' : 'them'} to <code>ESC_ALIAS</code> in ` +
-        `index.html if the book spells the client differently.` : '') +
-    (excluded ? ` ${esc(NO_BOOK_TEAMS.join(', '))}` +
-                `${NO_BOOK_TEAMS.length === 1 ? "'s team is" : " teams are"} not shown here — ` +
-                `no client book to measure against — so ${excluded} ` +
-                `${excluded === 1 ? 'person is' : 'people are'} left out of these figures ` +
-                `while still counting on the scorecard.` : '') +
-    (loose ? ` <b>${loose} ${loose === 1 ? 'person is' : 'people are'} in no team</b> and ` +
-             `counted in neither` +
-             (POD_GAPS.length ? `: ${POD_GAPS.map(esc).join('. ')}` : '') + `.` : '');
+    `<p class="period">Compliance and adoption for <b>${esc(monthsLabel())}` +
+    `${running ? ' to date' : ''}</b>. Module adoption is ${esc(ADOPTION_QUARTER)} and does ` +
+    `not move with the month picker. The four dials are shown side by side, ` +
+    `not blended &mdash; tap any <i>i</i> for how one is worked out.</p>` +
+    (notices.length
+      ? `<ul class="notices">` + notices.map(n =>
+          `<li class="${n.level}"><b>${n.head}</b> ${n.body}</li>`).join('') + `</ul>`
+      : '');
 }
 
 /* ---------------- client book ---------------- */
@@ -3633,6 +3694,32 @@ const modeOf = src => src === 'scorecard' ? 'scorecard'
                     : src === 'visits'    ? 'visits'
                     : 'daily';
 
+/* Slides the selection pill onto the current tab.
+   Layout-dependent, so it is guarded rather than assumed: jsdom reports every
+   offset as 0, and a rail that has not been laid out yet would park the pill at
+   the top-left and animate it away from there on the first real click. Nothing
+   about the navigation depends on this running — the tab still carries
+   aria-pressed, and a CSS fallback marker draws until the pill is live. */
+function moveNavPill(animate){
+  const pill = document.querySelector('.navpill');
+  const groups = document.querySelector('.groups');
+  const on = groups && groups.querySelector('button[aria-pressed=true]');
+  if (!pill || !on || typeof on.offsetWidth !== 'number' || !on.offsetWidth) return;
+  const x = on.offsetLeft - groups.offsetLeft + groups.scrollLeft;
+  const y = on.offsetTop - groups.offsetTop + groups.scrollTop;
+  pill.style.width  = on.offsetWidth + 'px';
+  pill.style.height = on.offsetHeight + 'px';
+  pill.style.transform = `translate(${x - 8}px, ${y}px)`;
+  /* The pill is placed before it is allowed to animate, so the first paint does
+     not show it flying in from the corner. */
+  if (animate === false){
+    pill.classList.remove('ready');
+    void pill.offsetWidth;
+  }
+  pill.classList.add('ready');
+  groups.classList.add('piloted');
+}
+
 function markSource(){
   for (const g of ['sources','sources2','sources3','sources4','sources5','sources6'])
     for (const b of $(g).children)
@@ -3670,6 +3757,8 @@ function markSource(){
   $('joinedwrap').hidden = mode === 'clients' || mode === 'adoption' ||
                            mode === 'feedback' || mode === 'visits';
   $('h1').innerHTML = mode === 'meter' ? 'Compliance and <em>business</em>.' : $('h1').innerHTML;
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => moveNavPill());
+  else moveNavPill();
 }
 
 function markMode(){
@@ -4150,6 +4239,15 @@ try {
 } catch (e) {}
 fillClientFilters();
 markSource();
+/* First placement without the transition, then follow the layout. A rail that
+   reflows — the 1000px breakpoint turns the column into a row — would otherwise
+   leave the pill behind on whichever tab it was drawn against. */
+if (typeof requestAnimationFrame === 'function'){
+  requestAnimationFrame(() => moveNavPill(false));
+  window.addEventListener('resize', () => moveNavPill(false));
+  const g = document.querySelector('.groups');
+  if (g) g.addEventListener('scroll', () => moveNavPill(false), {passive: true});
+}
 setDefaultRange();
 load();
 

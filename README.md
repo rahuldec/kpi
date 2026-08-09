@@ -801,7 +801,7 @@ entries loaded and when.
     node qa.js
     TZ=Asia/Kolkata node qa.js
 
-610 assertions with the network mocked: parsing (spacer rows above the header, quoted
+624 assertions with the network mocked: parsing (spacer rows above the header, quoted
 fields containing commas and newlines, blank assignees, case-variant names), every
 failure path (sheet not shared, network down, unparseable content), the date-window
 rules, cross-checks between the three places misses are counted, escaping of sheet
@@ -1111,3 +1111,46 @@ of more than a dozen names survives.
 Each list now sits in its own inset panel with hairlines between rows rather than
 running together as one column of text, so it is visible where the answer to one
 question stops and the next begins.
+
+
+## The meter hint, and the rail — 9 Aug 2026
+
+### The hint was six sentences of methodology with the warnings buried in it
+
+Every dial has carried its own (i) since the per-row buttons went in, so the
+paragraph at the top of the KPI meter was restating on the page what the reader
+could already ask for — and it pushed the warnings, which are the part available
+nowhere else, into the middle of a wall of text where they read as more prose.
+
+What is left is the period and one line about the four dials, then the warnings as
+their own rows: a coloured dot for the level, the finding in bold, the detail
+after it. "Is anything wrong?" is now answerable at a glance instead of by
+reading nine lines.
+
+The warnings themselves were **not** trimmed, and the test guards that
+distinction: it caps the length of the standing text only. Capping the whole hint
+would have measured the warnings, and a page with a lot wrong is supposed to say
+a lot. `VISIT_UNPLACED` joined the list while it was being rebuilt — it was
+reported on the Field tab and nowhere else.
+
+### The rail ran past the fold, so the selection moves now
+
+Tighter rhythm first — smaller group labels, less gap between groups.
+
+Then the selection: one pill for the whole rail rather than a background on each
+tab, so changing tab is a movement rather than one thing switching off and another
+switching on. The curve matters more than the duration —
+`cubic-bezier(.22,1.2,.36,1)` overshoots slightly at the end, which is what makes
+it feel like the pill arrived somewhere rather than faded there. It follows
+resize and rail scroll, and drops to a plain fade under
+`prefers-reduced-motion`.
+
+**It is decoration, never the mechanism.** The tab still carries `aria-pressed`,
+and a CSS fallback marker draws the selection until the pill is actually live —
+`.groups.piloted` gates that, so the fallback cannot disappear before its
+replacement works. jsdom reports every offset as `0`, which is the same shape as
+a layout failure in a real browser, so qa asserts the rail is *fully usable with
+the pill never positioned*: positioning does not throw, the pill stays
+unpositioned rather than parking in the corner, the fallback marker still draws,
+and tabs still switch. Hiding the fallback unconditionally fails 2 assertions;
+deleting the pill element fails 4.

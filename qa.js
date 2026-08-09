@@ -618,6 +618,49 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
           txt(doc, '#h1'));
   }
 
+  // ── 1e4. the selection pill ─────────────────────────────────────
+  {
+    /* Decoration over the top of the list, never the mechanism. jsdom reports
+       every offset as 0, which is exactly the case the guard exists for — so
+       this asserts the rail is fully usable with the pill never positioned,
+       because that is also what a layout failure in a real browser looks
+       like. */
+    const { doc, win } = boot(); await settle();
+    const pill = doc.querySelector('.navpill');
+    check('there is a selection pill', !!pill);
+    check('it is inside the groups container so it positions against them',
+          pill?.parentElement?.classList.contains('groups'));
+    check('and it is hidden from assistive tech',
+          pill?.getAttribute('aria-hidden') === 'true');
+
+    check('positioning never throws when there is no layout',
+          (() => { try { win.eval('moveNavPill()'); return true; } catch (e) { return e.message; } })() === true);
+    check('and it stays unpositioned rather than parking at the corner',
+          !doc.querySelector('.groups').classList.contains('piloted'));
+
+    /* With no pill, the CSS fallback marker is what shows the current tab — so
+       the rule that hides it must depend on the pill actually being live. */
+    const css = HTML.slice(HTML.indexOf('<style>'), HTML.indexOf('</style>'));
+    check('the fallback marker is only hidden once the pill is live',
+          /\.groups\.piloted [^{]*aria-pressed=true\]::after\{display:none\}/.test(css));
+    check('the tab still reports itself pressed either way',
+          doc.querySelector('#sources button[data-src="internal"]')
+             .getAttribute('aria-pressed') === 'true');
+
+    /* Switching tabs must still work with the pill inert. */
+    doc.querySelector('#sources2 button[data-src="clients"]').click(); await settle();
+    check('and switching tabs works without it',
+          win.eval('SOURCE') === 'clients' && doc.getElementById('clients').hidden === false);
+    check('the marker moves too',
+          doc.querySelector('#sources2 button[data-src="clients"]')
+             .getAttribute('aria-pressed') === 'true' &&
+          doc.querySelector('#sources button[data-src="internal"]')
+             .getAttribute('aria-pressed') === 'false');
+
+    check('motion is dropped for anyone who asked for that',
+          /prefers-reduced-motion:reduce\)\{[\s\S]{0,120}\.navpill\.ready\{transition:opacity/.test(css));
+  }
+
   // ── 1e3. the navigation is a rail, not a strip ─────────────────
   {
     /* The groups used to sit side by side on one rule above the content. They
@@ -1295,6 +1338,30 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     // the two are never blended into one figure
     check('no card shows a single combined score',
           cards.every(c => c.querySelectorAll('.val').length === 4));
+    /* The hint used to open with six sentences of methodology, which every dial's
+       own (i) already answers, and the warnings sat inside that paragraph where
+       they read as more prose. Warnings are their own rows now, so "is anything
+       wrong?" is answerable at a glance. */
+    /* Cap the standing text only. Capping the whole hint would have measured the
+       warnings, which are the part that must NOT be trimmed — a page with a lot
+       wrong is supposed to say a lot. */
+    check('the methodology essay is gone', (() => {
+      const t = txt(doc, '#meterhint');
+      return !/summed across the team rather than averaged/.test(t) &&
+             !/counted as unhappy/.test(t) &&
+             !/a member with fifty expected days/.test(t) &&
+             txt(doc, '#meterhint .period').length < 260;
+    })(), txt(doc, '#meterhint .period'));
+    check('but the period is still stated',
+          /2026/.test(txt(doc, '#meterhint .period')), txt(doc, '#meterhint .period'));
+    check('and each warning is its own row',
+          doc.querySelectorAll('#meterhint .notices li').length > 0,
+          String(doc.querySelectorAll('#meterhint .notices li').length));
+    check('every notice carries a level',
+          [...doc.querySelectorAll('#meterhint .notices li')]
+            .every(li => /\b(bad|warn|info)\b/.test(li.className)),
+          [...doc.querySelectorAll('#meterhint .notices li')].map(li => li.className).join());
+
     check('the note says why they are not blended',
           /not blended/.test(txt(doc, '#meterhint')), txt(doc, '#meterhint'));
     check('the note names the month in full', /July 2026/.test(txt(doc, '#meterhint')),
