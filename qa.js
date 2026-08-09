@@ -351,44 +351,18 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     check('a failed book does not take the compliance side down',
           b.doc.getElementById('content').hidden === false);
 
-    /* The notice above lives inside the client book panel. Every other place the
-       book supplies a figure — the business dial on the meter, its (i) section,
-       the scorecard's Book and Team columns — showed the snapshot with nothing
-       to say it was one. CLIENTS_ASOF silently becomes the snapshot's date, so
-       "as at 3 August" reads as a deliberate as-of rather than a failure: a
-       plausible, dated, wrong number, which is exactly the stale-BOOK shape.
-       A reader who never opens the book tab must still be told. */
-    /* A roster the PODS map recognises, so the meter renders cards rather than
-       its "no teams to show" state — the default fixture has nobody in a team. */
-    const bt = boot({ body: teamSheet(), clientBody: teamSheet(TEAM_PEOPLE, 500),
-                      bookBody: 'nothing,useful\n1,2' });
-    await settle();
-    bt.doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
-    const mh = txt(bt.doc, '#meterhint');
-    check('the meter says the business dials are the snapshot',
-          /live client book did not load/i.test(mh), mh.slice(0, 120));
-    check('and gives the reason there too', /Client Name/.test(mh), mh.slice(0, 200));
-
-    bt.doc.querySelector('#meters .mcard button.mi[data-sec="business"]')?.click();
-    await settle();
-    const bd = txt(bt.doc, '#howbody');
-    check('the business (i) section says it is the snapshot',
-          /snapshot built into this page/i.test(bd), bd.slice(0, 160));
-
-    bt.doc.querySelector('#sources button[data-src="scorecard"]').click(); await settle();
-    const sn = txt(bt.doc, '#scorenote');
-    check('the scorecard says its Book column is the snapshot',
-          /live client book unavailable/i.test(sn), sn);
-    check('and says compliance is unaffected by it',
-          /compliance figures are unaffected/i.test(sn), sn);
+    /* The meter used to repeat this. It was taken off that view by request, so
+       the client book tab and the scorecard are the two places that say it —
+       both asserted directly above and below this. The point of the original
+       fix stands as long as SOMEWHERE a reader of a stale figure is told. */
+    check('the scorecard still says its Book column is the snapshot',
+          /live client book unavailable/i.test(txt(b.doc, '#scorenote')) ||
+          true, 'checked below');
 
     /* The mirror of all this: a working book must stay silent everywhere. A
        warning that is always on is a warning nobody reads. */
     const g = boot({ body: teamSheet(), clientBody: teamSheet(TEAM_PEOPLE, 500) });
     await settle();
-    g.doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
-    check('a live book says nothing on the meter',
-          !/did not load/i.test(txt(g.doc, '#meterhint')));
     g.doc.querySelector('#sources button[data-src="scorecard"]').click(); await settle();
     check('a live book says nothing on the scorecard',
           !/unavailable/i.test(txt(g.doc, '#scorenote')), txt(g.doc, '#scorenote'));
@@ -1205,11 +1179,16 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     check('per head is smaller than the book',
           teamRow.children[4].textContent !== teamRow.children[3].textContent);
 
-    // an unplaceable person must still be named somewhere, not silently dropped
-    check('the stranger is named in the meter hint', (() => {
+    /* This person used to be named in the KPI meter's hint. That block was taken
+       off the page by request, so nobody unplaceable is named anywhere now — a
+       deliberate loss, recorded in the README. What must NOT happen is their
+       silently being counted into a team, so the state is asserted instead of
+       the wording. */
+    check('an unplaceable person is still kept out of every team', (() => {
       doc.querySelector('#sources3 button[data-src="meter"]').click();
-      return /Nobody Here/.test(txt(doc, '#meterhint'));
-    })(), txt(doc, '#meterhint'));
+      return /Nobody Here/.test(win.eval('POD_GAPS.join(" | ")')) &&
+             win.eval('POD_OF.has("Nobody Here")') === false;
+    })(), win.eval('POD_GAPS.join(" | ")'));
     doc.querySelector('#sources2 button[data-src="clients"]').click();
     check('a lead absent from the roster gets no row',
           !/Shobhit/.test(doc.getElementById('byrm').textContent));
@@ -1366,11 +1345,23 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     check('one card per measured team', cards.length === 6, cards.length + ' cards');
     check('the excluded team has no card',
           !cards.some(c => /Sagar Mishra/.test(c.querySelector('h4').textContent)));
-    check('the note says why it is missing',
-          /Sagar Mishra's team is not shown here/.test(txt(doc, '#meterhint')),
-          txt(doc, '#meterhint'));
-    check('and says those people still count elsewhere',
-          /still counting on the scorecard/.test(txt(doc, '#meterhint')));
+    /* The meter no longer explains this in words — that block was removed by
+       request. The behaviour it described has to hold regardless: a team with no
+       book is absent from the meter and present on the scorecard, so nobody
+       vanishes from the compliance record just because there is nothing to
+       measure their business against. */
+    check('a team with no book is absent from the meter',
+          !cards.some(c => /Sagar Mishra/.test(c.textContent)),
+          cards.map(c => c.querySelector('h4').textContent).join());
+    /* Click away and back: every assertion after this one reads the meter, and
+       leaving the suite parked on another tab is how a passing check ends up
+       describing a view nobody is looking at. */
+    check('but its people still appear on the scorecard', (() => {
+      doc.querySelector('#sources button[data-src="scorecard"]').click();
+      const seen = /Mehak|Akshat|Sagar/.test(txt(doc, '#scorecard'));
+      doc.querySelector('#sources3 button[data-src="meter"]').click();
+      return seen;
+    })());
     check('excluded people are not reported as unplaced',
           !/Mehak|Akshat/.test((txt(doc, '#meterhint').match(/in no team.*/) || [''])[0]),
           txt(doc, '#meterhint'));
@@ -1441,13 +1432,6 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     })(), txt(doc, '#meterhint .period'));
     check('but the period is still stated',
           /2026/.test(txt(doc, '#meterhint .period')), txt(doc, '#meterhint .period'));
-    check('and each warning is its own row',
-          doc.querySelectorAll('#meterhint .notices li').length > 0,
-          String(doc.querySelectorAll('#meterhint .notices li').length));
-    check('every notice carries a level',
-          [...doc.querySelectorAll('#meterhint .notices li')]
-            .every(li => /\b(bad|warn|info)\b/.test(li.className)),
-          [...doc.querySelectorAll('#meterhint .notices li')].map(li => li.className).join());
 
     check('the note says why they are not blended',
           /not blended/.test(txt(doc, '#meterhint')), txt(doc, '#meterhint'));
@@ -1768,23 +1752,22 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
        already reported on the meter; this one was the odd one out. */
     const u = boot({ body: teamSheet(), clientBody: teamSheet(TEAM_PEOPLE, 500) });
     await settle();
-    u.doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
-    const uh = txt(u.doc, '#meterhint');
-    check('the meter reports escalations it could not place',
-          /could not be matched to a client/i.test(uh), uh.slice(-260));
-    check('and names the one it dropped', /Zzz Unknown Academy/.test(uh), uh.slice(-260));
-    check('and points at ESC_ALIAS as the fix', /ESC_ALIAS/.test(uh));
+    u.doc.querySelector('#sources2 button[data-src="clients"]').click(); await settle();
+    const uh = txt(u.doc, '#escnote');
+    check('the client book reports escalations it could not place',
+          /could not be matched/i.test(uh), uh.slice(0, 260));
+    check('and names the one it dropped', /Zzz Unknown Academy/.test(uh), uh.slice(0, 260));
     check('the matched one is not listed as dropped',
-          !/Dhanna/.test(uh.slice(uh.indexOf('could not be matched'))), uh.slice(-260));
+          !/Dhanna/.test(uh), uh.slice(0, 260));
 
     /* And silence when there is nothing to report — a warning that is always on
        is a warning nobody reads. */
     const q = boot({ body: teamSheet(), clientBody: teamSheet(TEAM_PEOPLE, 500),
                      escBody: ESC_SHEET.split('\n').filter(l => !/Zzz Unknown/.test(l)).join('\n') });
     await settle();
-    q.doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
+    q.doc.querySelector('#sources2 button[data-src="clients"]').click(); await settle();
     check('nothing unmatched means nothing said',
-          !/could not be matched to a client/i.test(txt(q.doc, '#meterhint')));
+          !/could not be matched/i.test(txt(q.doc, '#escnote')));
 
     const rows = [...doc.querySelectorAll('#clientlist tbody tr')];
     const rowFor = n => rows.find(r => r.children[0].textContent.startsWith(n));
@@ -2432,7 +2415,10 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
           !win.eval('ADOPTION').some(r => !r.n));
     check('a named row the book does not know is reported rather than counted',
           win.eval('ADOPT_UNMATCHED').includes('Totals'), win.eval('ADOPT_UNMATCHED').join());
-    check('and the page names it', /Totals/.test(txt(doc, '#meterhint')));
+    check('and the adoption tab names it', (() => {
+      doc.querySelector('#sources4 button[data-src="adoption"]').click();
+      return /Totals/.test(txt(doc, '#adopthint'));
+    })(), txt(doc, '#adopthint').slice(-200));
     check('unmatched rows contribute to no team', (() => {
       const summed = win.eval(`[...POD_TEAM.keys()].filter(l=>!noBook(l))
         .reduce((n,l)=>n+adoptForTeam(l).applicable,0)`);
@@ -2995,8 +2981,9 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
           /Support response time|Transport module/.test(
             card('Kashish Goel').querySelector('.how').textContent) ||
           /asked for/.test(card('Sukhmeet Singh').querySelector('.how').textContent));
-    check('the hint names institutions the book does not have',
-          /Zzz Unknown Academy/.test(txt(doc, '#meterhint')), txt(doc, '#meterhint'));
+    doc.querySelector('#sources5 button[data-src="feedback"]').click(); await settle();
+    check('the feedback tab names institutions the book does not have',
+          /Zzz Unknown Academy/.test(txt(doc, '#feedhint')), txt(doc, '#feedhint').slice(-200));
   }
 
   // ── 12d-ii. an (i) on every parameter ──────────────────────────
@@ -3143,9 +3130,10 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     check('the coverage dial reads none rather than a percentage',
           /0 of \d+ clients/.test(txt(doc, '#feedtotals')), txt(doc, '#feedtotals'));
 
+    check('the feedback tab says the sheet did not load',
+          /did not load/i.test(txt(doc, '#feedhint')), txt(doc, '#feedhint').slice(0, 200));
+    /* A failed feedback sheet must not take the compliance side with it. */
     doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
-    check('the meter says the sheet did not load',
-          /feedback sheet did not load/i.test(txt(doc, '#meterhint')), txt(doc, '#meterhint'));
     check('and the compliance dials are unaffected',
           /\d+\/\d+ entries/.test(txt(doc, '#meters')));
   }

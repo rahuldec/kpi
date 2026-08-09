@@ -344,27 +344,7 @@ html.modalopen{overflow:hidden}
 .how .vlist{margin-top:4px}
 .board tr.flat td{color:var(--faint)}
 
-/* ── the meter's notice strip ─────────────────────────────────────────────────
-   Warnings were a paragraph, so they read as more prose and the reader had to
-   parse a wall to find out whether anything was actually wrong. One line each,
-   with the level in the marker rather than in the wording. */
 #meterhint .period{margin:0}
-/* Ordinary block flow, and deliberately nothing cleverer. The first version drew
-   its separators as a 1px grid gap over a tinted background, with overflow
-   hidden to clip the corners — three mechanisms cooperating to produce a line
-   between two rows. Real borders need none of them, and a list of warnings is
-   not the place to spend a layout trick. */
-#meterhint .notices{list-style:none;margin:12px 0 0;padding:0;
-  border:1px solid var(--hair);border-radius:12px}
-#meterhint .notices li{padding:10px 14px 10px 32px;position:relative;
-  font-size:13px;line-height:1.5;color:var(--body)}
-#meterhint .notices li + li{border-top:1px solid var(--hair)}
-#meterhint .notices li::before{content:'';position:absolute;left:14px;top:16px;
-  width:7px;height:7px;border-radius:50%;background:var(--faint)}
-#meterhint .notices li.bad::before{background:var(--miss)}
-#meterhint .notices li.warn::before{background:var(--brand)}
-#meterhint .notices li b{color:var(--ink);font-weight:600}
-#meterhint .notices li code{font-size:12px}
 .escwho,.covwho{font-size:12.5px;line-height:1.45;color:var(--miss);margin:5px 0 0 97px}
 .escwho.cool,.covwho.cool{color:var(--faint)}
 
@@ -3234,67 +3214,20 @@ function renderMeter(){
   OPEN_CARD = null;
 
   const running = MONTHS.includes(thisMonth());
-  /* This was six sentences of methodology followed by whatever warnings applied,
-     as one paragraph. The methodology has been reachable from every dial's own
-     (i) since the per-row buttons went in, so on the page it was restating what
-     the reader could already ask for — and it pushed the warnings, which are the
-     part nobody can get anywhere else, into the middle of a wall of text where
-     they read as more prose.
+  /* Nothing but the period. The warnings that used to sit here — unmatched
+     escalations, teams with no book, people in no team — were asked for twice to
+     be taken off this view, so they are off it. Each one is still computed and
+     still reported where its own data lives: unmatched escalations on the client
+     book, unscored clients on the adoption tab, unplaced visitors on Field.
 
-     What is left is the period, and the things that are wrong. A notice here
-     always means something needs a decision or a rename; when nothing does, the
-     strip is a single quiet line. */
-  const notices = [];
-  const notice = (level, head, body) => notices.push({level, head, body});
-
-  if (!BOOK_LIVE)
-    notice('bad', 'Live client book did not load',
-      `every business dial is the snapshot taken ${esc(pretty(CLIENTS_ASOF))}, not ` +
-      `today's book — ${esc(BOOK_ERROR || 'not loaded')}`);
-  if (FEED_ERROR)
-    notice('bad', 'Feedback sheet did not load',
-      `that dial is empty on every card — ${esc(FEED_ERROR)}`);
-  if (FEED_UNMATCHED.length)
-    notice('warn',
-      `${FEED_UNMATCHED.length} ${FEED_UNMATCHED.length === 1 ? 'institution' : 'institutions'} ` +
-      `answered under a name the book does not have`,
-      `${FEED_UNMATCHED.map(esc).join(', ')} — count towards nobody. ` +
-      `Add to <code>FEED_ALIAS</code> if they are the same client under another name.`);
-  if (ADOPT_UNMATCHED.length)
-    notice('warn',
-      `${ADOPT_UNMATCHED.length} scored ${ADOPT_UNMATCHED.length === 1 ? 'client is' : 'clients are'} not in the book`,
-      `${ADOPT_UNMATCHED.map(esc).join(', ')} — count towards nobody. ` +
-      `Add to <code>ADOPTION_ALIAS</code> if they are the same client under another name.`);
-  if (ESC_UNMATCHED.length)
-    notice('warn',
-      `${ESC_UNMATCHED.length} escalation${ESC_UNMATCHED.length === 1 ? '' : 's'} ` +
-      `could not be matched to a client`,
-      `${ESC_UNMATCHED.map(esc).join(', ')} — ${ESC_UNMATCHED.length === 1 ? 'is' : 'are'} ` +
-      `on nobody's card. Add to <code>ESC_ALIAS</code> if the book spells the client differently.`);
-  if (VISIT_UNPLACED.length)
-    notice('warn',
-      `${VISIT_UNPLACED.length} name${VISIT_UNPLACED.length === 1 ? '' : 's'} on the visits ` +
-      `${VISIT_UNPLACED.length === 1 ? 'is' : 'are'} not on the roster`,
-      `${VISIT_UNPLACED.map(esc).join(', ')} — count towards nobody.`);
-  if (excluded)
-    notice('info',
-      `${esc(NO_BOOK_TEAMS.join(', '))}${NO_BOOK_TEAMS.length === 1 ? "'s team is" : ' teams are'} not shown here`,
-      `no client book to measure against, so ${excluded} ` +
-      `${excluded === 1 ? 'person is' : 'people are'} left out of these figures ` +
-      `while still counting on the scorecard.`);
-  if (loose)
-    notice('info', `${loose} ${loose === 1 ? 'person is' : 'people are'} in no team`,
-      `counted in neither` + (POD_GAPS.length ? `: ${POD_GAPS.map(esc).join('. ')}` : '') + `.`);
-
+     Two have nowhere else and are genuinely no longer shown anywhere: the
+     excluded teams and the people in no team. That is a deliberate choice, not
+     an oversight. */
   $('meterhint').innerHTML =
     `<p class="period">Compliance and adoption for <b>${esc(monthsLabel())}` +
     `${running ? ' to date' : ''}</b>. Module adoption is ${esc(ADOPTION_QUARTER)} and does ` +
     `not move with the month picker. The four dials are shown side by side, ` +
-    `not blended &mdash; tap any <i>i</i> for how one is worked out.</p>` +
-    (notices.length
-      ? `<ul class="notices">` + notices.map(n =>
-          `<li class="${n.level}"><b>${n.head}</b> ${n.body}</li>`).join('') + `</ul>`
-      : '');
+    `not blended &mdash; tap any <i>i</i> for how one is worked out.</p>`;
 }
 
 /* ---------------- client book ---------------- */

@@ -801,7 +801,7 @@ entries loaded and when.
     node qa.js
     TZ=Asia/Kolkata node qa.js
 
-638 assertions with the network mocked: parsing (spacer rows above the header, quoted
+630 assertions with the network mocked: parsing (spacer rows above the header, quoted
 fields containing commas and newlines, blank assignees, case-variant names), every
 failure path (sheet not shared, network down, unparseable content), the date-window
 rules, cross-checks between the three places misses are counted, escaping of sheet
@@ -1242,3 +1242,31 @@ today: **when two functions write the same piece of state, the one that runs las
 wins, whether or not it knows enough to.**
 
 Reverting either fix fails 2 assertions.
+
+
+## The meter hint is one line — 9 Aug 2026
+
+Asked for twice. The whole warning block is off the KPI meter; the hint is the
+period and nothing else.
+
+Where each warning went, all of them already had a home on the tab that owns the
+data:
+
+* unmatched escalations -> the client book (`#escnote`)
+* scored clients not in the book -> the adoption tab (`#adopthint`)
+* institutions answering under an unknown name, and a failed feedback sheet ->
+  the feedback tab (`#feedhint`)
+* names on visits not on the roster -> the Field tab (`#visithint`)
+* the book falling back to its snapshot -> the client book (`#asof`) and the
+  scorecard note
+
+**Two are now shown nowhere, and that is a real loss rather than a tidy-up:**
+teams excluded for having no client book, and people in no team. The behaviour
+they described still holds and qa now asserts it structurally instead of by
+wording — an excluded team is absent from the meter and present on the scorecard,
+and an unplaceable person is kept out of every team rather than folded into one.
+Nobody is miscounted; nobody is told either.
+
+The tests were redirected rather than deleted, which is the part worth insisting
+on: a check that reads a removed sentence should point at wherever the fact
+lives now, not be dropped along with the sentence.
