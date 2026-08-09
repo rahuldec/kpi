@@ -44,7 +44,13 @@ const ESC_SHEET = [
   // no project of its own, and no client in the book by this name
   // no project of its own, and deliberately nothing like it in the book, so it
   // exercises the "reported, never guessed" path
-  '6,2026-07-08,,2026-07-27,Zzz Unknown Academy,Clients,Sukhmeet Singh,s@x.com,,,,,Client Escalations,'
+  '6,2026-07-08,,2026-07-27,Zzz Unknown Academy,Clients,Sukhmeet Singh,s@x.com,,,,,Client Escalations,',
+  /* Open, and spelled with a word the book does not have — Asana says "Dhanna
+     Bhagat Public School", the book says "Dhanna Bhagat School". The extra word
+     is in the middle, so the prefix rule bridges nothing in either direction and
+     this only lands via ESC_ALIAS. It is Mansi Rana's client, so it must reach
+     her card. */
+  '7,2026-08-04,,2026-08-06,Portal down,Clients,Vansh Saini,v@x.com,,,,,"Dhanna Bhagat Public School,Client Escalations",'
 ].join('\n');
 
 /* The published client book, replayed as CSV. Rather than hand-maintaining a
@@ -293,7 +299,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
        inside `.how`, or by an id. Generic names shared between two components are
        the collision; scoping is the fix. */
     const css = HTML.slice(HTML.indexOf('<style>') + 7, HTML.indexOf('</style>'));
-    const PANEL_CLASSES = ['dates', 'sum', 'who2', 'tk', 'none', 'missed', 'gaps', 'aim'];
+    const PANEL_CLASSES = ['dates', 'sum', 'who2', 'tk', 'none', 'missed', 'gaps', 'aim', 'vlist'];
     const leaks = [];
     for (const rule of css.split('}')){
       const sel = rule.slice(rule.lastIndexOf('*/') + 1).split('{')[0];
@@ -1476,7 +1482,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     doc.querySelector('#sources2 button[data-src="clients"]').click(); await settle();
 
     const esc = JSON.parse(win.eval('JSON.stringify(ESCALATIONS)'));
-    check('sub-tasks are not counted as escalations', esc.length === 4,
+    check('sub-tasks are not counted as escalations', esc.length === 5,
           esc.length + ': ' + esc.map(e => e.client).join());
     check('the client comes from Projects, not the task name',
           esc.some(e => e.client === 'Budha College Karnal'), esc.map(e => e.client).join());
@@ -1485,8 +1491,64 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     check('a row with no project of its own falls back to the task name',
           esc.some(e => e.client === 'Zzz Unknown Academy'), esc.map(e => e.client).join());
     check('open and closed are distinguished',
-          esc.filter(e => !e.closed).length === 3 && esc.filter(e => e.closed).length === 1,
+          esc.filter(e => !e.closed).length === 4 && esc.filter(e => e.closed).length === 1,
           esc.map(e => `${e.client}:${e.closed || 'open'}`).join());
+
+    /* An extra word in the MIDDLE of the name defeats the prefix rule in both
+       directions — "Dhanna Bhagat Public School" (Asana) against "Dhanna Bhagat
+       School" (book) — so the escalation matched nothing and appeared on no
+       card at all. Only ESC_ALIAS can bridge it, and the failure was silent
+       everywhere except the client book panel. */
+    const norm = s => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
+    check('a middle word really does defeat the prefix rule', (() => {
+      const a = norm('Dhanna Bhagat Public School'), b = norm('Dhanna Bhagat School');
+      return !a.startsWith(b) && !b.startsWith(a);
+    })());
+    const byClient = JSON.parse(win.eval('JSON.stringify([...ESC_BY_CLIENT.keys()])'));
+    check('the alias lands it on the book spelling',
+          byClient.includes('Dhanna Bhagat School'), byClient.join());
+    check('and it is not left unmatched',
+          !JSON.parse(win.eval('JSON.stringify(ESC_UNMATCHED)'))
+            .some(u => /Dhanna/.test(u)));
+    check('an alias fires regardless of case or punctuation',
+          win.eval(`(() => {
+            const m = new Map(Object.entries(ESC_ALIAS).map(([f, t]) => [eNorm(f), t]));
+            return m.get(eNorm('dhanna bhagat public school!')) === 'Dhanna Bhagat School';
+          })()`));
+
+    /* The point of the alias: it has to reach the team that owns the client. */
+    const owner = JSON.parse(win.eval(
+      'JSON.stringify((CLIENTS.find(c => c.n === "Dhanna Bhagat School") || {}).o)'));
+    check('the client is owned by the expected lead', owner === 'Mansi Rana', String(owner));
+    const forLead = JSON.parse(win.eval(`JSON.stringify(escForTeam(${JSON.stringify(owner)})
+      .map(x => x.client))`));
+    check("the escalation reaches that lead's team card",
+          forLead.includes('Dhanna Bhagat School'), forLead.join());
+
+    /* An unmatched escalation was reported only inside the client book panel.
+       From the KPI meter it was simply absent, which reads as "this team has no
+       escalation" rather than "one could not be placed" — the failure looked
+       like a clean result. The feedback and adoption unmatched lists were
+       already reported on the meter; this one was the odd one out. */
+    const u = boot({ body: teamSheet(), clientBody: teamSheet(TEAM_PEOPLE, 500) });
+    await settle();
+    u.doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
+    const uh = txt(u.doc, '#meterhint');
+    check('the meter reports escalations it could not place',
+          /could not be matched to a client/i.test(uh), uh.slice(-260));
+    check('and names the one it dropped', /Zzz Unknown Academy/.test(uh), uh.slice(-260));
+    check('and points at ESC_ALIAS as the fix', /ESC_ALIAS/.test(uh));
+    check('the matched one is not listed as dropped',
+          !/Dhanna/.test(uh.slice(uh.indexOf('could not be matched'))), uh.slice(-260));
+
+    /* And silence when there is nothing to report — a warning that is always on
+       is a warning nobody reads. */
+    const q = boot({ body: teamSheet(), clientBody: teamSheet(TEAM_PEOPLE, 500),
+                     escBody: ESC_SHEET.split('\n').filter(l => !/Zzz Unknown/.test(l)).join('\n') });
+    await settle();
+    q.doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
+    check('nothing unmatched means nothing said',
+          !/could not be matched to a client/i.test(txt(q.doc, '#meterhint')));
 
     const rows = [...doc.querySelectorAll('#clientlist tbody tr')];
     const rowFor = n => rows.find(r => r.children[0].textContent.startsWith(n));
@@ -2546,6 +2608,71 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     });
 
     check('every card carries a heard-from line', cards.every(c => c.querySelectorAll('.covline').length === 2));
+
+    /* ── client visits ──────────────────────────────────────────
+       A count, not a dial: nobody has agreed what a month of visits should be,
+       and a dial without a target invents one. So assert it is NOT drawn as a
+       dial — no track, no percentage — because turning it into one later is the
+       easy mistake and it would harden a made-up number into a fact. */
+    check('every card carries a visits line',
+          cards.every(c => c.querySelectorAll('.visitline').length === 1));
+    check('visits is not a covline', cards.every(c => c.querySelectorAll('.covline').length === 2));
+    check('visits has no progress track',
+          cards.every(c => !c.querySelector('.visitline .track')));
+    check('and shows no percentage',
+          cards.every(c => !/%/.test(c.querySelector('.visitline').textContent)),
+          cards.map(c => c.querySelector('.visitline').textContent).join(' | '));
+
+    /* Person-visits, not meetings: two people at one client is two people's
+       time. The card shows both so the difference cannot hide. */
+    {
+      const v = win.eval('JSON.stringify(visitsForTeam("Sukhmeet Singh", ["2026-07"]))');
+      const {person, meetings, byPerson} = JSON.parse(v);
+      check('a joint visit counts for everyone who went', person >= meetings,
+            `${person} person-visits across ${meetings} meetings`);
+      check('the per-person breakdown sums to the total',
+            byPerson.reduce((n, x) => n + x[1], 0) === person,
+            `${byPerson.map(x => x.join(':')).join()} vs ${person}`);
+      check('an online MOM is never counted as a visit',
+            win.eval('VISITS.every(v => true) && VISITS.length') > 0 &&
+            win.eval('JSON.stringify(VISITS)').indexOf('"online"') === -1);
+    }
+
+    /* The month picker has to move it. A visits figure that ignored the selected
+       months would sit beside a compliance dial that respects them and quietly
+       describe a different period. */
+    {
+      const jul = JSON.parse(win.eval(
+        'JSON.stringify(visitsForTeam("Sukhmeet Singh", ["2026-07"]))')).person;
+      const aug = JSON.parse(win.eval(
+        'JSON.stringify(visitsForTeam("Sukhmeet Singh", ["2026-08"]))')).person;
+      const both = JSON.parse(win.eval(
+        'JSON.stringify(visitsForTeam("Sukhmeet Singh", ["2026-07", "2026-08"]))')).person;
+      check('the month selection changes the figure', jul !== aug, `${jul} vs ${aug}`);
+      check('and two months is the sum of both', both === jul + aug, `${both} vs ${jul}+${aug}`);
+    }
+
+    /* Nobody is credited by resemblance. A first name resolves only when exactly
+       one roster member answers to it — the same restraint the escalation and
+       adoption matchers use, for the same reason: a visit credited to the wrong
+       person is worse than one credited to nobody. */
+    check('an unknown name is never credited',
+          win.eval('canonVisitor("Someone Nobody")') === null);
+    check('and an ambiguous first name is not guessed at',
+          win.eval('canonVisitor("Kumar")') === null,
+          String(win.eval('canonVisitor("Kumar")')));
+    check('people who cannot be placed are reported, not dropped',
+          JSON.parse(win.eval('JSON.stringify(VISIT_UNPLACED)')).length > 0);
+
+    /* The snapshot has to say it is one, exactly as the book and adoption do. */
+    {
+      cards[0].querySelector('button.mi[data-sec="visits"]').click();
+      const body = txt(doc, '#howbody');
+      check('the visits section says it is a snapshot',
+            /snapshot built into this page/i.test(body), body.slice(0, 200));
+      check('and says why online MOMs are absent',
+            /call/i.test(body) && /client call tracker/i.test(body));
+    }
     /* A coverage line describes the dial above it. Assert the pairing structurally
        rather than trusting the reading order: with four dials, a line that drifts
        away from its own dial lands directly above someone else's and is read as

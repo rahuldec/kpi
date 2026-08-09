@@ -73,6 +73,21 @@ const SOURCES = {
                  mismatch: 'It has no "Timestamp" and "Institution" columns — the link probably ' +
                            'points at the wrong tab. Re-publish with the form responses tab ' +
                            'selected and update FEEDBACK_CSV_URL.' },
+  /* Not a Google sheet at all. Field visits come from the MOM Portal, which
+     serves its own CSV at /api/kpi-visits behind a shared secret. It is proxied
+     here for one reason only: the secret must never reach the browser, and this
+     page's CSP forbids the browser calling another origin anyway.
+
+     Fails closed. If MOM_FEED_KEY is unset the portal refuses everyone, which is
+     the correct behaviour for an unconfigured secret — an open visits feed would
+     expose which clients were visited by whom and when. */
+  visits:      { direct: process.env.MOM_FEED_URL ||
+                   'https://odmom.lovable.app/api/kpi-visits',
+                 headers: () => ({ 'x-kpi-key': process.env.MOM_FEED_KEY || '' }),
+                 signature: csv => /meeting_date/i.test(csv) && /person/i.test(csv),
+                 envVar: 'MOM_FEED_KEY',
+                 mismatch: 'The portal answered, but not with the visits feed — check ' +
+                           'MOM_FEED_URL points at /api/kpi-visits.' },
   book:        { url: process.env.BOOK_CSV_URL ||
                    'https://docs.google.com/spreadsheets/d/e/2PACX-1vRJduuwLQYkHFCDbGo1J-kGu8gN' +
                    'WH3CX7dD8vVekiztMWxuiJIY1wptsW4eGgO5wg/pub?gid=667331627&single=true&output=csv',
@@ -160,6 +175,34 @@ module.exports = async (req, res) => {
        stops at the first one any tab answers for, so a half-finished Q2 does not
        hide a complete Q1. Blocks come back concatenated with a marker line — one
        response, one edge cache entry, however many tabs. */
+    /* 0. A source that is not a spreadsheet. One request, no tab hunt, and the
+       secret stays server-side. A 401 here means the two halves of the shared
+       key disagree, which is worth saying plainly rather than reporting as a
+       generic upstream failure — it is the one thing that will actually go
+       wrong. */
+    if (source.direct) {
+      attempted.push(source.direct);
+      if (!process.env.MOM_FEED_KEY)
+        return fail('MOM_FEED_KEY is not set on this deployment.',
+                    'Generate one (openssl rand -hex 32), set it here and as KPI_FEED_KEY ' +
+                    'on the MOM Portal. The portal refuses every request until both match.');
+      let r;
+      try {
+        r = await fetch(source.direct, { headers: source.headers() });
+      } catch (e) {
+        return fail(`Could not reach the MOM Portal: ${e.message}`,
+                    'Check MOM_FEED_URL and that the portal is deployed.');
+      }
+      if (r.status === 401 || r.status === 403)
+        return fail('The MOM Portal rejected the key.',
+                    'MOM_FEED_KEY here and KPI_FEED_KEY on the portal must be the same ' +
+                    'value. Rotating one without the other breaks this.');
+      if (!r.ok) return fail(`The MOM Portal answered ${r.status}.`, 'Nothing to read.');
+      const body = await r.text();
+      if (!looksLikeTheExport(body)) return fail('Unexpected response.', source.mismatch);
+      return send({ body, gid: null });
+    }
+
     if (source.byName) {
       const names = String((req.query && req.query.rms) ||
         new URL(req.url, 'http://x').searchParams.get('rms') || '')

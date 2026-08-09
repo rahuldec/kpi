@@ -801,7 +801,7 @@ entries loaded and when.
     node qa.js
     TZ=Asia/Kolkata node qa.js
 
-565 assertions with the network mocked: parsing (spacer rows above the header, quoted
+590 assertions with the network mocked: parsing (spacer rows above the header, quoted
 fields containing commas and newlines, blank assignees, case-variant names), every
 failure path (sheet not shared, network down, unparseable content), the date-window
 rules, cross-checks between the three places misses are counted, escaping of sheet
@@ -890,3 +890,122 @@ empty list is itself reported rather than guessed at.
 
 Before chasing any of it, hard-reload. Browser caching on this repo has looked like
 a data problem three times now.
+
+
+## "Dhanna Bhagat Public School is in the escalation sheet but not on Mansi's card"
+
+Reported 8 Aug 2026. The escalation was real, Mansi's ownership was real, and the
+page was working exactly as written — which is the problem.
+
+The client book spells it **Dhanna Bhagat School**. Asana spells it **Dhanna Bhagat
+Public School**. Escalations resolve to a client by exact normalised name, and
+failing that by a prefix test — one name running on from the other, which is what
+catches "Vedashree" against "Vedashree School" and "SA Jain (PG) College" against
+"SA Jain (PG) College + AIMT". Here the extra word is in the *middle*:
+
+    dhannabhagatschool          <- book
+    dhannabhagatpublicschool    <- Asana
+
+Neither is a prefix of the other, so nothing matched, so the escalation belonged to
+no client and therefore to no team. `ESC_ALIAS` now carries the pair.
+
+Two things made this worse than a one-line spelling fix.
+
+**The alias lookup was by exact string.** `ESC_ALIAS[e.client]` meant a difference in
+case, punctuation or a stray space decided whether a hand-written alias fired at all
+— which is how the MSG entry stopped working when Asana changed which string came
+through. Aliases are looked up normalised now. That loosens nothing: an alias still
+requires a person to write the pair down by evidence.
+
+**The failure was silent where anyone would notice it.** `ESC_UNMATCHED` was already
+computed and already listed — but only in the client book panel, next to "Every
+client". On the KPI meter, an escalation that matched nothing was simply absent from
+every card, and absent reads as *no escalation*, not as *we could not place one*. The
+feedback and adoption unmatched lists were already reported on the meter; escalations
+were the odd one out. They are reported there now, and silent when there is nothing
+to say.
+
+That is the same shape as the client-book failure above, found the same day: the
+notice existed, in the place useful to whoever wired the data up, and nowhere near
+whoever reads the number.
+
+### Still worth doing
+
+The prefix rule stays deliberately narrow — "GNAV Kurukshetra" against four
+Kurukshetra schools is a guess, and a wrong guess puts a red flag on an innocent
+client. But every mismatch found so far has been the same shape: the two systems
+agree on the words and disagree on how many. A rule matching every word of the book
+name appearing in order in the escalation name, accepted only when exactly one client
+qualifies, would have caught this one without guessing. Not done here — it changes
+which clients get flagged, so it wants its own change and its own tests.
+
+
+## Client visits (MOM Portal) — added 9 Aug 2026
+
+Every KPI meter card now carries a **Visits** line: field visits recorded in the
+MOM Portal at odmom.lovable.app, with a per-person breakdown in the (i) panel.
+
+**It is a count, not a dial, and that is deliberate.** Compliance has an obvious
+target — every entry filed. Business has an agreed one — Rs 50L. Nobody has said
+what a month of field visits should be. Drawing a dial against a number invents
+that target and then lets it harden into a fact, which is already the risk the
+adoption placeholder carries. A figure states what happened and asserts nothing.
+qa asserts the absence: no track, no percentage. Turning it into a dial later is
+the easy mistake.
+
+**Only offline MOMs count.** An online MOM is a call, and calls are already
+counted on the compliance side by the CS Client Call Tracker. Counting them here
+would score the same contact twice under two headings.
+
+**A visit counts for everyone who attended**, not only whoever filed it — credit
+is `employee_name` plus every attendee marked as Okie Dokie staff. So the team
+figure is person-visits, and the card shows the meeting count beside it whenever
+the two differ. Two people spending a morning at a client is two people's time,
+and a per-meeting count would hide the difference between a team of one turning
+up and a team of three.
+
+Names are resolved with the same restraint as the escalation and adoption
+matchers: a first name is credited only when exactly one roster member answers to
+it, and anyone who cannot be placed is listed rather than dropped. A visit
+credited to the wrong person is worse than one credited to nobody.
+
+### It is a snapshot, and it says so
+
+`VISITS_FALLBACK` holds 75 meetings to 8 Aug 2026. The live feed exists —
+`/api/kpi-visits` on the portal, one row per person per meeting — and `?src=visits`
+is wired in `api/data.js`, but it needs a shared secret set on both sides:
+
+    openssl rand -hex 32
+    # -> Lovable: Cloud -> Secrets -> KPI_FEED_KEY
+    # -> Vercel:  Environment Variables -> MOM_FEED_KEY
+
+Both halves must hold the same value. The portal fails closed while `KPI_FEED_KEY`
+is unset, so nothing is exposed in the gap between setting one and the other, and
+the proxy reports a key mismatch as exactly that rather than as a generic upstream
+failure. Until then the (i) panel says which it is reading.
+
+### Two corrections baked into the snapshot
+
+Both are still wrong AT SOURCE, so switching the live feed on will bring them back
+until the records are fixed in the portal:
+
+* **29 Jul, IAMR** — `employee_name` held "Rajendra Sir", the client's own admin,
+  marked `team: client` in the attendee list. The visit is Amit Kumar's. Lokesh
+  Kumar keeps his credit for it; he attended.
+* **28 Jul, Aravali** — entered twice minutes apart, as "Amar kumar , Sultan malik"
+  and "Amar Kumar, Sultan Malik". One visit, counted once.
+
+### What the numbers say
+
+August 2026 to date: 19 person-visits across the measured teams. Sukhmeet Singh's
+team has 10 of them and Bhavey Saluja alone has 6. July: 64, with Sukhmeet's team
+on 32 and Bhavey on 18.
+
+Vansh Saini, Divya Gupta, Sapna and all of Sagar Mishra's team have no visit in
+either month. Worth reading beside the long non-filers already noted above rather
+than as a separate finding.
+
+Two 6 Aug visits credit nobody on the CS roster — Vedashree (Lalit Garg, Rahul
+Sharma) and PIET (Ayush Garg). Left uncredited by decision, not by accident: they
+are real visits by people outside CS, and widening the roster to catch them would
+change what the compliance figures mean too.

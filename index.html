@@ -256,7 +256,7 @@ html.modalopen{overflow:hidden}
 
 /* Escalations on a team card. Not a dial: a count of live problems has no
    denominator, and a progress bar would invite reading "2 of 5" into it. */
-.escline,.covline{
+.visitline,.escline,.covline{
   display:flex;align-items:baseline;gap:2px 9px;margin:2px 0 0;flex-wrap:wrap;
   padding-top:12px;border-top:1px solid var(--hair);
 }
@@ -267,23 +267,24 @@ html.modalopen{overflow:hidden}
    each block is dial -> track -> its coverage line. */
 .covline{border-top:0;padding-top:6px}
 .covline + .dial,.covwho + .dial{padding-top:14px;border-top:1px solid var(--hair)}
-.escline .lbl,.covline .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.07em;
+.visitline .lbl,.escline .lbl,.covline .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.07em;
   color:var(--faint);width:88px;flex:none}
 /* The figure reads as one phrase — "36 of 48 clients" — so it must never break
    across lines the way it did when the money beside it was allowed to squeeze
    it. Below about 300px of card the row wraps instead and the money drops to a
    line of its own, still flush right; the value stays beside its label at every
    width, which is the thing being read. */
-.escline .n,.covline .n{font-size:15px;font-weight:600;letter-spacing:-.012em;
+.visitline .n,.escline .n,.covline .n{font-size:15px;font-weight:600;letter-spacing:-.012em;
   white-space:nowrap}
 .escline.hot .n,.covline.hot .n{color:var(--miss)}
-.escline.cool .n,.covline.cool .n{color:var(--faint);font-weight:500}
+.escline.cool .n,.covline.cool .n,.visitline .n{color:var(--faint);font-weight:500}
 .how .gaps{font-size:12.5px;line-height:1.5;color:var(--ink);margin:4px 0 0}
 .how .gaps.none{color:var(--faint)}
 /* The figure on the right of a coverage line, matching a dial's .sub exactly so
    the four rows of a card line up down the same edge. */
-.escline .sub,.covline .sub{font-size:12.5px;color:var(--faint);margin-left:auto;
+.visitline .sub,.escline .sub,.covline .sub{font-size:12.5px;color:var(--faint);margin-left:auto;
   text-align:right;white-space:nowrap}
+.how .vlist{margin-top:4px}
 .escwho,.covwho{font-size:12.5px;line-height:1.45;color:var(--miss);margin:5px 0 0 97px}
 .escwho.cool,.covwho.cool{color:var(--faint)}
 
@@ -967,6 +968,92 @@ const ADOPTION_ALIAS = {
    has neither, so this number is asserted, not derived, and the page says so
    rather than letting it pass as settled. */
 const ADOPTION_TARGET = 0.80;
+
+/* ---------------- client visits (MOM Portal) ---------------- */
+
+/* Field visits, read from the MOM Portal at odmom.lovable.app. One entry per
+   meeting, `p` being everyone credited for it.
+
+   Only OFFLINE MOMs are visits. An online MOM is a call, and calls are already
+   counted by the CS Client Call Tracker on the compliance side — counting them
+   here would score the same contact twice under two different headings.
+
+   Credit is `employee_name` plus every attendee marked as Okie Dokie staff, so
+   a joint visit counts for everyone who went rather than only for whoever filed
+   the record. Honorifics are stripped and "A & B" is split, because the portal's
+   employee field is free text and people type it every way there is.
+
+   This is a dated snapshot, not a live read — the same arrangement as the
+   adoption grid. The live feed exists (`/api/kpi-visits` on the portal, one row
+   per person per meeting) but needs a shared secret set on both sides before it
+   can be switched on, so until then the page says which it is showing. */
+const VISITS_FALLBACK_ASOF = '2026-08-08';
+const VISITS_FALLBACK = [{"d":"2026-08-08","p":["Sultan Malik","Anjali"]},{"d":"2026-08-07","p":["Bhavey Saluja"]},{"d":"2026-08-07","p":["Sukhmeet Singh"]},{"d":"2026-08-06","p":["Ayush Garg"]},{"d":"2026-08-06","p":["Bhavey Saluja"]},{"d":"2026-08-06","p":["Lalit Garg","Rahul Sharma"]},{"d":"2026-08-05","p":["Ankush","Tinku"]},{"d":"2026-08-05","p":["Anjali Verma"]},{"d":"2026-08-05","p":["Priya"]},{"d":"2026-08-05","p":["Bhavey Saluja"]},{"d":"2026-08-05","p":["Lokesh"]},{"d":"2026-08-05","p":["Gobind Monga"]},{"d":"2026-08-04","p":["Bhavey Saluja"]},{"d":"2026-08-04","p":["Lokesh Kumar"]},{"d":"2026-08-03","p":["Gobind Monga","Bhavey Saluja"]},{"d":"2026-08-01","p":["Sukhmeet Singh"]},{"d":"2026-08-01","p":["Mansi Rana","Bhavey Saluja"]},{"d":"2026-08-01","p":["Sultan Malik"]},{"d":"2026-07-31","p":["Sukhmeet Singh"]},{"d":"2026-07-31","p":["Sultan Malik","Vishwas Sehra"]},{"d":"2026-07-30","p":["Sukhmeet Singh"]},{"d":"2026-07-30","p":["Bhavey Saluja"]},{"d":"2026-07-29","p":["Sultan Malik"]},{"d":"2026-07-29","p":["Priya"]},{"d":"2026-07-29","p":["Amit Kumar","Lokesh Kumar"]},{"d":"2026-07-29","p":["Bhavey Saluja"]},{"d":"2026-07-28","p":["Gobind Monga"]},{"d":"2026-07-28","p":["Bhavey Saluja"]},{"d":"2026-07-28","p":["Amar kumar","Sultan malik"]},{"d":"2026-07-27","p":["Bhavey Saluja"]},{"d":"2026-07-27","p":["Sukhmeet Singh"]},{"d":"2026-07-27","p":["Sultan Malik","Anjali Verma","Amar Kumar","Ashish"]},{"d":"2026-07-24","p":["Gobind Monga","Bhavey Saluja"]},{"d":"2026-07-23","p":["Anjali Verma"]},{"d":"2026-07-23","p":["Ayush Garg","Gaurav Singla","Sultan Malik"]},{"d":"2026-07-23","p":["Bhavey Saluja"]},{"d":"2026-07-22","p":["Priya"]},{"d":"2026-07-22","p":["Sultan Malik"]},{"d":"2026-07-22","p":["Bhavey Saluja"]},{"d":"2026-07-22","p":["Sultan Malik"]},{"d":"2026-07-21","p":["Gobind Monga"]},{"d":"2026-07-21","p":["Mansi Rana"]},{"d":"2026-07-21","p":["Bhavey Saluja"]},{"d":"2026-07-21","p":["Mansi Rana"]},{"d":"2026-07-20","p":["Bhavey Saluja"]},{"d":"2026-07-17","p":["Sultan Malik"]},{"d":"2026-07-17","p":["Gobind Monga"]},{"d":"2026-07-17","p":["Bhavey Saluja"]},{"d":"2026-07-16","p":["Bhavey Saluja"]},{"d":"2026-07-16","p":["Mansi Rana","Sultan Malik"]},{"d":"2026-07-15","p":["Sukhmeet Singh"]},{"d":"2026-07-15","p":["Gobind Monga","Bhavey Saluja"]},{"d":"2026-07-15","p":["Kashish","Tanvi"]},{"d":"2026-07-15","p":["Kashish","Tanvi"]},{"d":"2026-07-15","p":["Gobind Monga","Bhavey Saluja"]},{"d":"2026-07-14","p":["Sultan Malik"]},{"d":"2026-07-14","p":["Bhavey Saluja"]},{"d":"2026-07-13","p":["Sukhmeet Singh"]},{"d":"2026-07-13","p":["Bhavey Saluja"]},{"d":"2026-07-13","p":["Priya"]},{"d":"2026-07-10","p":["Anjali Verma"]},{"d":"2026-07-10","p":["Bhavey Saluja"]},{"d":"2026-07-09","p":["Bhavey Saluja"]},{"d":"2026-07-09","p":["Sukhmeet Singh"]},{"d":"2026-07-08","p":["Sultan Malik"]},{"d":"2026-07-08","p":["Lokesh Kumar"]},{"d":"2026-07-08","p":["Bhavey Saluja"]},{"d":"2026-07-07","p":["Anjali Verma"]},{"d":"2026-07-06","p":["Anjali Verma"]},{"d":"2026-07-04","p":["Gobind Monga"]},{"d":"2026-07-03","p":["Sultan Malik","Jatin Goel","Ashish Kumar"]},{"d":"2026-07-01","p":["Rahul Sharma","Gobind Monga"]},{"d":"2026-06-30","p":["Sultan Malik","Gobind Monga"]},{"d":"2026-06-29","p":["Sultan Malik"]},{"d":"2026-06-03","p":["Rahul Sharma","Amar Kumar Pandit","Rahul","Amar"]}];
+
+let VISITS = VISITS_FALLBACK;
+let VISITS_ASOF = VISITS_FALLBACK_ASOF;
+let VISITS_LIVE = false;
+let VISITS_ERROR = null;
+let VISIT_UNPLACED = [];
+
+/* Two corrections applied to the snapshot above, agreed with the CS lead on
+   9 Aug 2026. Both are still wrong AT SOURCE, so a future live read will bring
+   them back until the records themselves are fixed:
+     - 29 Jul, IAMR: employee_name held "Rajendra Sir", who is the client's own
+       admin and marked team:client in the attendee list. The visit is Amit
+       Kumar's. Lokesh Kumar keeps his credit for it — he attended.
+     - 28 Jul, Aravali: entered twice minutes apart, as "Amar kumar , Sultan
+       malik" and "Amar Kumar, Sultan Malik". One visit, counted once. */
+
+/* Per person, then rolled up to the team that person belongs to. A visit is
+   credited to every attendee, so the team total counts a joint visit once per
+   person who went — deliberately: two people spending a morning at a client is
+   two people's time, and a per-meeting count would hide the difference between
+   a team of one turning up and a team of three. */
+function visitsForTeam(lead, months){
+  const team = new Set([lead, ...(POD_TEAM.get(lead) || [])]);
+  let person = 0;
+  const meetings = new Set();
+  const byPerson = new Map();
+  VISITS.forEach((v, i) => {
+    if (months && !months.includes(v.d.slice(0, 7))) return;
+    for (const raw of v.p){
+      const who = canonVisitor(raw);
+      if (!who || !team.has(who)) continue;
+      person++;
+      meetings.add(i);
+      byPerson.set(who, (byPerson.get(who) || 0) + 1);
+    }
+  });
+  return {person, meetings: meetings.size,
+          byPerson: [...byPerson.entries()].sort((a, b) => b[1] - a[1])};
+}
+
+/* The portal's employee field is free text, so a first name has to be resolved
+   against the roster before it can be credited. Resolution only ever chooses an
+   existing roster name — it never invents one — and anyone who cannot be placed
+   is listed on the page rather than dropped, because a visit credited to nobody
+   looks exactly like a visit that did not happen. */
+function canonVisitor(raw){
+  const n = String(raw).trim();
+  if (!n) return null;
+  const exact = [...POD_OF.keys()].find(r => r.toLowerCase() === n.toLowerCase());
+  if (exact) return exact;
+  const first = n.toLowerCase().split(/\s+/)[0];
+  const hits = [...POD_OF.keys()].filter(r => r.toLowerCase().split(/\s+/)[0] === first);
+  return hits.length === 1 ? hits[0] : null;
+}
+
+function buildVisits(){
+  VISIT_UNPLACED = [];
+  const seen = new Set();
+  for (const v of VISITS)
+    for (const raw of v.p){
+      const who = canonVisitor(raw);
+      if (!who && !seen.has(raw)){ seen.add(raw); VISIT_UNPLACED.push(raw); }
+    }
+}
+
 
 let ADOPTION = ADOPTION_FALLBACK;
 let ADOPTION_NOTES = [];
@@ -1859,7 +1946,14 @@ const ESC_ALIAS = {
      Both keys are kept so the mapping survives either path — same task, same
      client, whichever string the parser lands on. */
   'MSG Glorious Int School': 'Shah Satnam Sirsa',
-  'Sirsa MSG Glorious': 'Shah Satnam Sirsa'
+  'Sirsa MSG Glorious': 'Shah Satnam Sirsa',
+
+  /* The book says "Dhanna Bhagat School", Asana says "Dhanna Bhagat Public
+     School". The extra word sits in the MIDDLE, and the rule below only bridges
+     a prefix — one name running on from the other — so neither side reaches the
+     other and the escalation counted towards nobody. Same client, same owner
+     (Mansi Rana): this is a spelling difference, not a guess. */
+  'Dhanna Bhagat Public School': 'Dhanna Bhagat School'
   // "GNAV Kurukshetra" and "Manish Papneja" need no entry: the client sheet was
   // renamed to match the escalation project in each case. "SA Jain (PG) College"
   // needs none either — the book now reads "SA Jain (PG) College + AIMT", which
@@ -1878,6 +1972,15 @@ function buildEscalations(){
   const book = CLIENTS.map(c => c.n);
   const byNorm = new Map(book.map(n => [eNorm(n), n]));
 
+  /* Aliases are looked up normalised, not by exact string. They are hand-written
+     evidence about which client an escalation belongs to, so a difference in
+     case, punctuation or a stray space should not decide whether one fires —
+     that is how the MSG entry stopped firing once Asana changed which string
+     came through. Normalising the key loosens nothing: it still takes a human
+     writing the pair down. */
+  const aliasByNorm = new Map(
+    Object.entries(ESC_ALIAS).map(([from, to]) => [eNorm(from), to]));
+
   /* An alias pointing at a client that is not in the book is worse than no alias:
      it looks resolved and flags nothing. Catch it here rather than letting the
      escalation quietly disappear. */
@@ -1886,7 +1989,7 @@ function buildEscalations(){
       ESC_UNMATCHED.push(`"${from}" is aliased to "${to}", which is not in the client book`);
 
   for (const e of ESCALATIONS){
-    const alias = ESC_ALIAS[e.client] || e.client;
+    const alias = aliasByNorm.get(eNorm(e.client)) || e.client;
     const k = eNorm(alias);
     let hit = byNorm.get(k);
     if (!hit){
@@ -2141,8 +2244,9 @@ function meterRows(){
     const esc = escForTeam(e.lead);
     const adopt = adoptForTeam(e.lead);
     const feed = feedForTeam(e.lead);
+    const visits = visitsForTeam(e.lead, MONTHS);
     return {
-      ...e, revenue, target, esc, adopt, feed,
+      ...e, revenue, target, esc, adopt, feed, visits,
       escOpen: esc.filter(x => x.open.length),
       compliance: e.expected ? e.filed / e.expected : null,
       business: target ? revenue / target : 0
@@ -2177,6 +2281,7 @@ function howHtml(r){
   h += bookDetail(r);
   h += adoptDetail(r);
   h += feedDetail(r);
+  h += visitDetail(r);
   h += escDetail(r);
 
   if (!r.members.length) return h + `<p class="none">Nobody on this team has any expected days.</p>`;
@@ -2387,6 +2492,59 @@ function feedLine(r, info){
                                     : `none of ${f.total}`}</span>` +
          (f.heard ? `<span class="sub">${esc(inr(f.revHeard))} of ${esc(inr(f.revTotal))}</span>`
                   : '') + `</div>`;
+}
+
+/* Visits have no agreed target, so this is a count and not a dial. Compliance
+   has an obvious target (every entry filed) and business an agreed one (Rs 50L);
+   nobody has said what a month's worth of field visits should be. Drawing a dial
+   against a number nobody has agreed would make one up and then let it harden
+   into a fact, which is what the adoption placeholder already risks. A figure
+   states what happened and asserts nothing. */
+function visitLine(r, info){
+  if (VISITS_ERROR)
+    return `<div class="visitline"><span class="lbl">Visits</span>${info || ''}` +
+           `<span class="n">&mdash;</span><span class="sub">not loaded</span></div>`;
+
+  const v = r.visits;
+  if (!v.person)
+    return `<div class="visitline"><span class="lbl">Visits</span>${info || ''}` +
+           `<span class="n">none</span><span class="sub">${esc(monthsLabel())}</span></div>`;
+
+  /* Person-visits and meetings differ whenever the team went somewhere together,
+     and that gap is the interesting part — so show the meetings count beside it
+     rather than picking one number and hiding the other. */
+  return `<div class="visitline"><span class="lbl">Visits</span>${info || ''}` +
+         `<span class="n">${v.person}</span>` +
+         `<span class="sub">${v.meetings === v.person
+            ? `${v.meetings} ${v.meetings === 1 ? 'meeting' : 'meetings'}`
+            : `across ${v.meetings} meetings`}</span></div>`;
+}
+
+function visitDetail(r){
+  const v = r.visits;
+  let h = `<h5 data-sec="visits">Client visits</h5><p class="sum">`;
+  if (VISITS_ERROR)
+    return h + `The visit feed did not load: ${esc(VISITS_ERROR)}</p>`;
+
+  h += `Offline MOMs filed in the MOM Portal for ${esc(monthsLabel())}. ` +
+       `An online MOM is a call and is counted on the compliance side by the ` +
+       `client call tracker, so it is not a visit here. A visit counts for ` +
+       `everyone who attended, not only whoever filed it.`;
+  h += VISITS_LIVE ? ` Read live.` :
+       ` Read from the snapshot built into this page, taken ` +
+       `${esc(pretty(VISITS_ASOF))} — the live feed is not switched on yet.`;
+  h += `</p>`;
+
+  if (!v.person) return h + `<p class="none">Nobody on this team filed one.</p>`;
+
+  h += `<div class="vlist">`;
+  for (const [who, n] of v.byPerson)
+    h += `<p class="dates"><span class="tk">${esc(who)}</span>${n} ` +
+         `${n === 1 ? 'visit' : 'visits'}</p>`;
+  const silent = [r.lead, ...r.team].filter(p => !v.byPerson.some(x => x[0] === p));
+  if (silent.length)
+    h += `<p class="dates none">No visit filed: ${esc(silent.join(', '))}.</p>`;
+  return h + `</div>`;
 }
 
 function escLine(r, info){
@@ -2807,6 +2965,7 @@ function renderMeter(){
                `${r.feed.heard === 1 ? 'client' : 'clients'}`, feedMet,
            mi('feedback', 'client feedback')) +
       feedLine(r, mi('feedback', 'who has been heard from')) +
+      visitLine(r, mi('visits', 'client visits')) +
       escLine(r, mi('escalations', 'escalations')) +
       `<div class="how" id="how${i}" hidden>${panel}</div>` +
       `</div>`;
@@ -2846,6 +3005,17 @@ function renderMeter(){
         `not in the book</b> and count towards nobody: ` +
         `${ADOPT_UNMATCHED.map(esc).join(', ')}. Add them to <code>ADOPTION_ALIAS</code> ` +
         `in index.html if they are the same client under another name.` : '') +
+    /* This list already existed, but only inside the client book panel. An
+       escalation that matches nothing is absent from every team card with
+       nothing to say it was dropped, which reads as "no escalation" rather than
+       as "we could not place one". The other two unmatched lists are reported
+       here already; this one was the odd one out. */
+    (ESC_UNMATCHED.length
+      ? ` <b>${ESC_UNMATCHED.length} escalation${ESC_UNMATCHED.length === 1 ? '' : 's'} ` +
+        `could not be matched to a client</b> and ${ESC_UNMATCHED.length === 1 ? 'is' : 'are'} ` +
+        `on nobody's card: ${ESC_UNMATCHED.map(esc).join(', ')}. Add ` +
+        `${ESC_UNMATCHED.length === 1 ? 'it' : 'them'} to <code>ESC_ALIAS</code> in ` +
+        `index.html if the book spells the client differently.` : '') +
     (excluded ? ` ${esc(NO_BOOK_TEAMS.join(', '))}` +
                 `${NO_BOOK_TEAMS.length === 1 ? "'s team is" : " teams are"} not shown here — ` +
                 `no client book to measure against — so ${excluded} ` +
@@ -3513,6 +3683,7 @@ async function load(){
       ADOPT_ERROR = (e && e.message) || String(e);
     }
     buildAdoption();
+    buildVisits();
 
     /* Feedback joins on client names typed by the respondent, so like escalations
        and adoption it waits for the book. It fails soft and, unlike adoption,
