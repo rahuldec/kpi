@@ -249,10 +249,44 @@ html.modalopen{overflow:hidden}
 .how .sum b{color:var(--ink);font-weight:600}
 .how .who2{font-weight:600;color:var(--ink);margin:11px 0 3px;font-size:13px}
 .how .who2:first-of-type{margin-top:0}
-.how .dates{display:block;margin:0 0 2px;color:var(--miss);
-  font-variant-numeric:tabular-nums;word-spacing:.15em}
 .how .none{color:var(--body)}
-.how .tk{display:inline-block;min-width:64px;color:var(--faint);font-weight:500}
+
+/* ── label-and-value rows ─────────────────────────────────────────────────────
+   `.tk` was `display:inline-block;min-width:64px` with nothing after it. A
+   label SHORTER than 64px looked spaced; one longer than it butted straight
+   against its own value — "Sukhmeet Singh2 visits", "internal calls4 Aug",
+   "Budha College Karnaldd". Every one of those is the same bug, and it showed up
+   wherever a label happened to be long.
+
+   A minimum width was the wrong instrument: it was trying to make a column out
+   of inline text. These are label/value pairs, so they are laid out as such —
+   the label takes a fixed column, the value takes the rest and wraps inside it,
+   and the two can never touch however long either gets. */
+.how .dates{display:flex;gap:6px 14px;align-items:baseline;
+  margin:0;padding:7px 0;color:var(--miss);font-variant-numeric:tabular-nums}
+.how .dates + .dates{border-top:1px solid var(--hair)}
+.how .tk{flex:0 0 108px;color:var(--faint);font-weight:500}
+.how .dates > :not(.tk){min-width:0}
+@media (max-width:460px){
+  .how .dates{display:block;padding:8px 0}
+  .how .tk{display:block;margin-bottom:1px}
+}
+
+/* ── grouped list panels ──────────────────────────────────────────────────────
+   The sections used to run together as one column of text, so a reader scrolling
+   the dialog could not tell where the answer to one question stopped and the
+   next began. Each list sits in its own inset panel instead: the rows belong to
+   something visible, and the hairlines inside it separate rows rather than
+   sections. */
+.how .missed,.how .vlist,.how .asks{
+  background:var(--page);border:1px solid var(--hair);border-radius:12px;
+  padding:3px 14px;margin:8px 0 0;
+}
+.modal .how .missed,.modal .how .vlist,.modal .how .asks{background:#FAF8F6}
+.how .missed .who2,.how .asks .who2{margin:0;padding:12px 0 2px}
+.how .missed .who2 + .dates,.how .asks .who2 + .dates{border-top:0}
+.how .missed .who2:not(:first-child),.how .asks .who2:not(:first-child){
+  border-top:1px solid var(--hair);margin-top:2px}
 
 /* Escalations on a team card. Not a dial: a count of live problems has no
    denominator, and a progress bar would invite reading "2 of 5" into it. */
@@ -278,8 +312,25 @@ html.modalopen{overflow:hidden}
   white-space:nowrap}
 .escline.hot .n,.covline.hot .n{color:var(--miss)}
 .escline.cool .n,.covline.cool .n,.visitline .n{color:var(--faint);font-weight:500}
-.how .gaps{font-size:12.5px;line-height:1.5;color:var(--ink);margin:4px 0 0}
-.how .gaps.none{color:var(--faint)}
+.how .gaps{font-size:12.5px;line-height:1.7;color:var(--ink);margin:6px 0 0}
+.how .gaps.none{color:var(--faint);font-size:12px;margin-top:8px}
+/* A figure attached to a name, not a column of its own. */
+.how .amt{color:var(--faint);font-variant-numeric:tabular-nums}
+.how .gaps .sep{color:var(--hair);padding:0 3px}
+
+/* A long list is capped and opens on request. Forty-eight client names is a
+   reference table, not something anyone reads on the way past — and it buried
+   the sections under it. Native disclosure, so it is keyboard-reachable and
+   needs no script. */
+.how details{margin:6px 0 0}
+.how details > summary{
+  list-style:none;cursor:pointer;display:inline-flex;align-items:center;gap:6px;
+  font-size:12.5px;font-weight:600;color:var(--brand);padding:6px 0;
+}
+.how details > summary::-webkit-details-marker{display:none}
+.how details > summary::after{content:'\203A';transform:rotate(90deg);font-size:14px;line-height:1}
+.how details[open] > summary::after{transform:rotate(-90deg)}
+.how details > summary:hover{color:var(--brand-dark)}
 /* The figure on the right of a coverage line, matching a dial's .sub exactly so
    the four rows of a card line up down the same edge. */
 .visitline .sub,.escline .sub,.covline .sub{font-size:12.5px;color:var(--faint);margin-left:auto;
@@ -2324,10 +2375,12 @@ function howHtml(r){
     let any = false;
     for (const t of TRACKERS){
       const per = m.per[t];
-      if (!per){ h += `<p class="dates none"><span class="tk">${esc(SOURCES[t].noun)}</span>exempt</p>`; continue; }
+      if (!per){ h += `<p class="dates none"><span class="tk">${esc(SOURCES[t].noun)}</span>` +
+                      `<span>exempt</span></p>`; continue; }
       if (!per.gaps.length) continue;
       any = true;
-      h += `<p class="dates"><span class="tk">${esc(SOURCES[t].noun)}</span>${esc(dayList(per.gaps))}</p>`;
+      h += `<p class="dates"><span class="tk">${esc(SOURCES[t].noun)}</span>` +
+           `<span>${esc(dayList(per.gaps))}</span></p>`;
     }
     if (!any && TRACKERS.every(t => m.per[t]))
       h += `<p class="dates none">Nothing missed.</p>`;
@@ -2339,11 +2392,25 @@ function howHtml(r){
    them is the arithmetic: which clients were never scored (the denominator the
    dial cannot show), and where the scorecard and the book disagree about who
    owns an account. Both change how the number should be read. */
+/* A client and what it bills, as one phrase. Not a label/value row: these run on
+   as a list, so the amount rides with the name rather than starting a column. */
+const clientMoney = c => `${esc(c.n)} <span class="amt">${esc(inr(c.r || 0))}</span>`;
+
+/* A list long enough to bury what follows it. The first few are shown, the rest
+   open on request — the names are reference material, and burying six sections
+   under forty-eight of them is what made this dialog unreadable. */
+function longList(items, shown, label){
+  const sep = `<span class="sep">\u00B7</span>`;
+  if (items.length <= shown + 2)
+    return `<p class="gaps">${items.join(sep)}</p>`;
+  return `<p class="gaps">${items.slice(0, shown).join(sep)}</p>` +
+         `<details><summary>Show all ${items.length} ${label}</summary>` +
+         `<p class="gaps">${items.join(sep)}</p></details>`;
+}
+
 function adoptDetail(r){
   const a = r.adopt;
   if (!a.total) return '';
-  const money = c => `${esc(c.n)} <span class="tk">${esc(inr(c.r || 0))}</span>`;
-
   let h = `<h5 data-sec="adoption">How module adoption is worked out</h5><p class="sum">` +
     `Each scored client contributes the modules it has taken up out of the ones ` +
     `that apply to it; modules never sold to a client are left out of both sides. ` +
@@ -2361,8 +2428,8 @@ function adoptDetail(r){
     const rev = a.missing.reduce((n, c) => n + (c.r || 0), 0);
     h += `<h5 data-sec="scored">Never scored — ${a.missing.length} of ${a.total} clients, ` +
          `${esc(inr(rev))}</h5>` +
-         `<p class="gaps">${a.missing.slice().sort((x, y) => (y.r || 0) - (x.r || 0))
-            .map(money).join(' · ')}</p>` +
+         longList(a.missing.slice().sort((x, y) => (y.r || 0) - (x.r || 0))
+            .map(clientMoney), 6, 'clients') +
          `<p class="gaps none">These are absent from the percentage above, not ` +
          `counted as zero — the dial describes the ${a.scored} that were scored.</p>`;
   }
@@ -2416,12 +2483,14 @@ function escDetail(r){
   };
   let h = `<h5 data-sec="escalations">Escalations</h5>`;
   const open = r.esc.filter(x => x.open.length);
+  if (open.length) h += `<div class="asks">`;
   for (const x of open){
     h += `<p class="who2">${esc(x.client)}</p>`;
     for (const e of x.open)
-      h += `<p class="dates">${esc(e.title || 'escalation')}${esc(when(e.raised))}` +
-           (e.owner ? ` · ${esc(e.owner)}` : '') + `</p>`;
+      h += `<p class="dates"><span>${esc(e.title || 'escalation')}${esc(when(e.raised))}` +
+           (e.owner ? ` · ${esc(e.owner)}` : '') + `</span></p>`;
   }
+  if (open.length) h += `</div>`;
   const shut = r.esc.reduce((n, x) => n + (x.all.length - x.open.length), 0);
   if (shut)
     h += `<p class="${open.length ? 'dates none' : 'none'}">${shut} resolved earlier ` +
@@ -2460,7 +2529,6 @@ function coverLine(r, info){
 function feedDetail(r){
   const f = r.feed;
   if (!f.total) return '';
-  const money = c => `${esc(c.n)} <span class="tk">${esc(inr(c.r || 0))}</span>`;
 
   if (FEED_ERROR)
     return `<h5 data-sec="feedback">How client feedback is worked out</h5>` +
@@ -2489,15 +2557,16 @@ function feedDetail(r){
          `only — nothing on this page ranks teams on it.</p>`;
 
   if (f.silent.length)
-    h += `<p class="who2">Not heard from</p><p class="dates">` +
-         f.silent.slice().sort((a, b) => (b.r || 0) - (a.r || 0)).map(money).join(' · ') +
-         `</p>`;
+    h += `<p class="who2">Not heard from</p>` +
+         longList(f.silent.slice().sort((a, b) => (b.r || 0) - (a.r || 0)).map(clientMoney),
+                  6, 'clients');
 
   const asks = f.latest.filter(x => x.improve || x.gaps);
   if (asks.length)
-    h += `<p class="who2">What they asked for</p>` +
+    h += `<p class="who2">What they asked for</p><div class="asks">` +
          asks.map(x => `<p class="dates"><span class="tk">${esc(x.client.n)}</span>` +
-                       `${esc([x.improve, x.gaps].filter(Boolean).join(' — '))}</p>`).join('');
+                       `<span>${esc([x.improve, x.gaps].filter(Boolean).join(' — '))}</span></p>`)
+             .join('') + `</div>`;
   return h;
 }
 
@@ -2571,8 +2640,8 @@ function visitDetail(r){
 
   h += `<div class="vlist">`;
   for (const [who, n] of v.byPerson)
-    h += `<p class="dates"><span class="tk">${esc(who)}</span>${n} ` +
-         `${n === 1 ? 'visit' : 'visits'}</p>`;
+    h += `<p class="dates"><span class="tk">${esc(who)}</span>` +
+         `<span>${n} ${n === 1 ? 'visit' : 'visits'}</span></p>`;
   const silent = [r.lead, ...r.team].filter(p => !v.byPerson.some(x => x[0] === p));
   if (silent.length)
     h += `<p class="dates none">No visit filed: ${esc(silent.join(', '))}.</p>`;

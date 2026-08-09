@@ -1476,6 +1476,31 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
       const t = how.match(/(\d+) expected, (\d+) filed, (\d+) missed/);
       return Number(t[3]) === Number(t[1]) - Number(t[2]);
     })(), how.match(/\d+ expected, \d+ filed, \d+ missed/));
+    /* ── the (i) panel reads as rows, not as run-on text ────────
+       `.tk` was an inline-block with a min-width and nothing after it, so a
+       label longer than 64px ran straight into its own value: "Sukhmeet Singh2
+       visits", "internal calls4 Aug", "Budha College Karnaldd". Every label/value
+       row in the panel had it, and it only showed when a label happened to be
+       long — which is why it survived four rounds of looking at this dialog.
+
+       Assert the shape rather than the pixel: the label is its own element and
+       the value is too, so nothing depends on how wide either happens to be. */
+    for (const row of doc.querySelectorAll('#howbody .dates')){
+      const tk = row.querySelector('.tk');
+      if (!tk) continue;
+      const rest = [...row.children].filter(c => c !== tk);
+      check('a labelled row keeps its value in its own element',
+            rest.length > 0 && row.textContent.replace(tk.textContent, '').trim() ===
+              rest.map(c => c.textContent).join('').trim(),
+            row.outerHTML.slice(0, 120));
+      break;   // one is enough; the builders share the shape
+    }
+    check('no label is left touching its value', (() => {
+      const css = HTML.slice(HTML.indexOf('<style>'), HTML.indexOf('</style>'));
+      const rule = css.match(/\.how \.tk\{([^}]*)\}/);
+      return rule && !/min-width/.test(rule[1]) && /flex/.test(rule[1]);
+    })(), 'the .tk rule still sets a min-width instead of a column');
+
     check('the dates listed match the missed count', (() => {
       const t = Number(how.match(/(\d+) missed/)[1]);
       const listed = (doc.querySelector('#howbody .how .missed').textContent
@@ -2740,7 +2765,27 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     {
       cards[0].querySelector('button.mi[data-sec="visits"]').click();
       const body = txt(doc, '#howbody');
-      check('the visits section says it is a snapshot',
+      /* A forty-eight-name client list buried every section under it. Capped, with
+       the rest behind a disclosure — and the disclosure has to be real markup,
+       not a class that hides text, or the names are unreachable by keyboard. */
+    {
+      const c = card('Sukhmeet Singh') || cards[0];
+      c.querySelector('button.info').click(); await settle();
+      const body = doc.getElementById('howbody');
+      for (const d of body.querySelectorAll('details')){
+        check('a capped list opens on request', !!d.querySelector('summary'));
+        check('and says how many it is hiding',
+              /Show all \d+/.test(d.querySelector('summary').textContent),
+              d.querySelector('summary').textContent);
+      }
+      check('long lists are capped, not dumped', (() => {
+        const loose = [...body.querySelectorAll('.gaps')]
+          .filter(p => !p.closest('details') && p.textContent.split('\u00B7').length > 12);
+        return loose.length === 0;
+      })(), 'an uncapped list of more than a dozen names is still being dumped');
+    }
+
+    check('the visits section says it is a snapshot',
             /snapshot built into this page/i.test(body), body.slice(0, 200));
       check('and says why online MOMs are absent',
             /call/i.test(body) && /client call tracker/i.test(body));

@@ -801,7 +801,7 @@ entries loaded and when.
     node qa.js
     TZ=Asia/Kolkata node qa.js
 
-603 assertions with the network mocked: parsing (spacer rows above the header, quoted
+610 assertions with the network mocked: parsing (spacer rows above the header, quoted
 fields containing commas and newlines, blank assignees, case-variant names), every
 failure path (sheet not shared, network down, unparseable content), the date-window
 rules, cross-checks between the three places misses are counted, escaping of sheet
@@ -1055,3 +1055,59 @@ that the group-id list in `markSource()` and the one on the click handler are
 identical, and that both match the `.sources` ids actually in the markup.
 Removing a group id from the handler alone fails 10 assertions instead of leaving
 a tab that draws, highlights nothing, and does nothing.
+
+
+## The (i) dialog was unreadable — rebuilt 9 Aug 2026
+
+Reported from four screenshots. The clutter was mostly one CSS bug wearing
+several costumes, plus two decisions that had aged badly.
+
+### The bug: `.tk` was a column that was not a column
+
+    .how .tk{display:inline-block;min-width:64px}
+
+Nothing after it. A label shorter than 64px looked spaced; a label longer than it
+ran straight into its own value:
+
+    Sukhmeet Singh2 visits
+    internal calls4 Aug · 6 Aug
+    Budha College Karnaldd — dd
+
+Every label/value row in the panel had this, and it only appeared when a label
+happened to exceed 64px — which is why it survived four rounds of looking at this
+dialog. A minimum width was the wrong instrument: it was trying to make a column
+out of inline text.
+
+They are laid out as what they are now — the label takes a fixed column, the
+value takes the rest and wraps inside it, and the two cannot touch however long
+either grows. Below 460px the row stacks instead. qa asserts the shape (label and
+value in separate elements) rather than any pixel measurement, and separately
+asserts the `.tk` rule no longer sets a `min-width`. Restoring the old rule fails
+2 assertions.
+
+### `word-spacing:.15em` on every `.dates`
+
+Added for date runs, where it helps separate "4 Aug · 6 Aug". It also applied to
+the client lists, which is what made those look randomly gappy rather than dense.
+Gone.
+
+### Silence was painted as failure
+
+"Not heard from" listed every client yet to answer the feedback form, in the same
+red used for missed entries — directly under a paragraph explaining that
+non-responses are *not* counted as unhappy. The panel argued with itself. That
+list is neutral now.
+
+### Forty-eight names buried six sections
+
+The never-scored and not-heard-from lists dumped every client inline, pushing
+everything below them off the bottom of a scrolling dialog. They show the first
+six with the rest behind a native `<details>` disclosure — keyboard-reachable,
+no script, and the summary says how many are hidden. qa asserts no uncapped list
+of more than a dozen names survives.
+
+### Grouping
+
+Each list now sits in its own inset panel with hairlines between rows rather than
+running together as one column of text, so it is visible where the answer to one
+question stops and the next begins.
