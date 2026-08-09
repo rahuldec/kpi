@@ -855,6 +855,63 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     check('exempt row carries a dash for its tracker', /—/.test(board), board.slice(0, 120));
   }
 
+  // ── 1f4b. the Field tab ─────────────────────────────────────────
+  {
+    const { doc, win } = boot({ body: teamSheet(), clientBody: teamSheet(TEAM_PEOPLE, 500) });
+    await settle();
+    const tab = () => doc.querySelector('#sources6 button[data-src="visits"]');
+    check('visits has its own group', 
+          tab().closest('.group')?.querySelector('.grouplabel')?.textContent === 'Field',
+          tab().closest('.group')?.querySelector('.grouplabel')?.textContent);
+    /* Field sits above Overall, not below it: the rail pins the last group to
+       the foot as the roll-up, so a new group added after Overall would take
+       that position and read as the summary of everything above it. */
+    const labels = [...doc.querySelectorAll('.groups > .group .grouplabel')].map(x => x.textContent);
+    check('and still sits above Overall',
+          labels.indexOf('Field') === labels.length - 2, labels.join());
+
+    tab().click(); await settle();
+    check('the visits panel shows', doc.getElementById('visits').hidden === false);
+    check('and the other panels do not',
+          ['scorecard','clients','adoption','feedback','meter','chase']
+            .every(id => doc.getElementById(id).hidden === true));
+
+    /* It follows the month picker, like the meter and the scorecard. A visits
+       tab reading all time beside a meter reading this month would be two
+       different questions wearing the same word. */
+    check('the month picker is offered here', doc.getElementById('monthwrap').hidden === false);
+    const before = txt(doc, '#visittotals');
+    win.eval("setMonths(['2026-07'])"); await settle();
+    const jul = txt(doc, '#visittotals');
+    win.eval("setMonths(['2026-08'])"); await settle();
+    check('and changing it changes the figures', jul !== txt(doc, '#visittotals'),
+          `${jul.slice(0, 40)} vs ${txt(doc, '#visittotals').slice(0, 40)}`);
+    check('the joined toggle is not offered — it changes nothing here',
+          doc.getElementById('joinedwrap').hidden === true);
+
+    win.eval("setMonths(['2026-07'])"); await settle();
+    const teamRows = [...doc.querySelectorAll('#visitteams tbody tr')];
+    const peopleRows = [...doc.querySelectorAll('#visitpeople tbody tr')];
+    check('every measured team gets a row, visits or not', teamRows.length > 0);
+    const num = (tr, i) => tr.querySelectorAll('td')[i].textContent.trim();
+    const teamTotal = teamRows.reduce((n, tr) =>
+      n + (num(tr, 2) === '—' ? 0 : Number(num(tr, 2))), 0);
+    const peopleTotal = peopleRows.reduce((n, tr) =>
+      n + Number(tr.querySelectorAll('td')[2].textContent), 0);
+    check('the two tables agree on the total', teamTotal === peopleTotal,
+          `teams ${teamTotal} vs people ${peopleTotal}`);
+
+    /* People with none are named, not counted. "3 filed none" moves the
+       question along; the names are what anyone asks for next. */
+    const gaps = [...doc.querySelectorAll('#visitgaps tbody tr')];
+    check('people with no visit are named', gaps.length > 0);
+    const named = new Set(gaps.map(tr => tr.querySelector('td').textContent));
+    const filed = new Set(peopleRows.map(tr => tr.querySelector('td').textContent));
+    check('and nobody appears in both lists',
+          [...named].every(n => !filed.has(n)),
+          [...named].filter(n => filed.has(n)).join());
+  }
+
   // ── 1f4. client book ────────────────────────────────────────────
   {
     const { doc, win } = boot({ body: teamSheet(), clientBody: teamSheet(TEAM_PEOPLE, 500) });
@@ -863,12 +920,12 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     check('the book tab lives in its own group',
           tab().closest('.group')?.querySelector('.grouplabel')?.textContent === 'Business',
           tab().closest('.group')?.querySelector('.grouplabel')?.textContent);
-    check('there are five groups and no more',
-          doc.querySelectorAll('.groups > .group').length === 5,
+    check('there are six groups and no more',
+          doc.querySelectorAll('.groups > .group').length === 6,
           String(doc.querySelectorAll('.groups > .group').length));
     check('and each one is labelled', (() => {
       const l = [...doc.querySelectorAll('.groups > .group .grouplabel')].map(x => x.textContent);
-      return JSON.stringify(l) === JSON.stringify(['Compliance','Business','Product','Voice','Overall']);
+      return JSON.stringify(l) === JSON.stringify(['Compliance','Business','Product','Voice','Field','Overall']);
     })(), [...doc.querySelectorAll('.groups > .group .grouplabel')].map(x => x.textContent).join());
 
     tab().click(); await settle();
@@ -2460,6 +2517,21 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
       if (win.eval('SOURCE') !== want || (panel && panel.hidden)) dead.push(want);
     }
     check('clicking any tab switches to it', dead.length === 0, 'inert: ' + dead.join());
+    /* The trap this section exists for is a group id added to one list and not
+       the other, so assert the two lists agree rather than only that today's
+       tabs happen to work. A seventh group wired into markSource alone would
+       draw, highlight nothing, and do nothing. */
+    {
+      const lists = [...HTML.matchAll(/for \(const g of \[([^\]]+)\]\)/g)]
+        .map(m => m[1].replace(/['\s]/g, ''));
+      check('every group id is in both the marker and the handler list',
+            lists.length >= 2 && new Set(lists).size === 1, lists.join(' vs '));
+      const inMarkup = [...new Set([...HTML.matchAll(/class="sources" id="(\w+)"/g)]
+        .map(m => m[1]))].sort().join();
+      check('and the lists match the groups actually in the markup',
+            lists[0].split(',').sort().join() === inMarkup,
+            `${lists[0]} vs ${inMarkup}`);
+    }
     check('and every tab is pressed only when current', (() => {
       const cur = win.eval('SOURCE');
       return tabs.every(b =>

@@ -801,7 +801,7 @@ entries loaded and when.
     node qa.js
     TZ=Asia/Kolkata node qa.js
 
-590 assertions with the network mocked: parsing (spacer rows above the header, quoted
+603 assertions with the network mocked: parsing (spacer rows above the header, quoted
 fields containing commas and newlines, blank assignees, case-variant names), every
 failure path (sheet not shared, network down, unparseable content), the date-window
 rules, cross-checks between the three places misses are counted, escaping of sheet
@@ -1009,3 +1009,49 @@ Two 6 Aug visits credit nobody on the CS roster — Vedashree (Lalit Garg, Rahul
 Sharma) and PIET (Ayush Garg). Left uncredited by decision, not by accident: they
 are real visits by people outside CS, and widening the roster to catch them would
 change what the compliance figures mean too.
+
+
+## The Field tab — added 9 Aug 2026
+
+Visits got their own group in the rail, **Field → Client visits**, rather than
+being folded into Compliance. Compliance measures filing discipline against an
+expectation — every working day, two entries. A visit has no expectation behind
+it, so putting it in that group would have described it as something it is not.
+
+The tab shows three totals (person-visits, meetings, teams out), then by team,
+then by person with each person's share, then a card naming everyone on a
+measured team with **no** visit in the selected months. Named, not counted:
+"3 filed none" moves the question along; the names are what anyone asks next.
+
+It follows the month picker, like the scorecard and the meter. The joined toggle
+is not offered — it changes nothing here.
+
+### Field sits above Overall, and a test now says so
+
+The rail pins its **last** group to the foot as the roll-up. A group added after
+Overall would take that position and read as the summary of everything above it.
+qa asserts Field is second-to-last for that reason, not for tidiness.
+
+### Two bugs found while wiring it, both worth the note
+
+**`renderVisits()` was called inside the feedback branch**, which returns. The
+tab rendered perfectly whenever you were looking at a different tab and was blank
+on its own. Same family as the inert-tab bug: the view existed, the wiring went
+to the wrong place.
+
+**`setMonths()` ended `if (SOURCE === 'meter') renderMeter(); else renderScorecard()`.**
+That was true when two views read the picker. With a third, changing the month
+sent the visits tab a scorecard re-render and left its figures showing whichever
+month happened to be selected when it was first drawn — a stale number with a
+fresh label above it. It dispatches on the source now.
+
+Generalise: **an `else` that names one view is a two-view assumption**, and it
+does not announce itself when a third arrives.
+
+### The inert-tab guard, generalised
+
+Section 12b-ii clicked every tab and asserted the view moved. It now also asserts
+that the group-id list in `markSource()` and the one on the click handler are
+identical, and that both match the `.sources` ids actually in the markup.
+Removing a group id from the handler alone fails 10 assertions instead of leaving
+a tab that draws, highlights nothing, and does nothing.

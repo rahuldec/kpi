@@ -285,6 +285,7 @@ html.modalopen{overflow:hidden}
 .visitline .sub,.escline .sub,.covline .sub{font-size:12.5px;color:var(--faint);margin-left:auto;
   text-align:right;white-space:nowrap}
 .how .vlist{margin-top:4px}
+.board tr.flat td{color:var(--faint)}
 .escwho,.covwho{font-size:12.5px;line-height:1.45;color:var(--miss);margin:5px 0 0 97px}
 .escwho.cool,.covwho.cool{color:var(--faint)}
 
@@ -673,6 +674,13 @@ footer b{color:var(--body);font-weight:600}
     </div>
 
     <div class="group">
+      <span class="grouplabel">Field</span>
+      <div class="sources" id="sources6">
+        <button type="button" data-src="visits">Client visits</button>
+      </div>
+    </div>
+
+    <div class="group">
       <span class="grouplabel">Overall</span>
       <div class="sources" id="sources3">
         <button type="button" data-src="meter">KPI meter</button>
@@ -790,6 +798,29 @@ footer b{color:var(--body);font-weight:600}
       <h3>Not heard from</h3>
       <p class="targetnote" id="feedgapnote"></p>
       <table class="board" id="feedgaps"></table>
+    </div>
+  </section>
+
+  <section id="visits" hidden>
+    <div class="card">
+      <h3>Where it stands</h3>
+      <p class="hint" id="visithint"></p>
+      <div class="meters" id="visittotals"></div>
+    </div>
+    <div class="card">
+      <h3>By team</h3>
+      <p class="targetnote" id="visitteamnote"></p>
+      <table class="board" id="visitteams"></table>
+    </div>
+    <div class="card">
+      <h3>By person</h3>
+      <p class="targetnote" id="visitpeoplenote"></p>
+      <table class="board" id="visitpeople"></table>
+    </div>
+    <div class="card" id="visitgapcard">
+      <h3>No visit filed</h3>
+      <p class="targetnote" id="visitgapnote"></p>
+      <table class="board" id="visitgaps"></table>
     </div>
   </section>
 
@@ -1264,7 +1295,8 @@ const SOURCES = {
   clients:   {label: 'CS client book',                 noun: 'calls'},
   meter:     {label: 'CS team KPI meter',              noun: 'calls'},
   adoption:  {label: 'ERP module adoption',            noun: 'calls'},
-  feedback:  {label: 'Client feedback',                noun: 'calls'}
+  feedback:  {label: 'Client feedback',                noun: 'calls'},
+  visits:    {label: 'Client visits',                  noun: 'calls'}
 };
 const TRACKERS = ['internal','client'];
 const MONTH_KEY = 'kpi.months';
@@ -2581,7 +2613,13 @@ function setMonths(list){
   MONTHS = clean.length ? clean : [thisMonth()];
   writeStore(MONTH_KEY, JSON.stringify(MONTHS));
   renderMonthPicker();
-  if (SOURCE === 'meter') renderMeter(); else renderScorecard();
+  /* Three views read the month picker now, so dispatch on the source rather than
+     assuming anything not the meter is the scorecard — that assumption sent the
+     visits tab a scorecard re-render and left its own figures showing whichever
+     month was selected when it was first drawn. */
+  if (SOURCE === 'meter') renderMeter();
+  else if (SOURCE === 'visits') renderVisits();
+  else renderScorecard();
 }
 
 /* The module adoption tab. Everything here is Quarter I and none of it moves
@@ -2735,6 +2773,96 @@ function renderAdoption(){
 
    Nothing here moves with the month picker — a response is dated, but the score
    is the client's current view rather than a monthly figure. */
+/* The Field tab. Same figures as the meter's visits line, laid out so the
+   distribution is readable — which is the whole point of giving it a tab. The
+   meter answers "how many"; this answers "who, and who not at all".
+
+   Everything here follows the month picker, exactly as the meter does. A visits
+   tab showing all time beside a meter showing this month would be two different
+   questions wearing the same word. */
+function renderVisits(){
+  const months = MONTHS;
+  const leads = [...POD_TEAM.keys()].filter(l => !noBook(l));
+  const rows = leads.map(lead => ({lead, ...visitsForTeam(lead, months)}))
+    .sort((a, b) => b.person - a.person || a.lead.localeCompare(b.lead));
+
+  const totalPeople = rows.reduce((n, r) => n + r.person, 0);
+  const allMeetings = new Set();
+  VISITS.forEach((v, i) => {
+    if (months.length && !months.includes(v.d.slice(0, 7))) return;
+    if (v.p.some(x => canonVisitor(x))) allMeetings.add(i);
+  });
+
+  /* Counted, not scored. There is no target here, so these are figures rather
+     than dials — the same reason the card carries a count. */
+  $('visittotals').innerHTML =
+    `<div class="kpi"><div class="fig">${totalPeople}</div><div class="lab">Person-visits</div>` +
+      `<div class="sub">${esc(monthsLabel())}</div></div>` +
+    `<div class="kpi"><div class="fig">${allMeetings.size}</div><div class="lab">Meetings</div>` +
+      `<div class="sub">a joint visit counts once here</div></div>` +
+    `<div class="kpi"><div class="fig">${rows.filter(r => r.person).length}` +
+      `<span class="unit">/${rows.length}</span></div><div class="lab">Teams out</div>` +
+      `<div class="sub">at least one visit</div></div>`;
+
+  $('visithint').innerHTML =
+    (VISITS_ERROR
+      ? `<b>The visit feed did not load:</b> ${esc(VISITS_ERROR)}`
+      : `Offline MOMs from the MOM Portal. An online MOM is a call and is counted ` +
+        `by the client call tracker instead, so it is not here. A visit counts for ` +
+        `everyone who attended, not only whoever filed it — which is why ` +
+        `person-visits can exceed meetings.` +
+        (VISITS_LIVE ? ` Read live.`
+                     : ` Read from the snapshot built into this page, taken ` +
+                       `${esc(pretty(VISITS_ASOF))}; the live feed is not switched on yet.`)) +
+    (VISIT_UNPLACED.length
+      ? ` <b>${VISIT_UNPLACED.length} name${VISIT_UNPLACED.length === 1 ? '' : 's'} ` +
+        `on the visits could not be matched to anyone on the roster</b> and ` +
+        `count towards nobody: ${VISIT_UNPLACED.map(esc).join(', ')}.` : '');
+
+  $('visitteamnote').textContent =
+    `${esc(monthsLabel())} · teams with no client book are not shown here`;
+  let t = `<thead><tr><th>Team</th><th class="num">People</th>` +
+          `<th class="num">Person-visits</th><th class="num">Meetings</th>` +
+          `<th class="num">Per person</th></tr></thead><tbody>`;
+  for (const r of rows){
+    const heads = (POD_TEAM.get(r.lead) || []).length + 1;
+    t += `<tr${r.person ? '' : ' class="flat"'}><td>${esc(r.lead)}</td>` +
+         `<td class="num">${heads}</td>` +
+         `<td class="num">${r.person || '—'}</td>` +
+         `<td class="num">${r.meetings || '—'}</td>` +
+         `<td class="num">${r.person ? (r.person / heads).toFixed(1) : '—'}</td></tr>`;
+  }
+  $('visitteams').innerHTML = t + `</tbody>`;
+
+  const people = new Map();
+  for (const r of rows) for (const [who, n] of r.byPerson) people.set(who, {n, lead: r.lead});
+  const ranked = [...people.entries()].sort((a, b) => b[1].n - a[1].n || a[0].localeCompare(b[0]));
+  $('visitpeoplenote').textContent =
+    `${ranked.length} ${ranked.length === 1 ? 'person' : 'people'} filed at least one · ` +
+    `${esc(monthsLabel())}`;
+  let p2 = `<thead><tr><th>Person</th><th>Team</th><th class="num">Visits</th>` +
+           `<th class="num">Share</th></tr></thead><tbody>`;
+  for (const [who, x] of ranked)
+    p2 += `<tr><td>${esc(who)}</td><td>${esc(x.lead)}</td>` +
+          `<td class="num">${x.n}</td>` +
+          `<td class="num">${totalPeople ? Math.round(x.n / totalPeople * 100) : 0}%</td></tr>`;
+  $('visitpeople').innerHTML = p2 + `</tbody>`;
+
+  /* Named, not counted. "3 people filed none" moves the question along; the
+     names are the thing anyone would ask for next. */
+  const silent = [];
+  for (const lead of leads)
+    for (const who of [lead, ...(POD_TEAM.get(lead) || [])])
+      if (!people.has(who)) silent.push({who, lead});
+  $('visitgapcard').hidden = !silent.length;
+  $('visitgapnote').textContent =
+    `${silent.length} on a measured team with no visit in ${monthsLabel()}`;
+  $('visitgaps').innerHTML =
+    `<thead><tr><th>Person</th><th>Team</th></tr></thead><tbody>` +
+    silent.map(x => `<tr class="flat"><td>${esc(x.who)}</td><td>${esc(x.lead)}</td></tr>`).join('') +
+    `</tbody>`;
+}
+
 function renderFeedback(){
   const owned = CLIENTS.filter(c => c.o);
   const latest = owned.map(c => latestFeedback(c.n)).filter(Boolean);
@@ -3433,10 +3561,11 @@ const modeOf = src => src === 'scorecard' ? 'scorecard'
                     : src === 'meter'     ? 'meter'
                     : src === 'adoption'  ? 'adoption'
                     : src === 'feedback'  ? 'feedback'
+                    : src === 'visits'    ? 'visits'
                     : 'daily';
 
 function markSource(){
-  for (const g of ['sources','sources2','sources3','sources4','sources5'])
+  for (const g of ['sources','sources2','sources3','sources4','sources5','sources6'])
     for (const b of $(g).children)
       b.setAttribute('aria-pressed', String(b.dataset.src === SOURCE));
   const mode = modeOf(SOURCE);
@@ -3446,11 +3575,13 @@ function markSource(){
      : mode === 'clients' ? 'client book'
      : mode === 'adoption' ? 'module adoption'
      : mode === 'feedback' ? 'client feedback'
+     : mode === 'visits'   ? 'client visits'
      : SOURCES[SOURCE].label);
   $('h1').innerHTML = mode === 'scorecard' ? 'Missed days, <em>counted</em>.'
                     : mode === 'clients'   ? 'Who owns <em>what</em>.'
                     : mode === 'adoption'  ? 'What they actually <em>use</em>.'
                     : mode === 'feedback'  ? 'What the clients <em>say</em>.'
+                    : mode === 'visits'    ? 'Who went <em>out</em>.'
                     : 'Who <em>hasn\'t</em> filed.';
   const daily = mode === 'daily';
   $('lede').hidden = !daily;
@@ -3459,14 +3590,16 @@ function markSource(){
   $('meter').hidden     = mode !== 'meter';
   $('adoption').hidden  = mode !== 'adoption';
   $('feedback').hidden  = mode !== 'feedback';
+  $('visits').hidden    = mode !== 'visits';
   for (const id of DAILY_PANELS){ const el = $(id); if (el) el.hidden = !daily; }
   $('presets').hidden   = !daily;
-  $('monthwrap').hidden = mode !== 'scorecard' && mode !== 'meter';
+  $('monthwrap').hidden = mode !== 'scorecard' && mode !== 'meter' && mode !== 'visits';
   $('dates').hidden     = !daily || MODE !== 'custom';
   $('exempt').hidden    = !daily;
   /* Quarterly, and not per-person: neither the month picker nor the joined
      toggle changes a single figure on this tab, so neither is shown. */
-  $('joinedwrap').hidden = mode === 'clients' || mode === 'adoption' || mode === 'feedback';
+  $('joinedwrap').hidden = mode === 'clients' || mode === 'adoption' ||
+                           mode === 'feedback' || mode === 'visits';
   $('h1').innerHTML = mode === 'meter' ? 'Compliance and <em>business</em>.' : $('h1').innerHTML;
 }
 
@@ -3532,6 +3665,17 @@ function showActive(){
     $('fresh').textContent = FEED_ERROR ? 'feedback sheet not loaded'
       : `${n} ${n === 1 ? 'response' : 'responses'} · ${FEED_BY_CLIENT.size} clients`;
     renderFeedback();
+    return;
+  }
+  /* Per-month, so unlike adoption and feedback the month picker applies — but
+     not per-person against an expectation, so the joined toggle does not. */
+  if (SOURCE === 'visits'){
+    showContent();
+    const n = VISITS.reduce((a, v) => a + v.p.length, 0);
+    $('fresh').textContent = VISITS_ERROR ? 'visit feed not loaded'
+      : `${VISITS.length} ${VISITS.length === 1 ? 'meeting' : 'meetings'} · ` +
+        `${n} person-visits on file`;
+    renderVisits();
     return;
   }
   if (SOURCE === 'clients'){
@@ -3788,7 +3932,7 @@ $('score').addEventListener('click', e => {
 });
 /* Every group's tabs share one handler — a new group needs its id here and
    nothing else. Binding per group is how a tab ends up silently inert. */
-for (const g of ['sources','sources2','sources3','sources4','sources5'])
+for (const g of ['sources','sources2','sources3','sources4','sources5','sources6'])
   $(g).addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b || b.dataset.src === SOURCE) return;
     SOURCE = b.dataset.src;
