@@ -147,7 +147,8 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
    is the standing book, and a team can be strong on one and weak on the other.
    Collapsing them would hide exactly the case worth looking at. */
 .meters{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
-.mcard{border:1px solid var(--line);border-radius:13px;padding:16px 17px 15px}
+.mcard{border:1px solid var(--line);border-radius:13px;padding:16px 17px 15px;
+  box-shadow:0 1px 3px rgba(0,0,0,.04),0 8px 28px rgba(0,0,0,.035)}
 .mcard h4{font-size:16px;font-weight:600;letter-spacing:-.012em;color:var(--ink);margin:0 0 2px}
 .mcard .who{font-size:12.5px;color:var(--faint);margin:0 0 14px;line-height:1.45}
 /* Every row on a card is label · (i) · figure · detail, and the detail is the
@@ -347,6 +348,12 @@ html.modalopen{overflow:hidden}
 .covwho + .dial,.mixbar + .dial,.implwho + .dial,.implline + .dial{padding-top:14px;border-top:1px solid var(--hair)}
 .visitline .lbl,.escline .lbl,.implline .lbl,.mixline .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.07em;
   color:var(--faint);width:88px;flex:none}
+/* "Implementation" is one unbreakable word, wider than the 88px column every
+   other one-line label here fits inside — at 88px it overflows straight
+   through the (i) button beside it rather than wrapping (there's no space to
+   wrap at, unlike "Module adoption" or "Client feedback"). Only this label
+   needs the extra room. */
+.implline .lbl{width:122px}
 /* The figure reads as one phrase — "2 open" — so it must never break across
    lines the way it did when other text beside it was allowed to squeeze it.
    Below about 300px of card the row wraps instead; the value stays beside its
