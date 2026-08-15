@@ -2765,19 +2765,7 @@ function adoptDetail(r){
       [a.applicable, 'applicable'],
       [`${a.applicable ? Math.round(a.adopted / a.applicable * 100) : 0}%`, 'adoption'],
       [`${Math.round(ADOPTION_TARGET * 100)}%`, 'target'],
-    ]) +
-    `<p class="sum">` +
-    `Each scored client contributes the modules it has taken up out of the ones ` +
-    `that apply to it; modules never sold to a client are left out of both sides. ` +
-    `Summed across the team that is <b>${a.adopted} adopted</b> of ` +
-    `<b>${a.applicable} applicable</b> — ` +
-    `${a.applicable ? Math.round(a.adopted / a.applicable * 100) : 0}%. ` +
-    `This is ${esc(ADOPTION_QUARTER)} as at ${esc(pretty(ADOPTION_ASOF))}, not the ` +
-    `months chosen above, and the ${Math.round(ADOPTION_TARGET * 100)}% target is a ` +
-    `placeholder rather than an agreed one.` +
-    (ADOPT_LIVE ? '' : ` Read from the copy built into this page` +
-      (ADOPT_ERROR ? ` because the live sheet failed: ${esc(ADOPT_ERROR)}` : '') + `.`) +
-    `</p>`;
+    ]);
 
   if (a.missing.length){
     const rev = a.missing.reduce((n, c) => n + (c.r || 0), 0);
@@ -3069,18 +3057,9 @@ function visitLine(r, info){
 
 function visitDetail(r){
   const v = r.visits;
-  let h = `<h5 data-sec="visits">Client visits</h5><p class="sum">`;
+  let h = `<h5 data-sec="visits">Client visits</h5>`;
   if (VISITS_ERROR)
-    return h + `The visit feed did not load: ${esc(VISITS_ERROR)}</p>`;
-
-  h += `Offline MOMs filed in the MOM Portal for ${esc(monthsLabel())}. ` +
-       `An online MOM is a call and is counted on the compliance side by the ` +
-       `client call tracker, so it is not a visit here. A visit counts for ` +
-       `everyone who attended, not only whoever filed it.`;
-  h += VISITS_LIVE ? ` Read live.` :
-       ` Read from the snapshot built into this page, taken ` +
-       `${esc(pretty(VISITS_ASOF))} — the live feed is not switched on yet.`;
-  h += `</p>`;
+    return h + `<p class="sum">The visit feed did not load: ${esc(VISITS_ERROR)}</p>`;
 
   if (!v.person) return h + `<p class="none">Nobody on this team filed one.</p>`;
 

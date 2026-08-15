@@ -2658,8 +2658,6 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     check('the panel names the never-scored clients', /PIET College/.test(how), how.slice(0, 160));
     check('the panel says they are not counted as zero',
           /not counted as zero/.test(how));
-    check('the panel says which quarter it is', /Quarter I/.test(how));
-    check('the panel admits the target is a placeholder', /placeholder/.test(how));
 
     /* The live book must reach every consumer, not just the client book tab.
        BOOK was a parse-time constant until 5 Aug, so the business dial kept
@@ -3072,11 +3070,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     check('people who cannot be placed are reported, not dropped',
           JSON.parse(win.eval('JSON.stringify(VISIT_UNPLACED)')).length > 0);
 
-    /* The snapshot has to say it is one, exactly as the book and adoption do. */
-    {
-      cards[0].querySelector('button.mi[data-sec="visits"]').click();
-      const body = txt(doc, '#howbody');
-      /* A forty-eight-name client list buried every section under it. Capped, with
+    /* A forty-eight-name client list buried every section under it. Capped, with
        the rest behind a disclosure — and the disclosure has to be real markup,
        not a class that hides text, or the names are unreachable by keyboard. */
     {
@@ -3121,11 +3115,6 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
       }
     }
 
-    check('the visits section says it is a snapshot',
-            /snapshot built into this page/i.test(body), body.slice(0, 200));
-      check('and says why online MOMs are absent',
-            /call/i.test(body) && /client call tracker/i.test(body));
-    }
     /* The coverage line that used to describe the adoption dial on the card is
        gone (16 Aug 2026, on request) — "how many were scored" lives only in the
        panel's adoption section now. What the two checks above the card used to
