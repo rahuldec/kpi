@@ -320,7 +320,11 @@ html.modalopen{overflow:hidden}
 /* The mix line hugs the business dial by the same rule and for the same
    reason — it describes the dial above it, not the one below. */
 .covline,.mixline{border-top:0;padding-top:6px}
-.covline + .dial,.covwho + .dial,.mixline + .dial{padding-top:14px;border-top:1px solid var(--hair)}
+/* The bar sits directly under its own line with no rule between them — one
+   is the figure, the other is the same figure drawn, and separating them would
+   suggest they were two different things. The dial after the bar is what
+   needs the rule, so it inherits the pairing .mixline used to carry alone. */
+.covline + .dial,.covwho + .dial,.mixbar + .dial{padding-top:14px;border-top:1px solid var(--hair)}
 .visitline .lbl,.escline .lbl,.covline .lbl,.mixline .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.07em;
   color:var(--faint);width:88px;flex:none}
 /* The figure reads as one phrase — "36 of 48 clients" — so it must never break
@@ -355,9 +359,28 @@ html.modalopen{overflow:hidden}
 .how details[open] > summary::after{transform:rotate(-90deg)}
 .how details > summary:hover{color:var(--brand-dark)}
 /* The figure on the right of a coverage line, matching a dial's .sub exactly so
-   the four rows of a card line up down the same edge. */
-.visitline .sub,.escline .sub,.covline .sub,.mixline .sub{font-size:12.5px;color:var(--faint);margin-left:auto;
+   the four rows of a card line up down the same edge. The mix line has no .sub
+   of its own — its figures moved into the bar below, where the whole point is
+   that each sits inside the thing it measures rather than off to one side. */
+.visitline .sub,.escline .sub,.covline .sub{font-size:12.5px;color:var(--faint);margin-left:auto;
   text-align:right;white-space:nowrap}
+
+/* Two segments, sized by rupees rather than by percentage so there is nothing
+   to keep in sync — flex-grow only ever looks at the ratio between the two
+   style attributes, which are the same numbers the label prints. Real height
+   and real padding, not the 7px hairline the dials use above: those tracks
+   carry no text, this one has to hold a rupee figure without truncating it,
+   which is the width a percentage bar can survive and a labelled one cannot. */
+.mixbar{display:flex;height:34px;border-radius:8px;overflow:hidden;margin:8px 0 4px;
+  font-size:12.5px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.005em}
+.mixbar i{display:flex;align-items:center;justify-content:center;
+  padding:0 10px;white-space:nowrap;font-style:normal}
+/* min-width:auto (the flex default, left alone here) resolves to the label's
+   own min-content — so a lopsided ratio narrows the smaller segment down to
+   exactly its own text and no further, rather than clipping it. flex-grow
+   only ever divides up whatever room is left once both labels already fit. */
+.mixbar .ret{background:var(--brand);color:#fff}
+.mixbar .imp{background:var(--gold);color:var(--deep)}
 .how .vlist{margin-top:4px}
 .board tr.flat td{color:var(--faint)}
 
@@ -2687,9 +2710,24 @@ function mixLine(r, info){
     return `<div class="mixline cool"><span class="lbl">Mix</span>${info || ''}` +
            `<span class="n">not in this book</span></div>`;
   const ret = b.retention, imp = b.implementation;
+  /* The amount used to sit off to the right as small muted text — easy to miss
+     and, at a wide split, easy to misread against which half it belonged to.
+     Printing it inside its own segment removes the ambiguity: the number and
+     the thing it measures are the same shape on screen.
+
+     flex-grow sees only the ratio between the two, so raw rupees works
+     directly as the grow weight — no separate percentage to keep in sync with
+     the figures. Each segment additionally has a real minimum width (below),
+     so a lopsided split narrows the smaller side without ever clipping its
+     label; a zero-revenue side still shows as a sliver with its own ₹0. */
   return `<div class="mixline cool"><span class="lbl">Mix</span>${info || ''}` +
-         `<span class="n">${ret.clients} retention &middot; ${imp.clients} implementation</span>` +
-         `<span class="sub">${esc(inr(ret.revenue))} / ${esc(inr(imp.revenue))}</span></div>`;
+         `<span class="n">${ret.clients} retention &middot; ${imp.clients} implementation</span></div>` +
+         `<div class="mixbar" role="img" aria-label="${esc(ret.clients)} retention clients at ` +
+         `${esc(inr(ret.revenue))}, ${esc(imp.clients)} implementation clients at ` +
+         `${esc(inr(imp.revenue))}">` +
+         `<i class="ret" style="flex-grow:${Math.max(ret.revenue, 1)}">${esc(inr(ret.revenue))}</i>` +
+         `<i class="imp" style="flex-grow:${Math.max(imp.revenue, 1)}">${esc(inr(imp.revenue))}</i>` +
+         `</div>`;
 }
 
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];

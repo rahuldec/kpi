@@ -366,19 +366,38 @@ const settle = () => new Promise(r => setTimeout(r, 30));
       check('and it names both halves with their counts',
             /1 retention/.test(mix.textContent) && /1 implementation/.test(mix.textContent),
             mix && mix.textContent);
-      // inr() drops a whole lakh's trailing ".0" — ₹10L, not ₹10.0L.
-      check('and prints both books beside it',
-            /₹10L/.test(mix.textContent) && /₹4L/.test(mix.textContent),
-            mix && mix.querySelector('.sub')?.textContent);
 
-      /* The rule the suite already enforces for every other row: the line has
-         to sit under the dial it describes, which is Business. */
+      /* The bar is what the user asked for by name: the amount printed inside
+         the graph itself, not beside it as small muted text. */
+      const bar = card.querySelector('.mixbar');
+      check('the mix line is followed by an actual bar, not just text', !!bar,
+            card.innerHTML.slice(0, 200));
+      const ret = bar && bar.querySelector('.ret');
+      const imp = bar && bar.querySelector('.imp');
+      check('the retention segment prints its own amount inside itself',
+            ret && ret.textContent.trim() === '₹10L', ret && ret.textContent);
+      check('the implementation segment prints its own amount inside itself',
+            imp && imp.textContent.trim() === '₹4L', imp && imp.textContent);
+      check('the two segments are sized by the same rupee figures they display',
+            ret && imp && ret.style.flexGrow === '1000000' && imp.style.flexGrow === '400000',
+            ret && imp && `${ret.style.flexGrow} / ${imp.style.flexGrow}`);
+      check('the bar has an accessible label carrying both figures, for anyone not reading it visually',
+            /retention.*₹10L.*implementation.*₹4L/i.test(bar?.getAttribute('aria-label') || ''),
+            bar && bar.getAttribute('aria-label'));
+
+      /* The rule the suite already enforces for every other row: the pairing
+         has to sit directly under the dial it describes, which is Business —
+         now line, then bar, then the next dial's separator. */
       const kids = [...card.children];
       const i = kids.indexOf(mix);
+      check('the bar immediately follows the mix line, with nothing between them',
+            kids[i + 1] === bar, kids[i + 1] && kids[i + 1].className);
       check('the mix line sits directly under the business dial it describes',
             kids[i - 1].classList.contains('track') &&
             kids[i - 2].querySelector('.lbl').textContent === 'Business',
             kids[i - 2] && kids[i - 2].textContent);
+      check('and the next dial is separated from the bar, not from the line',
+            kids[i + 2].classList.contains('dial'), kids[i + 2] && kids[i + 2].className);
 
       /* Adding a line must not add a dial — the four dial labels are read
          positionally by the main suite and by the eye. */
@@ -423,6 +442,38 @@ const settle = () => new Promise(r => setTimeout(r, 30));
     check('and the mix line says so rather than showing a zero split',
           /not in this book/.test(win.eval(`mixLine(meterRows().rows[0] || {lead:'Mansi Rana'}, '')`)),
           win.eval(`mixLine({lead:'Mansi Rana'}, '')`));
+  }
+
+  // ── H4. An extreme ratio — the whole reason for a real minimum width ──
+  {
+    /* 99 retention clients worth almost nothing against one implementation
+       client worth a great deal. A percentage-width bar would shrink the
+       ₹50L segment to a sliver too narrow for its own label; flex's default
+       min-width:auto is what is supposed to stop that. */
+    const rows = ['Sr No.,Client Name,Old/New,TYPE1,Category,Type, Total Billing FY , Team ,RM,Retention/Imp,,,'];
+    for (let i = 1; i <= 99; i++)
+      rows.push(`${i},Client ${i},Old,College,Small,B," ₹ 1,000.00 ",Mansi Rana,,Retention,,,`);
+    rows.push('100,Big Implementation Client,New,University,Large,B," ₹ 5,000,000.00 ",Mansi Rana,,Implementation,,,');
+    const book = rows.join('\n');
+    const trk = sheet(['1,2026-07-01,,,x,S,Mansi Rana,m@x.com,,2026-07-27,,n']);
+    const { doc, win, errs } = boot({ body: trk, clientBody: asClient(trk), bookBody: book });
+    await settle();
+    doc.querySelector('#sources3 button[data-src="meter"]').click();
+    await settle();
+    check('a 99-to-1 client split does not crash the meter', errs.length === 0, errs.join(' | '));
+
+    const card = [...doc.querySelectorAll('.mcard')]
+      .find(c => /Mansi Rana/.test(c.querySelector('h4').textContent));
+    const bar = card && card.querySelector('.mixbar');
+    check('the bar still renders both segments at this ratio', !!bar);
+    const ret = bar && bar.querySelector('.ret'), imp = bar && bar.querySelector('.imp');
+    check('the 99-client, ₹99K retention segment keeps its own label',
+          ret && ret.textContent.trim() === '₹99,000', ret && ret.textContent);
+    check('the single ₹50L implementation client is not swallowed by the other side',
+          imp && imp.textContent.trim() === '₹50L', imp && imp.textContent);
+    check('the far larger implementation revenue drives the wider flex-grow',
+          imp && ret && Number(imp.style.flexGrow) > Number(ret.style.flexGrow),
+          imp && ret && `${imp.style.flexGrow} vs ${ret.style.flexGrow}`);
   }
 
   const w = Math.max(...results.map(r => r[1].length));

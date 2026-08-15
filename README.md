@@ -323,6 +323,23 @@ first time this was checked: a team can be one-third retention by client count a
 half-and-half by revenue, which is a different fact about the book each way, so one
 number does not stand in for the other.
 
+The revenue half is also drawn, not just stated — a two-segment bar under the
+count line, each segment carrying its own rupee figure printed inside it. That
+was the point of putting it there rather than in the small grey text a coverage
+line uses for its own figure: at a glance the split reads as *this much orange,
+this much gold*, and the number confirms what the eye already saw instead of
+being the only way to know it.
+
+Segment width comes straight from the two revenue figures as flex-grow weights,
+so there is no separate percentage to compute or keep in sync with the label —
+whatever `inr()` prints is the same number sizing the segment. The one thing
+that needed checking rather than assuming: a lopsided split, tested at 99
+one-thousand-rupee clients against a single ₹50L one. Flexbox's ordinary
+`min-width:auto` turned out to already be the right behaviour with no extra
+CSS — each segment claims at least its own label's width before any of the
+grow ratio is applied, so the ₹99,000 side survives at 1/500th the revenue of
+the other rather than being squeezed to nothing.
+
 The (i) beside the line opens to the same panel as every other row — the split
 named again with the count and the money side by side, and, when the book has no
 such column at all (the compiled fallback predates it), a line saying there is
