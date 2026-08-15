@@ -3079,6 +3079,31 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
           .filter(p => !p.closest('details') && p.textContent.split('\u00B7').length > 12);
         return loose.length === 0;
       })(), 'an uncapped list of more than a dozen names is still being dumped');
+
+      /* The capped preview used to sit unconditionally beside its own
+         <details> \u2014 opening "Show all" printed the first six a second time,
+         at the head of the full list right below the still-visible preview.
+         Every real long list on this page (Never scored here, Not heard from
+         on feedback, Retention/Implementation on the mix section) shares one
+         longList() call, so the fix is asserted once, generically, against
+         whichever real capped lists this fixture actually produced \u2014 not
+         hand-built for the purpose. */
+      const capped = [...body.querySelectorAll('details')]
+        .map(d => ({d, cap: d.previousElementSibling}))
+        .filter(x => x.cap && x.cap.classList.contains('cap'));
+      check('every disclosed list has a capped preview marked to hide when it opens',
+            capped.length > 0 && capped.length === body.querySelectorAll('details').length,
+            `${capped.length} of ${body.querySelectorAll('details').length}`);
+      for (const {d, cap} of capped){
+        check('the preview is visible before opening', !cap.hidden, cap.textContent.slice(0, 60));
+        d.querySelector('summary').click();
+        await settle();
+        check('and hidden the moment it opens \u2014 no more duplicate listing',
+              cap.hidden === true, cap.textContent.slice(0, 60));
+        d.querySelector('summary').click();
+        await settle();
+        check('then visible again once it closes', cap.hidden === false, cap.textContent.slice(0, 60));
+      }
     }
 
     check('the visits section says it is a snapshot',

@@ -551,11 +551,16 @@ const settle = () => new Promise(r => setTimeout(r, 30));
   }
 
   // ── K. The mix panel's client lists cap and disclose, same as every
-  //      other named list in this dialog (Never scored, Not heard from) ──
+  //      other named list in this dialog (Never scored, Not heard from) —
+  //      A-Z, not by revenue, and named names cleverly chosen so the two
+  //      orders actually disagree: alphabetical revenue order is exactly
+  //      backwards from name order, so a wrong sort is caught, not coincided
+  //      with by a fixture where both orders happen to agree. ─────────────
   {
+    const names = ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot', 'Golf', 'Hotel', 'India'];
     const rows = ['Sr No.,Client Name,Old/New,TYPE1,Category,Type, Total Billing FY , Team ,RM,Retention/Imp,,,'];
-    for (let i = 1; i <= 9; i++)
-      rows.push(`${i},Retention Client ${i},Old,School,Small,B," ₹ ${i * 10000}.00 ",Mansi Rana,,Retention,,,`);
+    names.forEach((n, i) => rows.push(
+      `${i + 1},${n} School,Old,School,Small,B," ₹ ${(i + 1) * 10000}.00 ",Mansi Rana,,Retention,,,`));
     rows.push('10,The Only Implementation Client,New,College,Large,B," ₹ 500,000.00 ",Mansi Rana,,Implementation,,,');
     const book = rows.join('\n');
     const trk = sheet(['1,2026-07-01,,,x,S,Mansi Rana,m@x.com,,2026-07-27,,n']);
@@ -582,15 +587,40 @@ const settle = () => new Promise(r => setTimeout(r, 30));
     const details = mixDetails.find(d => /Show all 9 clients/.test(d.querySelector('summary')?.textContent || ''));
     check('nine retention clients disclose behind "Show all 9 clients"', !!details,
           mixDetails.map(d => d.querySelector('summary')?.textContent).join(' | '));
+    const cap = details && details.previousElementSibling;
     check('the visible list before opening it is capped, not all nine',
-          details && details.previousElementSibling?.textContent.split('·').length < 9,
-          details && details.previousElementSibling?.textContent);
+          cap && cap.textContent.split('·').length < 9, cap && cap.textContent);
     check('opening it reveals every one, including the smallest',
-          details && /Retention Client 9/.test(details.textContent), details && details.textContent);
+          details && /India School/.test(details.textContent), details && details.textContent);
     check('a single implementation client needs no disclosure of its own — only the nine-strong retention list does',
           mixDetails.length === 1 &&
           mixSection.some(el => /The Only Implementation Client/.test(el.textContent)),
           mixDetails.length + ' details inside the mix section');
+
+    /* The real bug this section exists for: Alpha School bills the LEAST of
+       the nine (₹90,000) and Golf School bills the MOST — so if the capped
+       preview were still sorted by revenue, Golf would lead it and Alpha
+       would be buried behind "Show all". A-Z puts Alpha first regardless. */
+    check('the capped preview is alphabetical, not revenue order — Alpha leads despite billing the least',
+          cap && cap.textContent.trim().startsWith('Alpha School'), cap && cap.textContent);
+    check('and Foxtrot (billing more than everyone before it, A-Z) still sits in the middle, not pulled to the front',
+          cap && !cap.textContent.trim().startsWith('Foxtrot'), cap && cap.textContent);
+
+    /* The fix itself: opening "Show all" must hide the capped preview rather
+       than leaving both visible — a real click on <summary>, not setting
+       .open programmatically, so the native toggle event actually fires. */
+    check('before opening, the capped preview is visible', cap && !cap.hidden, cap && String(cap.hidden));
+    details.querySelector('summary').click();
+    await settle();
+    check('opening "Show all" hides the capped preview — no more duplicate listing',
+          cap.hidden === true, String(cap.hidden));
+    check('the full list underneath is what shows now, unduplicated',
+          /India School/.test(details.querySelector('p.gaps:not(.cap)')?.textContent || ''),
+          details.querySelector('p.gaps:not(.cap)')?.textContent);
+    details.querySelector('summary').click();
+    await settle();
+    check('closing it again restores the capped preview',
+          cap.hidden === false, String(cap.hidden));
   }
 
   const w = Math.max(...results.map(r => r[1].length));

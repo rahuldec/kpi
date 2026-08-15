@@ -2724,11 +2724,19 @@ function stats(items){
 /* A list long enough to bury what follows it. The first few are shown, the rest
    open on request — the names are reference material, and burying six sections
    under forty-eight of them is what made this dialog unreadable. */
+/* The capped preview and the full list inside <details> used to both be plain
+   siblings, so opening "Show all" printed the first six twice \u2014 once in the
+   preview above, again at the head of the full list right below it. The
+   preview carries a `cap` class for exactly one reason: the delegated toggle
+   listener near the bottom of this file hides it the moment its own <details>
+   opens, and restores it when that closes \u2014 the full list already does this
+   natively; `cap` is what makes the preview follow the same rule instead of
+   sitting there unconditionally regardless of open state. */
 function longList(items, shown, label){
   const sep = `<span class="sep">\u00B7</span>`;
   if (items.length <= shown + 2)
     return `<p class="gaps">${items.join(sep)}</p>`;
-  return `<p class="gaps">${items.slice(0, shown).join(sep)}</p>` +
+  return `<p class="gaps cap">${items.slice(0, shown).join(sep)}</p>` +
          `<details><summary>Show all ${items.length} ${label}</summary>` +
          `<p class="gaps">${items.join(sep)}</p></details>`;
 }
@@ -2846,12 +2854,14 @@ function mixDetail(r){
   /* Same client objects the business dial's own list draws from — CLIENTS
      filtered to this lead, split on the same `k` the stats above are counted
      from, so the names named here can never disagree with the counts beside
-     them. Largest billing first, matching every other named list in this
-     panel (Never scored, Not heard from). */
+     them. A-Z rather than by billing: these two lists are a roster to scan
+     for one name, not a ranking — Never scored and Not heard from sort by
+     revenue because the size of the gap they describe is the point; there is
+     no equivalent "worst first" reading of who happens to be retention. */
   const mine = CLIENTS.filter(c => c.o === r.lead);
-  const byRevenue = (a, b2) => (b2.r || 0) - (a.r || 0);
-  const retNames = mine.filter(c => c.k === 'retention').sort(byRevenue).map(clientMoney);
-  const impNames = mine.filter(c => c.k === 'implementation').sort(byRevenue).map(clientMoney);
+  const byName = (a, b2) => a.n.localeCompare(b2.n);
+  const retNames = mine.filter(c => c.k === 'retention').sort(byName).map(clientMoney);
+  const impNames = mine.filter(c => c.k === 'implementation').sort(byName).map(clientMoney);
   return head +
     stats([
       [ret.clients, 'retention'],
@@ -4628,6 +4638,18 @@ $('howmodal').addEventListener('click', e => {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeHow();
 });
+/* longList()'s capped preview sits immediately before its own <details> and
+   is hidden the moment that <details> opens, restored when it closes — see
+   the comment on longList() for why. `toggle` does not bubble, so this has to
+   be a capturing listener on a fixed ancestor rather than delegation on
+   #howbody the way every click handler above it works; #howbody's own content
+   is replaced wholesale on every openHow(), so nothing here needs rewiring
+   when that happens. */
+document.addEventListener('toggle', e => {
+  if (e.target.tagName !== 'DETAILS') return;
+  const cap = e.target.previousElementSibling;
+  if (cap && cap.classList.contains('cap')) cap.hidden = e.target.open;
+}, true);
 $('scaletarget').addEventListener('change', e => {
   TARGET_SCALED = e.target.checked;
   writeStore(TARGET_KEY, TARGET_SCALED ? '1' : '0');

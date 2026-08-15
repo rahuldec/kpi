@@ -350,13 +350,42 @@ nothing to split rather than a silent 0/0.
 Below that, each half gets its clients named — added 16 Aug 2026, on request, so
 "38 retention" is a list you can read, not just a number to trust. Same
 `clientMoney`/`longList` pair every other named list in this dialog already uses
-(Never scored, Not heard from): largest billing first, six shown, the rest behind
-"Show all N clients" rather than dumped — a team with forty retention clients would
-otherwise bury the implementation section right under it, which is the exact
-failure this dialog was rebuilt to stop doing (see **The (i) dialog was
-unreadable**, below). The names come from the same `CLIENTS` array the stats above
-are counted from, filtered on the same `k` field, so a client can never appear in
-the list without being counted in the number, or the other way round.
+(Never scored, Not heard from): six shown, the rest behind "Show all N clients"
+rather than dumped — a team with forty retention clients would otherwise bury the
+implementation section right under it, which is the exact failure this dialog was
+rebuilt to stop doing (see **The (i) dialog was unreadable**, below). The names
+come from the same `CLIENTS` array the stats above are counted from, filtered on
+the same `k` field, so a client can never appear in the list without being counted
+in the number, or the other way round.
+
+A-Z, not by billing — the one place this list departs from Never scored and Not
+heard from, both of which sort by revenue because the *size of the gap* is the
+finding. There is no equivalent reading here: retention and implementation are a
+composition, not a ranking, and "worst first" has no meaning for a category a
+client simply belongs to. A-Z is what lets a reader scan for one name.
+
+### The capped preview and the full list used to print the same six names twice
+
+Filed 16 Aug 2026, the day after the client lists shipped. `longList()`'s capped
+preview and its `<details>` were plain, independent siblings — opening "Show all"
+left the preview sitting there unconditionally, so the first six names appeared
+once above the disclosure and again at the head of the full list a line below it.
+Every long list on the page shares this one function (Never scored, Not heard
+from, both halves of the mix section here), so the bug — and the fix — was never
+specific to retention and implementation; a screenshot of this section is just
+what surfaced it.
+
+The preview now carries a `cap` class, and a single capturing listener on
+`document` (`toggle` does not bubble, so delegation the way every click handler
+on this page works was not an option) hides it the instant its own `<details>`
+opens and restores it when that closes. Native `<details>` already does the
+equivalent for the full list — reveal on open, hide on close — for free; `cap`
+is what makes the preview follow the same rule instead of standing outside it.
+Because both the preview and the full list are sorted the same way, opening
+"Show all" can look unchanged at the very top of a long alphabetical list — the
+first six names are identical either way — which is correct, not a sign the fix
+did nothing: the six-line preview is genuinely gone, replaced by all thirty-eight,
+and only scrolling past the first six shows the difference.
 
 Module adoption is the third dial — see **Module adoption** below.
 
