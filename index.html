@@ -691,9 +691,6 @@ table.board td.tot.zero{font-weight:400;color:var(--faint)}
 .exempt{font-size:13px;color:var(--faint);margin:-8px 0 0;padding:0 4px;letter-spacing:-.006em}
 .exempt:empty{display:none}
 
-footer{margin-top:44px;font-size:13px;line-height:1.6;color:var(--faint);max-width:64em}
-footer b{color:var(--body);font-weight:600}
-
 /* Below 1000px a 264px rail plus a card grid does not fit, so the rail returns
    to the top of the page and lays its groups out along a row again — the layout
    this replaced. Overall loses its pin here: in a row there is no foot to pin
@@ -857,7 +854,6 @@ footer b{color:var(--body);font-weight:600}
     </div>
     <div class="card">
       <h3>By module</h3>
-      <p class="targetnote" id="adoptmodnote"></p>
       <table class="board" id="adoptmodules"></table>
     </div>
     <div class="card">
@@ -999,9 +995,6 @@ footer b{color:var(--body);font-weight:600}
     </div>
   </div>
 
-  <footer>
-    <b>How a day counts.</b> A person-day is "filed" if at least one entry exists with that due date — a separate Online Meeting and Phone call row on the same day still counts once. With the checkbox on, days before a person's first-ever entry are excluded, so a recent joiner isn't scored for a period they weren't around; days after their first entry always count, so someone who stops filing still shows up. Turn it off to see raw coverage against the full range.
-  </footer>
 </div>
 
 </div><!-- /.shell -->
@@ -2839,10 +2832,7 @@ function renderAdoption(){
   const unscored = CLIENTS.filter(c => c.o && !ADOPT_BY_CLIENT.has(c.n));
 
   $('adopthint').innerHTML =
-    `${esc(ADOPTION_QUARTER)} as at ${esc(pretty(ADOPTION_ASOF))}. A client counts a ` +
-    `module only where it applies to them — modules never sold are left out of both ` +
-    `sides, an unused one counts against. Ownership is the client book's, so these are ` +
-    `the RM's team figures whichever tab the scoring was typed on. ` +
+    `${esc(ADOPTION_QUARTER)} as at ${esc(pretty(ADOPTION_ASOF))}. ` +
     (ADOPT_LIVE ? `Read live from the ERP Usage Score sheet, one tab per RM.`
                 : `Read from the copy built into this page` +
                   (ADOPT_ERROR ? `, because the live sheet failed: ${esc(ADOPT_ERROR)}` : '') + `.`) +
@@ -2894,13 +2884,6 @@ function renderAdoption(){
     return {name, s, a};
   }).filter(m => m.a).sort((x, y) => (x.s / x.a) - (y.s / y.a) || y.a - x.a);
 
-  $('adoptmodnote').innerHTML =
-    `Across every client the module applies to. A module nobody has taken up is a ` +
-    `product or onboarding question rather than an RM one, which is why this table ` +
-    `comes before the team one. ` +
-    `Counted from the score column of each RM's tab; the Grade columns repeat it ` +
-    `and the sheet's own Total column is never read — Excel turned most of those ` +
-    `into dates.`;
 
   $('adoptmodules').innerHTML =
     `<thead><tr><th>Module</th><th class="num">In use</th><th class="num">Applies to</th>` +
@@ -3002,12 +2985,8 @@ function renderVisits(){
   $('visithint').innerHTML =
     (VISITS_ERROR
       ? `<b>The visit feed did not load:</b> ${esc(VISITS_ERROR)}`
-      : `Offline MOMs from the MOM Portal. An online MOM is a call and is counted ` +
-        `by the client call tracker instead, so it is not here. A visit counts for ` +
-        `everyone who attended, not only whoever filed it — which is why ` +
-        `person-visits can exceed meetings.` +
-        (VISITS_LIVE ? ` Read live.`
-                     : ` Read from the snapshot built into this page, taken ` +
+      : (VISITS_LIVE ? `Read live.`
+                     : `Read from the snapshot built into this page, taken ` +
                        `${esc(pretty(VISITS_ASOF))}; the live feed is not switched on yet.`)) +
     (VISIT_UNPLACED.length
       ? ` <b>${VISIT_UNPLACED.length} name${VISIT_UNPLACED.length === 1 ? '' : 's'} ` +
@@ -3075,10 +3054,6 @@ function renderFeedback(){
   $('feedhint').innerHTML =
     `The Okie Dokie Feedback Form, one row per submission` +
     (FEED_ASOF ? `, read ${esc(pretty(FEED_ASOF))}` : '') + `. ` +
-    `Each client counts once, through its most recent response — an institution that ` +
-    `answers every month does not outweigh one that answered once. Clients who have not ` +
-    `answered are left out of every average on this page rather than counted as ` +
-    `dissatisfied, which is why the coverage figure sits beside the score and not below it. ` +
     (FEED_ERROR
       ? `<b>The sheet did not load, so nothing here describes your clients:</b> ${esc(FEED_ERROR)}`
       : FEED_LIVE ? `Read live from the published responses tab.` : '') +
