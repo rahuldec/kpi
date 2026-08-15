@@ -164,7 +164,14 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
 .track{height:7px;border-radius:4px;background:var(--hair);overflow:hidden;margin:0 0 14px}
 .track i{display:block;height:100%;border-radius:4px;background:var(--brand)}
 .track.low i{background:var(--miss)}
-.track.met i{background:var(--deep)}
+/* A dial that has met its target used to switch its bar to --deep, the dark
+   wordmark maroon — close enough to --miss in hue that a met dial and a
+   failing one read as the same "something's wrong" color at a glance,
+   exactly backwards from what met is supposed to say. The number already
+   carries "target met" (it is the percentage past 100, or the dial simply
+   not going hot); the bar stays the same brand orange every other dial
+   uses, met or not, so business does not look like the odd one out on a
+   card where every other bar is orange. */
 .mcard .dial:last-of-type + .track{margin-bottom:0}
 
 /* ── how-it-adds-up panel ─────────────────────────────────────────────────────
