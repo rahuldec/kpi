@@ -2489,21 +2489,34 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
       return before !== onTab && before > 0;
     })());
 
-    // coverage: the denominator the dial cannot show has to be on the card
+    /* The denominator the dial cannot show used to sit on the card as a
+       .covline; retired to the (i) panel only on 16 Aug 2026, on request —
+       the card face stays a dial's worth of numbers, and the "how many were
+       scored" figure moved in with the rest of the arithmetic it was always
+       part of. These checks read the panel instead of the card, using the
+       same stat() label-lookup pattern by hand: find the .stat whose <span>
+       is the label, read the <b> beside it. */
+    const statVal = (root, label) => {
+      const el = [...root.querySelectorAll('.how .stat')]
+        .find(s => s.querySelector('span')?.textContent === label);
+      return el?.querySelector('b')?.textContent;
+    };
     check('every card states how much of the book was scored',
-          cards.every(c => c.querySelector('.covline')));
-    /* The card carries the denominator and the money, and nothing else. The
-       arithmetic sentence that used to sit under it moved into the (i) panel —
-       a card people read at a glance cannot afford a wrapped paragraph per dial. */
-    check('and does it in one row, not a paragraph',
-          !cards.some(c => c.querySelector('.covwho')),
-          (cards.find(c => c.querySelector('.covwho')) || {textContent: ''}).textContent);
-    check('a partly-scored team is flagged',
-          !!card('Mansi Rana').querySelector('.covline.hot'),
-          card('Mansi Rana').querySelector('.covline')?.textContent);
+          cards.every(c => /^\d+\/\d+$/.test(statVal(c, 'scored') || '')),
+          cards.map(c => statVal(c, 'scored')).join(','));
+    /* The card carries only the dial and its (i) — no coverage row of its own
+       at all now, paragraph or otherwise. */
+    check('and the card carries no coverage row of its own any more',
+          !cards.some(c => c.querySelector('.covline, .covwho')),
+          (cards.find(c => c.querySelector('.covline, .covwho')) || {textContent: ''}).textContent);
+    check('a partly-scored team says so in the panel',
+          statVal(card('Mansi Rana'), 'scored') !== undefined &&
+          !/^(\d+)\/\1$/.test(statVal(card('Mansi Rana'), 'scored')),
+          statVal(card('Mansi Rana'), 'scored'));
     check('and names the revenue behind the gap',
-          /of ₹/.test(card('Mansi Rana').querySelector('.covline .sub')?.textContent || ''),
-          card('Mansi Rana').querySelector('.covline .sub')?.textContent);
+          /Never scored[^<]*of[^<]*clients,\s*₹/.test(
+            card('Mansi Rana').querySelector('.how').innerHTML),
+          card('Mansi Rana').querySelector('.how h5[data-sec="scored"]')?.textContent);
 
     /* Unscored clients must be absent from the ratio, not zero. Scoring them as
        zero would make a team that simply has not been assessed look failing. */
@@ -2865,7 +2878,18 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
       met: c.querySelectorAll('.track')[i].classList.contains('met')
     });
 
-    check('every card carries a heard-from line', cards.every(c => c.querySelectorAll('.covline').length === 2));
+    /* The Heard-from row moved into the panel only on 16 Aug 2026, along with
+       Scored — check the panel carries the figure instead of a now-gone card
+       row. feedDetail()'s stats block always includes a "replied" figure
+       whenever the team has heard from anyone at all; a team nobody has
+       answered for gets the explicit "None ... has answered" sentence instead
+       (asserted elsewhere), so that case is excused here. */
+    check('every card\'s panel carries a heard-from figure', cards.every(c => {
+      const stats = [...c.querySelectorAll('.how .stat')]
+        .find(s => s.querySelector('span')?.textContent === 'replied');
+      const noneHeard = /has answered the feedback/.test(c.querySelector('.how')?.textContent || '');
+      return !!stats || noneHeard;
+    }));
 
     /* ── client visits ──────────────────────────────────────────
        A count, not a dial: nobody has agreed what a month of visits should be,
@@ -2874,7 +2898,9 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
        easy mistake and it would harden a made-up number into a fact. */
     check('every card carries a visits line',
           cards.every(c => c.querySelectorAll('.visitline').length === 1));
-    check('visits is not a covline', cards.every(c => c.querySelectorAll('.covline').length === 2));
+    /* covline itself is gone from the card now, so the thing worth guarding is
+       narrower: visits did not quietly absorb its class name along the way. */
+    check('visits is not a covline', cards.every(c => !c.querySelector('.visitline.covline')));
     check('visits has no progress track',
           cards.every(c => !c.querySelector('.visitline .track')));
     check('and shows no percentage',
@@ -2951,23 +2977,20 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
       check('and says why online MOMs are absent',
             /call/i.test(body) && /client call tracker/i.test(body));
     }
-    /* A coverage line describes the dial above it. Assert the pairing structurally
-       rather than trusting the reading order: with four dials, a line that drifts
-       away from its own dial lands directly above someone else's and is read as
-       theirs — which is exactly what the top rule made it look like. */
-    check('each coverage line sits with the dial it describes', cards.every(c => {
-      const kids = [...c.children];
-      return [...c.querySelectorAll('.covline')].every(l => {
-        const i = kids.indexOf(l);
-        return i > 1 && kids[i - 1].classList.contains('track') &&
-               kids[i - 2].classList.contains('dial');
-      });
-    }));
-    check('and the adoption line follows the adoption dial, not the feedback one',
+    /* The coverage line that used to describe the adoption dial on the card is
+       gone (16 Aug 2026, on request) — "how many were scored" lives only in the
+       panel's adoption section now. What the two checks above the card used to
+       guard — the figure landing under the right dial rather than drifting to
+       whichever one happened to be nearest — has a panel-shaped equivalent: the
+       "scored" stat has to sit inside the adoption section specifically, not
+       feedback's, however the two sections get reordered in future. */
+    check('the scored figure sits inside the adoption section of the panel, not drifted into feedback\'s',
           cards.every(c => {
-            const kids = [...c.children];
-            const first = kids.indexOf(c.querySelector('.covline'));
-            return kids[first - 2].querySelector('.lbl').textContent === 'Module adoption';
+            const h5 = c.querySelector('.how h5[data-sec="adoption"]');
+            if (!h5) return true;   // nothing to score for this team at all
+            const stats = h5.nextElementSibling;
+            return stats && stats.classList.contains('stats') &&
+                   [...stats.querySelectorAll('span')].some(s => s.textContent === 'scored');
           }));
     const sk = dialOf(card('Sukhmeet Singh'), 3);
     check('the feedback dial reads out of five', /\/5 from \d+ client/.test(sk.sub), sk.sub);
@@ -2987,7 +3010,12 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
       return /Fewer than 3 replies/.test(card('Sukhmeet Singh').querySelector('.how').textContent);
     })());
 
-    const none = cards.find(c => /none of \d+/.test(c.querySelectorAll('.covline')[1].textContent));
+    /* "Heard from" lost its own card row on 16 Aug 2026 along with Scored; the
+       zero-replies wording feedDetail() gives that case is still there in the
+       panel (always rendered, just hidden pre-click), so read that instead of
+       a now-gone .covline. */
+    const none = cards.find(c =>
+      /has answered the feedback/.test(c.querySelector('.how')?.textContent || ''));
     check('a team nobody answered for shows no score rather than zero',
           none && dialOf(none, 3).val === '—' && /no responses yet/.test(dialOf(none, 3).sub),
           none ? dialOf(none, 3).val + ' ' + dialOf(none, 3).sub : 'no such card');
@@ -3027,8 +3055,14 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
           cards.every(c => [...c.querySelectorAll('.dial')].every(d => d.querySelector('button.mi'))),
           String(cards.map(c => [...c.querySelectorAll('.dial')]
             .filter(d => !d.querySelector('button.mi')).length)));
-    check('and so do the coverage lines',
-          cards.every(c => [...c.querySelectorAll('.covline')].every(l => l.querySelector('button.mi'))));
+    /* Scored/Heard-from lost their own card rows on 16 Aug 2026; the mix line
+       is what is left in that shape (label · (i) · figure), so it carries this
+       check alone now. */
+    check('and so does the mix line',
+          cards.every(c => {
+            const l = c.querySelector('.mixline');
+            return !l || l.querySelector('button.mi');
+          }));
     /* The card-level button is still there and is still the way to read the whole
        panel — the row buttons are entry points into it, not a replacement. */
     check('the card still has its own (i) as well',
@@ -3091,12 +3125,15 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     check('focus goes back to the row button that opened it',
           doc.activeElement === compBtn);
 
-    // the coverage line points at the list of what is missing, where there is one
-    const covBtn = sk.querySelector('.covline button.mi');
-    covBtn.click();
-    check('the scored line opens the never-scored list',
-          body.dataset.aim === 'scored' &&
-          /Never scored/.test(body.querySelector('h5.aim').textContent),
+    /* There is no longer a Scored row of its own to click — the module
+       adoption dial's (i) is the nearest entry point now, and it aims at the
+       adoption section that the never-scored list lives inside (checked
+       separately above: "the scored figure sits inside the adoption
+       section"). */
+    const adoptBtn = sk.querySelectorAll('.dial')[2].querySelector('button.mi');
+    adoptBtn.click();
+    check('the module adoption (i) opens the section the scored figure lives in',
+          body.dataset.aim === 'adoption',
           body.dataset.aim + ' ' + (body.querySelector('h5.aim')?.textContent || ''));
     closeAll();
 
@@ -3124,15 +3161,17 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
        because the money beside it was allowed to squeeze it. Nothing headless can
        measure a line break, so the rule is asserted statically. */
     const css = HTML.slice(HTML.indexOf('<style>') + 7, HTML.indexOf('</style>'));
-    /* Matched on .covline rather than on the whole selector list: the list is
+    /* Matched on .escline rather than on the whole selector list: the list is
        shared with every other line on the card and grows when one is added
        (.mixline did exactly that), which is not a reason for this to fail.
        [^{}]* allows more selectors in the group without letting the match run
-       on into the next rule. */
+       on into the next rule. .covline itself carried this rule until 16 Aug
+       2026, when its row was retired from the card; .escline (escalations,
+       "2 open") is the row left in that shape — label, figure, no-break. */
     check('a coverage figure is not allowed to break mid-phrase',
-          /\.covline \.n[^{}]*\{[^}]*white-space:nowrap/s.test(css));
+          /\.escline \.n[^{}]*\{[^}]*white-space:nowrap/s.test(css));
     check('and the row wraps instead, so the money moves rather than the value',
-          /\.covline[^{}]*\{[^}]*flex-wrap:wrap/s.test(css));
+          /\.escline[^{}]*\{[^}]*flex-wrap:wrap/s.test(css));
     check('a dial row wraps by the same rule, now that it carries a control too',
           /\.dial\{[^}]*flex-wrap:wrap/s.test(css));
   }

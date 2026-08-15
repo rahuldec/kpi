@@ -261,9 +261,10 @@ one on screen, so a spreadsheet can total it.
 
 **Overall -> KPI meter** puts the four measures on one screen: a card per team with a
 compliance dial, a business dial, a module adoption dial and a client feedback dial —
-side by side, never blended. Under the adoption and feedback dials sit their coverage
-lines, because both are averages over whichever clients have been measured and neither
-dial can show its own denominator.
+side by side, never blended. Adoption and feedback are both averages over whichever
+clients have been measured, and neither dial can show its own denominator — that
+figure lives in the (i) panel behind each dial rather than as a row of its own on the
+card (see **Coverage is part of the number**, and **Client feedback**, below).
 
 ### Choosing months
 
@@ -478,13 +479,18 @@ the work was shared out differently.
 
 ### Coverage is part of the number
 
-A dial computed only over scored clients looks complete when it is not. Every card
-therefore carries a **Scored** line — "15 of 19 clients" — and when a team's book is
-not fully scored it turns red and shows the revenue behind the gap. The (i) panel
-lists every never-scored client with its billing, and says plainly that they are
-excluded from the percentage rather than counted as zero. Scoring an unassessed
-client as zero would make a team that has simply not been measured look like it is
-failing.
+A dial computed only over scored clients looks complete when it is not. Every card's
+(i) panel therefore carries a **Scored** figure — "15 of 19 clients" — and when a
+team's book is not fully scored, a **Never scored** section beneath it lists every
+missing client with its billing, and says plainly that they are excluded from the
+percentage rather than counted as zero. Scoring an unassessed client as zero would
+make a team that has simply not been measured look like it is failing.
+
+This sat as its own row on the card until 16 Aug 2026, alongside a matching **Heard
+from** row for feedback coverage; both moved into the panel only, on request — the
+card face is a dial's worth of numbers now, and "how many were scored" travels with
+the rest of the adoption arithmetic it was always part of rather than standing apart
+from it. Nothing about the figures changed, only where a reader finds them.
 
 As of Quarter I this matters a great deal: 37 of 148 clients were never scored, and
 they skew to the largest accounts — only 3 of the top 10 by revenue appear, so the
@@ -1406,3 +1412,50 @@ team carries a real, differently-shaped split (Sukhmeet Singh 39 retention / 9
 implementation by count but a closer ₹44.9L/₹21.4L by revenue; Sultan Malik almost
 even by count and revenue-heavier on implementation), which is the both-figures
 case the line exists to show.
+
+
+## Scored and Heard from moved into the panel only — 16 Aug 2026
+
+Asked for by name. Both had been their own row on the card since the meter's early
+days — `coverLine()` for adoption's denominator, `feedLine()` for feedback's, the
+same "label · (i) · figure · money" shape as an escalation or a visit count. Neither
+function is called from the card any more, and both are deleted outright rather than
+left in place unused — `qa.js`'s own static-hygiene check would have caught either
+one sitting there declared and dead.
+
+Nothing about the arithmetic changed, only where it is read. The card is a dial's
+worth of numbers now; the coverage figure travels with the rest of the panel's
+arithmetic for that dial instead of standing beside it as a fifth row:
+
+* **Scored** — `adoptDetail()`'s stats row gained an unconditional `scored/total`
+  entry. It used to appear only when there was a gap to report (inside the "Never
+  scored" heading); a fully-scored team had nowhere on the page that said so. That
+  was a real hole opened by removing the card row, not a display preference — caught
+  before it shipped by asking what the panel says for a 48-of-48 team, not just a
+  partly-scored one.
+* **Heard from** — already unconditional. `feedDetail()`'s stats row has carried a
+  `heard/total` "replied" figure since the panel was reshaped in this same session's
+  earlier work, so nothing needed adding there.
+* **The stale-BOOK cross-check did too.** The deleted `coverLine()` carried a comment
+  explaining that its revenue pair — computed independently in `adoptForTeam()`,
+  never read from the cached `BOOK` — was "the only place the business dial's book
+  total is printed twice," which is what caught `BOOK` going stale on 5 Aug (see
+  **KPI meter**, above). Removing the row without replacing that would have quietly
+  removed the cross-check along with it. `adoptDetail()`'s stats row now carries
+  `a.revTotal` as its own **book** figure, printed a few lines below `bookDetail()`'s
+  own — both independently derived, both in the same dialog, easier to compare now
+  than when one was on the card and the other in a panel a click away.
+
+The test suite took the heaviest hit of any change in this file: fourteen assertions
+across `qa.js` either read `.covline` directly off a card or positioned something
+relative to one. Two crashed outright — `kids[first - 2].querySelector(...)` on a
+`.covline` that `indexOf` could no longer find, `undefined.querySelector` — rather
+than failing cleanly, which is the shape of a test whose premise stopped being true
+out from under it. Each was redirected to read the same fact from the panel instead
+of deleted: a small `statVal()` helper (find the `.stat` whose `<span>` is the wanted
+label, read the `<b>` beside it) replaces most of the card-scraping; the two
+positional checks about a coverage line sitting under the right dial became one
+check that the **scored** stat sits inside the adoption `<h5>`'s own section, not
+drifted into feedback's, which is the same failure mode the original checks existed
+to catch, just asked of the panel instead of the card. `extreme_qa.js` gained the
+inverse assertion outright: `.covline` count is now pinned at zero, not two.

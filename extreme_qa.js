@@ -405,8 +405,10 @@ const settle = () => new Promise(r => setTimeout(r, 30));
             [...card.querySelectorAll('.dial .lbl')].map(x => x.textContent).join('|') ===
             'Compliance|Business|Module adoption|Client feedback',
             [...card.querySelectorAll('.dial .lbl')].map(x => x.textContent).join('|'));
-      check('and did not disturb the coverage-line count the suite pins',
-            card.querySelectorAll('.covline').length === 2,
+      // .covline itself was retired from the card on 16 Aug 2026 (Scored and
+      // Heard-from moved into the panel only) — nothing should still emit one.
+      check('and did not resurrect .covline, which no longer belongs on the card',
+            card.querySelectorAll('.covline').length === 0,
             String(card.querySelectorAll('.covline').length));
 
       // its (i) must open a section that actually exists

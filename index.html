@@ -154,7 +154,8 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
    part that gives way. Adding a control to each row cost about 20px of width,
    which is enough to break "4.0/5 from 2 clients" in a 300px column — so the row
    wraps and the muted right-hand figure drops to a line of its own rather than
-   the label and value being pushed apart. Same rule on .covline below. */
+   the label and value being pushed apart. Same rule on .escline and .visitline
+   below. */
 .dial{display:flex;align-items:baseline;gap:2px 9px;margin:0 0 4px;flex-wrap:wrap}
 .dial .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);
   width:88px;flex:none}
@@ -307,38 +308,39 @@ html.modalopen{overflow:hidden}
   border-top:1px solid var(--hair);margin-top:2px}
 
 /* Escalations on a team card. Not a dial: a count of live problems has no
-   denominator, and a progress bar would invite reading "2 of 5" into it. */
-.visitline,.escline,.covline,.mixline{
+   denominator, and a progress bar would invite reading "2 of 5" into it.
+
+   .covline (the Scored line) and its feedback twin were retired from the card
+   on 16 Aug 2026 — moved into the (i) panel only, on request, rather than
+   sitting on the card face. The selectors below are what is left of that
+   layout; .covwho is untouched because it is still drawn elsewhere (the
+   adoption and feedback tabs' own "by RM" tables), just no longer on this
+   card. */
+.visitline,.escline,.mixline{
   display:flex;align-items:baseline;gap:2px 9px;margin:2px 0 0;flex-wrap:wrap;
   padding-top:12px;border-top:1px solid var(--hair);
 }
-/* A coverage line describes the dial ABOVE it, so it must not be fenced off from
-   it. With three dials the top rule was merely odd; with four it was wrong — the
-   adoption "Scored" line sat immediately above the Client feedback dial and read
-   as feedback's own coverage. The rule moves to the start of the next dial, so
-   each block is dial -> track -> its coverage line. */
-/* The mix line hugs the business dial by the same rule and for the same
-   reason — it describes the dial above it, not the one below. */
-.covline,.mixline{border-top:0;padding-top:6px}
+/* The mix line hugs the business dial above it rather than being fenced off
+   from it — it describes that dial, not the one below. */
+.mixline{border-top:0;padding-top:6px}
 /* The bar sits directly under its own line with no rule between them — one
    is the figure, the other is the same figure drawn, and separating them would
    suggest they were two different things. The dial after the bar is what
-   needs the rule, so it inherits the pairing .mixline used to carry alone. */
-.covline + .dial,.covwho + .dial,.mixbar + .dial{padding-top:14px;border-top:1px solid var(--hair)}
-.visitline .lbl,.escline .lbl,.covline .lbl,.mixline .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.07em;
+   needs the rule. */
+.covwho + .dial,.mixbar + .dial{padding-top:14px;border-top:1px solid var(--hair)}
+.visitline .lbl,.escline .lbl,.mixline .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.07em;
   color:var(--faint);width:88px;flex:none}
-/* The figure reads as one phrase — "36 of 48 clients" — so it must never break
-   across lines the way it did when the money beside it was allowed to squeeze
-   it. Below about 300px of card the row wraps instead and the money drops to a
-   line of its own, still flush right; the value stays beside its label at every
-   width, which is the thing being read. */
-.visitline .n,.escline .n,.covline .n,.mixline .n{font-size:15px;font-weight:600;letter-spacing:-.012em;
+/* The figure reads as one phrase — "2 open" — so it must never break across
+   lines the way it did when other text beside it was allowed to squeeze it.
+   Below about 300px of card the row wraps instead; the value stays beside its
+   label at every width, which is the thing being read. */
+.visitline .n,.escline .n,.mixline .n{font-size:15px;font-weight:600;letter-spacing:-.012em;
   white-space:nowrap}
 /* Two phrases joined by a separator rather than one indivisible figure, so this
    is the one value on a card that may break — between them, never inside them. */
 .mixline .n{white-space:normal;font-size:14px}
-.escline.hot .n,.covline.hot .n{color:var(--miss)}
-.escline.cool .n,.covline.cool .n,.visitline .n,.mixline.cool .n{color:var(--faint);font-weight:500}
+.escline.hot .n{color:var(--miss)}
+.escline.cool .n,.visitline .n,.mixline.cool .n{color:var(--faint);font-weight:500}
 .how .gaps{font-size:12.5px;line-height:1.7;color:var(--ink);margin:6px 0 0}
 .how .gaps.none{color:var(--faint);font-size:12px;margin-top:8px}
 /* A figure attached to a name, not a column of its own. */
@@ -358,11 +360,11 @@ html.modalopen{overflow:hidden}
 .how details > summary::after{content:'\203A';transform:rotate(90deg);font-size:14px;line-height:1}
 .how details[open] > summary::after{transform:rotate(-90deg)}
 .how details > summary:hover{color:var(--brand-dark)}
-/* The figure on the right of a coverage line, matching a dial's .sub exactly so
-   the four rows of a card line up down the same edge. The mix line has no .sub
-   of its own — its figures moved into the bar below, where the whole point is
-   that each sits inside the thing it measures rather than off to one side. */
-.visitline .sub,.escline .sub,.covline .sub{font-size:12.5px;color:var(--faint);margin-left:auto;
+/* The figure on the right of a line, matching a dial's .sub exactly so the
+   rows of a card line up down the same edge. The mix line has no .sub of its
+   own — its figures moved into the bar below, where the whole point is that
+   each sits inside the thing it measures rather than off to one side. */
+.visitline .sub,.escline .sub{font-size:12.5px;color:var(--faint);margin-left:auto;
   text-align:right;white-space:nowrap}
 
 /* Two segments, sized by rupees rather than by percentage so there is nothing
@@ -2576,6 +2578,14 @@ function adoptDetail(r){
   if (!a.total) return '';
   let h = `<h5 data-sec="adoption">How module adoption is worked out</h5>` +
     stats([
+      [`${a.scored}/${a.total}`, 'scored'],
+      /* a.revTotal is summed straight from CLIENTS here, independently of
+         bookDetail()'s own revenue figure a few sections up — printing both
+         is what caught BOOK going stale once already (see README, "the
+         business dial and the adoption card agree on the book"). Losing this
+         line when the card's own coverLine went would quietly lose that
+         cross-check along with it. */
+      [inr(a.revTotal), 'book'],
       [a.adopted, 'adopted'],
       [a.applicable, 'applicable'],
       [`${a.applicable ? Math.round(a.adopted / a.applicable * 100) : 0}%`, 'adoption'],
@@ -2698,11 +2708,10 @@ function mixDetail(r){
     `</p>`;
 }
 
-/* The mix, as one row under the business dial — the same shape as the adoption
-   coverage line, and for the same reason: it describes the dial above it and
-   the dial itself cannot show it. Its own class rather than .covline, because
-   that class means "how much of the book this dial actually describes" and this
-   is not that. */
+/* The mix, as one row under the business dial — it describes the dial above it
+   and the dial itself cannot show it. Its own class rather than reusing a
+   coverage-line one, because "how much of the book this dial actually
+   describes" is not what this row says. */
 function mixLine(r, info){
   const b = bookOf(r.lead);
   if (!b || !b.clients) return '';
@@ -2759,30 +2768,6 @@ function escDetail(r){
   return h;
 }
 
-/* The adoption dial's denominator, said out loud. A team whose biggest accounts
-   were never scored would otherwise show a confident percentage drawn from its
-   small clients only — the failure this line exists to prevent. */
-function coverLine(r, info){
-  const a = r.adopt;
-  if (!a.total)
-    return `<div class="covline cool"><span class="lbl">Scored</span>${info || ''}` +
-           `<span class="n">no clients in the book</span></div>`;
-
-  /* One row, laid out like a dial: label, figure, and the money pushed right.
-     This used to spill a wrapped red sentence under every card — "covers ₹40.6L
-     of ₹67.9L — 60% of the book" — which is the arithmetic, and the arithmetic
-     belongs in the (i) panel. What has to stay on the card is the denominator
-     itself, because the dial above cannot show it. The revenue pair stays too:
-     it is the only place the business dial's book total is printed twice, which
-     is what caught the stale-BOOK bug. */
-  const full = a.scored === a.total;
-  return `<div class="covline ${full ? 'cool' : 'hot'}">` +
-         `<span class="lbl">Scored</span>${info || ''}` +
-         `<span class="n">${a.scored ? `${a.scored} of ${a.total} clients`
-                                     : `none of ${a.total}`}</span>` +
-         `<span class="sub">${esc(inr(a.revCovered))} of ${esc(inr(a.revTotal))}</span></div>`;
-}
-
 /* The feedback dial, shown working. The denominator matters more here than
    anywhere else on the page: an RM whose one happy client replied outscores an
    RM whose ten mixed ones did, and nothing about the dial itself says so. */
@@ -2837,30 +2822,6 @@ function feedDetail(r){
   return h;
 }
 
-/* Coverage for the feedback dial, in the same shape as the adoption one. Two
-   distinct empty states, deliberately: a team nobody has asked reads differently
-   from a team asked and not answered, and both read differently from zero. */
-function feedLine(r, info){
-  const f = r.feed;
-  if (!f.total)
-    return `<div class="covline cool"><span class="lbl">Heard from</span>${info || ''}` +
-           `<span class="n">no clients in the book</span></div>`;
-  if (FEED_ERROR)
-    return `<div class="covline cool"><span class="lbl">Heard from</span>${info || ''}` +
-           `<span class="n">—</span>` +
-           `<span class="sub">sheet not loaded</span></div>`;
-
-  /* Same shape as the Scored line above it. The thin-sample warning is not here:
-     it is a sentence, and a sentence on a card is clutter. The dial refuses to
-     read as target met on a thin sample, and the (i) panel says why in full —
-     which is where anyone asking the question will already be looking. */
-  const full = f.heard === f.total;
-  return `<div class="covline ${full ? 'cool' : 'hot'}"><span class="lbl">Heard from</span>${info || ''}` +
-         `<span class="n">${f.heard ? `${f.heard} of ${f.total} clients`
-                                    : `none of ${f.total}`}</span>` +
-         (f.heard ? `<span class="sub">${esc(inr(f.revHeard))} of ${esc(inr(f.revTotal))}</span>`
-                  : '') + `</div>`;
-}
 
 /* Visits have no agreed target, so this is a count and not a dial. Compliance
    has an obvious target (every entry filed) and business an agreed one (Rs 50L);
@@ -3383,9 +3344,6 @@ function renderMeter(){
         `title="How ${esc(label)} is worked out" ` +
         `aria-label="How ${esc(label)} is worked out for ${esc(r.lead)}">i</button>`
       : '';
-    /* The coverage line is explained by the never-scored list where there is
-       one, and by the adoption section where the book is fully scored. */
-    const scoredSec = panel.includes('data-sec="scored"') ? 'scored' : 'adoption';
 
     return `<div class="mcard">` +
       `<button type="button" class="info" data-card="${i}" aria-expanded="false" ` +
@@ -3404,14 +3362,12 @@ function renderMeter(){
              ? `${r.adopt.adopted}/${r.adopt.applicable} modules`
              : 'no client scored', adoptMet,
            mi('adoption', 'module adoption')) +
-      coverLine(r, mi(scoredSec, 'the scored share of the book')) +
       dial('Client feedback', r.feed.satisfaction,
            r.feed.sat === null
              ? (FEED_ERROR ? 'not loaded' : 'no responses yet')
              : `${r.feed.sat.toFixed(1)}/5 from ${r.feed.heard} ` +
                `${r.feed.heard === 1 ? 'client' : 'clients'}`, feedMet,
            mi('feedback', 'client feedback')) +
-      feedLine(r, mi('feedback', 'who has been heard from')) +
       visitLine(r, mi('visits', 'client visits')) +
       escLine(r, mi('escalations', 'escalations')) +
       `<div class="how" id="how${i}" hidden>${panel}</div>` +
