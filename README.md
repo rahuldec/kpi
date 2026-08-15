@@ -1520,12 +1520,15 @@ clients Mix just described, not a "something's wrong right now" line in the same
 family as an open escalation; the panel order (`bookDetail()`, then `implDetail()`,
 then `adoptDetail()`) follows the card the same way it always has.
 
-"None overdue" and grey, or "N of M overdue" and red with the overdue **projects**
-named individually — by their own Asana name, not by the client they belong to.
-That distinction matters as soon as more than one project aliases to a single book
-row: naming the client for Dalmia Group's five branches would print "Dalmia Group"
-five times and say nothing about which branch is actually behind, so the line names
-`Dalmia Vidya Mandir, Kalyanpur (Extramarks)` and its siblings instead.
+"None overdue" and grey, or "N of M overdue" and red — the card itself prints only
+that headline, nothing else. The overdue projects themselves are named one level
+down, in the (i) panel, and by their own Asana name rather than the client they
+belong to: naming the client on the card for Dalmia Group's five overdue branches
+would print "Dalmia Group" five times over and say nothing about which branch is
+actually behind, and even naming the projects individually ran long enough to
+swamp the rest of a busy card (eight branch names is a paragraph, not a line) — so
+as of 17 Aug 2026 the roster moved into the panel entirely, grouped under
+`Dalmia Vidya Mandir, Kalyanpur (Extramarks)` and its siblings' shared client.
 
 Both sides of "N of M" are **projects**, deliberately — not tasks, and, since 17 Aug
 2026, not clients either. Counting projects rather than tasks was there from the

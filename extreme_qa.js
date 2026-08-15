@@ -653,9 +653,11 @@ const settle = () => new Promise(r => setTimeout(r, 30));
       check('implementation sits directly after the mix bar, with nothing between them',
             kids[kids.indexOf(mixBar) + 1] === implLine,
             kids[kids.indexOf(mixBar) + 1] && kids[kids.indexOf(mixBar) + 1].className);
-      const implWho = implLine.nextElementSibling;
-      const nextDial = kids[kids.indexOf(implWho) + 1];
-      check('module adoption follows implementation\'s own paragraph, not the mix bar directly',
+      /* This fixture's one project is overdue, so implLine() is a hot card:
+         no .implwho paragraph follows it (the roster moved into the (i) panel
+         17 Aug 2026) — module adoption's dial sits directly after the line. */
+      const nextDial = kids[kids.indexOf(implLine) + 1];
+      check('module adoption follows the implementation line directly, not the mix bar',
             nextDial && nextDial.classList.contains('dial') &&
             nextDial.querySelector('.lbl')?.textContent === 'Module adoption',
             nextDial && nextDial.textContent.slice(0, 40));
@@ -709,11 +711,15 @@ const settle = () => new Promise(r => setTimeout(r, 30));
     const n = card.querySelector('.implline .n')?.textContent.trim();
     check('the headline reads "2 of 3 overdue" — two overdue PROJECTS, not one overdue CLIENT',
           n === '2 of 3 overdue', n);
-    const who = card.querySelector('.implwho')?.textContent || '';
-    check('both overdue branches are named individually',
-          /Branch A/.test(who) && /Branch B/.test(who), who);
+    check('the card itself names no branch — the roster lives in the (i) panel only',
+          !card.querySelector('.implwho'));
+
+    card.querySelector('button.info').click();
+    const who = card.querySelector('.how').textContent.replace(/\s+/g, ' ');
+    check('both overdue branches are named individually in the panel',
+          /Branch A/.test(who) && /Branch B/.test(who), who.slice(0, 300));
     check('the on-track branch is not named among the overdue ones',
-          !/Branch C/.test(who), who);
+          !/Branch C/.test(who), who.slice(0, 300));
   }
 
   const w = Math.max(...results.map(r => r[1].length));

@@ -339,10 +339,12 @@ html.modalopen{overflow:hidden}
    suggest they were two different things. Whichever element actually ends up
    right before the next dial is what needs the rule: .mixbar when a team has
    no implementation line at all (implLine() returns nothing, so the dial
-   follows the bar directly, same as before 16 Aug 2026); .implwho — the
-   overdue-projects paragraph, always the last thing implLine() prints,
-   success or error — once a team has one. */
-.covwho + .dial,.mixbar + .dial,.implwho + .dial{padding-top:14px;border-top:1px solid var(--hair)}
+   follows the bar directly, same as before 16 Aug 2026); .implwho when a team
+   has one but nothing overdue, or the sheet failed to load (a paragraph still
+   follows the line); .implline itself once something IS overdue — the project
+   roster moved into the (i) panel on 17 Aug 2026, so the card prints only the
+   headline div with nothing after it. */
+.covwho + .dial,.mixbar + .dial,.implwho + .dial,.implline + .dial{padding-top:14px;border-top:1px solid var(--hair)}
 .visitline .lbl,.escline .lbl,.implline .lbl,.mixline .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.07em;
   color:var(--faint);width:88px;flex:none}
 /* The figure reads as one phrase — "2 open" — so it must never break across
@@ -3143,13 +3145,12 @@ function implLine(r, info){
            `<span class="n">None overdue</span></div>` +
            `<p class="implwho cool">${total} ${total === 1 ? 'project' : 'projects'} tracked</p>`;
 
-  /* Named by PROJECT, not by client — the client name alone is not enough to
-     act on when several projects alias to one book row (naming the client
-     would print "Dalmia Group" once per overdue project and not say which
-     branch is actually behind). */
+  /* Just the count on the card — the project names themselves are named,
+     one per client, in the (i) panel (implDetail()). A client with several
+     overdue branches can print a paragraph long enough to dwarf the rest of
+     the card; the card's job is the headline, not the roster. */
   return `<div class="implline hot"><span class="lbl">Implementation</span>${info || ''}` +
-         `<span class="n">${overdueProjects.length} of ${total} overdue</span></div>` +
-         `<p class="implwho">${esc(overdueProjects.map(p => p.name).join(', '))}</p>`;
+         `<span class="n">${overdueProjects.length} of ${total} overdue</span></div>`;
 }
 
 function renderMonthPicker(){

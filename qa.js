@@ -1956,13 +1956,13 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
           /overdue/.test(mansi.querySelector('.implline .n')?.textContent || ''),
           mansi.querySelector('.implline .n')?.textContent);
     check('and it is marked hot', mansi.querySelector('.implline').classList.contains('hot'));
-    /* implwho names the PROJECT ("Puran Murti Group", Asana's own spelling),
-       not the book client it resolved to ("Pooranmurti") — so what proves the
-       alias fired is the project landing on the right lead's card at all, not
-       the text itself naming the client. */
-    check('the spelling-fixed alias reached her card (Puran Murti Group -> Pooranmurti)',
-          /Puran Murti Group/.test(mansi.querySelector('.implwho')?.textContent || ''),
-          mansi.querySelector('.implwho')?.textContent);
+    /* The project roster moved into the (i) panel on 17 Aug 2026 — a hot card
+       prints only the "N of M overdue" headline now, nothing after it, so a
+       long branch list can no longer dwarf the rest of the card. What proves
+       an alias fired has to be checked against the panel below, not against
+       a .implwho paragraph that no longer exists once something is overdue. */
+    check('nothing but the headline follows the line on a hot card',
+          !mansi.querySelector('.implwho'));
 
     // Sukhmeet Singh owns GNAV Kurukshetra, matched by prefix, with 0 overdue
     const sk = card('Sukhmeet Singh');
@@ -1970,20 +1970,31 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
           /None overdue/.test(sk.querySelector('.implline .n')?.textContent || ''),
           sk.querySelector('.implline .n')?.textContent);
     check('and is not marked hot', !sk.querySelector('.implline').classList.contains('hot'));
+    check('a cool card still gets its tracked-count paragraph',
+          /tracked/.test(sk.querySelector('.implwho')?.textContent || ''),
+          sk.querySelector('.implwho')?.textContent);
 
     // Kashish Goel owns Hindu College, which the Hindu-group alias lands on
     const kg = card('Kashish Goel');
-    check('the group-split alias reached the right card (Hindu Girls College -> Hindu College)',
-          /Hindu Girls College/.test(kg.querySelector('.implwho')?.textContent || ''),
-          kg.querySelector('.implwho')?.textContent);
+    check('the group-split alias also lands on a hot card (Hindu Girls College -> Hindu College)',
+          /overdue/.test(kg.querySelector('.implline .n')?.textContent || ''),
+          kg.querySelector('.implline .n')?.textContent);
 
-    // the (i) panel must detail what the line summarises
+    // the (i) panel must detail what the line summarises — now the only place
+    // either name (the raw project, or the book client it resolved to) shows
     mansi.querySelector('button.info').click();
     const how = mansi.querySelector('.how').textContent.replace(/\s+/g, ' ');
-    check('the panel lists the overdue project', /Implementation/.test(how) &&
+    check('the panel names the project by its own Asana spelling (Puran Murti Group -> Pooranmurti)',
+          /Implementation/.test(how) && /Puran Murti Group/.test(how), how.slice(0, 200));
+    check('and by the book client it resolved to',
           /Pooranmurti/.test(how), how.slice(0, 200));
     check('with its due date and how far behind it is',
           /overdue task/.test(how) && /still open/.test(how), how.slice(0, 300));
+
+    kg.querySelector('button.info').click();
+    const kgHow = kg.querySelector('.how').textContent.replace(/\s+/g, ' ');
+    check('the group-split alias reached the right card\'s panel too (Hindu Girls College -> Hindu College)',
+          /Implementation/.test(kgHow) && /Hindu Girls College/.test(kgHow), kgHow.slice(0, 300));
 
     // the client book note must name what could not be matched, and how to fix it
     doc.querySelector('#sources2 button[data-src="clients"]').click(); await settle();
