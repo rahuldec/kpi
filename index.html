@@ -251,8 +251,20 @@ html.modalopen{overflow:hidden}
 }
 .how h5{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;
   color:var(--faint);margin:0 0 7px}
-.how .sum{margin:0 0 13px}
+/* The headline numbers, up front and scannable — the sentence used to be the
+   only place they lived, buried mid-clause with everything else a reader might
+   want to check but not what they came for. This is additive: the sentence
+   below is unchanged, so nothing here can drift out of sync with it. */
+.how .stats{display:flex;flex-wrap:wrap;gap:4px 26px;margin:0 0 12px}
+.how .stat{display:flex;flex-direction:column;gap:1px;min-width:0}
+.how .stat b{font-size:19px;font-weight:600;letter-spacing:-.015em;color:var(--ink);
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+.how .stat span{font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.06em}
+.how .sum{margin:0 0 13px;color:var(--faint)}
 .how .sum b{color:var(--ink);font-weight:600}
+/* The sentence now backs up the stat row rather than carrying the numbers
+   alone, so it reads quieter than a heading and louder than a footnote. */
+.how h5 + .stats + .sum,.how .stats + .sum{font-size:12.5px;line-height:1.6}
 .how .who2{font-weight:600;color:var(--ink);margin:11px 0 3px;font-size:13px}
 .how .who2:first-of-type{margin-top:0}
 .how .none{color:var(--body)}
@@ -1483,6 +1495,27 @@ const LAST_BODY = {};
    COVER records how far back each sheet actually reaches. */
 const COVER = {};
 const EXPORT_CAP = 500;
+
+/* A rolling export can only ever describe its own window — the fix is a second
+   copy of what it already showed, taken often enough that nothing falls out
+   between two copies. scripts/archive.js does that: a scheduled job that reads
+   the same live sheets this page does, and commits any entry it has not seen
+   before into archive/<tracker>/<month>.json, keyed by person and due date so
+   re-running it never duplicates a row. This page then reads those files back
+   in as a second source alongside the live fetch — see fetchArchive() below —
+   so a month the sync has since dropped is still scored from what was captured
+   while it was still there, rather than reading as a page of missed days that
+   were never really missed.
+
+   ARCHIVE_FROM is the month the archiver started running; there is nothing to
+   fetch before it; and it caps how many small requests a page load makes, which
+   would otherwise grow by two every month forever. */
+const ARCHIVE_FROM = '2026-07';
+function archiveMonths(){
+  const out = [];
+  for (let m = thisMonth(); m >= ARCHIVE_FROM; m = ymAdd(m, -1)) out.push(m);
+  return out;
+}
 let ROSTER = new Map();
 
 /* Asana's display-name casing varies row to row, so "whichever spelling arrived
@@ -1556,11 +1589,24 @@ function splitRows(t,dl){
   row.push(f); if(row.length>1||row[0]!=='')rows.push(row);
   return rows;
 }
+/* A regex match tells you the string had the right shape, not that the date is
+   real — "31/02/2026" matches the slash pattern below just as well as "07/30/2026"
+   does. Building the result positionally from the match groups without checking
+   it against a real calendar used to hand back "2026-31-02" for that case: a
+   string that sorts after every legitimate day in any range, so the person it
+   belonged to silently vanished from every stat rather than showing as missed or
+   as a reported error. Round-tripping through a real Date and checking the parts
+   survive catches that the same way an out-of-range month or a Feb 30 would. */
 function normDate(v){
   v=(v||'').trim(); if(!v)return null;
-  let m=v.match(/^(\d{4})-(\d{2})-(\d{2})/); if(m)return `${m[1]}-${m[2]}-${m[3]}`;
+  const real=(y,mo,d)=>{ const dt=new Date(y,mo-1,d);
+    return dt.getFullYear()===y && dt.getMonth()===mo-1 && dt.getDate()===d; };
+  let m=v.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(m){ const y=Number(m[1]),mo=Number(m[2]),d=Number(m[3]);
+    return real(y,mo,d)?`${m[1]}-${m[2]}-${m[3]}`:null; }
   m=v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-  if(m)return `${m[3]}-${String(m[1]).padStart(2,'0')}-${String(m[2]).padStart(2,'0')}`;
+  if(m){ const mo=Number(m[1]),d=Number(m[2]),y=Number(m[3]);
+    return real(y,mo,d)?`${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`:null; }
   const d=new Date(v); return isNaN(d)?null:iso(d);
 }
 const tc=s=>s.split(/\s+/).map(w=>w?w[0].toUpperCase()+w.slice(1).toLowerCase():w).join(' ');
@@ -2393,7 +2439,14 @@ function howHtml(r){
   }).join(' · ');
 
   const skipping = $('joined').checked;
-  let h = `<h5 data-sec="compliance">How compliance is worked out</h5><p class="sum">` +
+  let h = `<h5 data-sec="compliance">How compliance is worked out</h5>` +
+    stats([
+      [r.expected, 'expected'],
+      [r.filed, 'filed'],
+      [r.expected - r.filed, 'missed'],
+      [`${r.expected ? Math.round(r.filed / r.expected * 100) : 0}%`, 'compliance'],
+    ]) +
+    `<p class="sum">` +
     `Every working day counts as one expected entry per tracker — two a day, ` +
     `Sundays excluded, Saturdays counted, and nothing counted for days that ` +
     `have not happened yet. ` +
@@ -2437,6 +2490,17 @@ function howHtml(r){
    as a list, so the amount rides with the name rather than starting a column. */
 const clientMoney = c => `${esc(c.n)} <span class="amt">${esc(inr(c.r || 0))}</span>`;
 
+/* The number a section's sentence is about, said first and big. The sentence
+   below still carries the rule and every caveat — this doesn't replace it, it
+   gives a reader who only wants the figure somewhere to land without parsing a
+   run-on clause to find it, and gives the sentence itself room to be read as
+   the reasoning rather than as where the numbers live. */
+function stats(items){
+  return `<div class="stats">` + items.map(([v, l]) =>
+    `<div class="stat"><b>${esc(String(v))}</b><span>${esc(l)}</span></div>`).join('') +
+    `</div>`;
+}
+
 /* A list long enough to bury what follows it. The first few are shown, the rest
    open on request — the names are reference material, and burying six sections
    under forty-eight of them is what made this dialog unreadable. */
@@ -2452,7 +2516,14 @@ function longList(items, shown, label){
 function adoptDetail(r){
   const a = r.adopt;
   if (!a.total) return '';
-  let h = `<h5 data-sec="adoption">How module adoption is worked out</h5><p class="sum">` +
+  let h = `<h5 data-sec="adoption">How module adoption is worked out</h5>` +
+    stats([
+      [a.adopted, 'adopted'],
+      [a.applicable, 'applicable'],
+      [`${a.applicable ? Math.round(a.adopted / a.applicable * 100) : 0}%`, 'adoption'],
+      [`${Math.round(ADOPTION_TARGET * 100)}%`, 'target'],
+    ]) +
+    `<p class="sum">` +
     `Each scored client contributes the modules it has taken up out of the ones ` +
     `that apply to it; modules never sold to a client are left out of both sides. ` +
     `Summed across the team that is <b>${a.adopted} adopted</b> of ` +
@@ -2487,7 +2558,14 @@ function bookDetail(r){
   const n = r.adopt.total;
   const heads = r.team.length + 1;
   const gap = r.target - r.revenue;
-  return `<h5 data-sec="business">How business is worked out</h5><p class="sum">` +
+  return `<h5 data-sec="business">How business is worked out</h5>` +
+    stats([
+      ...(n ? [[n, n === 1 ? 'client' : 'clients']] : []),
+      [inr(r.revenue), 'book'],
+      [inr(Math.round(r.target)), 'target'],
+      [inr(Math.round(Math.abs(gap))), gap > 0 ? 'short' : 'over'],
+    ]) +
+    `<p class="sum">` +
     `The book is the total billing of every client the client book gives ` +
     `<b>${esc(r.lead)}</b> as owner` +
     (n ? ` — <b>${n} ${n === 1 ? 'client' : 'clients'}</b>` : '') +
@@ -2581,7 +2659,14 @@ function feedDetail(r){
            `<p class="sum">None of this team's ${f.total} clients has answered the feedback ` +
            `form, so there is no score — not a score of zero. Silence is not dissatisfaction.</p>`;
 
-  let h = `<h5 data-sec="feedback">How client feedback is worked out</h5><p class="sum">` +
+  let h = `<h5 data-sec="feedback">How client feedback is worked out</h5>` +
+    stats([
+      [`${f.heard}/${f.total}`, 'replied'],
+      [f.sat === null ? '—' : f.sat.toFixed(1), 'satisfaction /5'],
+      ...(f.support === null ? [] : [[f.support.toFixed(1), 'support /5']]),
+      ...(f.reco === null ? [] : [[f.reco.toFixed(1), 'recommend /5']]),
+    ]) +
+    `<p class="sum">` +
     `The most recent response from each client that answered, averaged. ` +
     `<b>${f.heard} of ${f.total}</b> clients replied` +
     (f.responses > f.heard
@@ -3848,6 +3933,38 @@ function reliableFrom(){
   return f.length ? f.sort()[f.length-1] : null;
 }
 
+/* One archived month, tolerant of every way it can be absent: not yet
+   archived, a 404 from a static host, or — in a test harness with no real
+   /archive on disk — some other fixture's body answering instead of a 404.
+   None of those are errors this page should show; they all just mean there is
+   nothing extra for that month, same as if the archiver had never run. */
+async function fetchArchiveMonth(tracker, month){
+  try {
+    const res = await fetch(`/archive/${tracker}/${month}.json`, {cache:'no-store'});
+    if (!res.ok) return [];
+    const rows = JSON.parse(await res.text());
+    return Array.isArray(rows)
+      ? rows.filter(r => r && typeof r.name === 'string' && typeof r.due === 'string')
+      : [];
+  } catch (e) { return []; }
+}
+async function fetchArchive(tracker){
+  const lists = await Promise.all(archiveMonths().map(m => fetchArchiveMonth(tracker, m)));
+  return lists.flat();
+}
+
+/* Live rows win on any date they cover — the export is the source of truth
+   while an entry is still inside its window. Archived rows only ever fill in
+   dates the live fetch no longer reaches, keyed on person + due date so a
+   month present in both never double-counts a day. */
+function mergeArchive(live, archived){
+  if (!archived.length) return live;
+  const key = r => `${r.name.trim().toLowerCase()}|${r.due}`;
+  const seen = new Set(live.map(key));
+  const extra = archived.filter(r => !seen.has(key(r)));
+  return extra.length ? live.concat(extra) : live;
+}
+
 async function load(){
   loading();
   $('refresh').disabled = true;
@@ -3861,11 +3978,18 @@ async function load(){
        to have landed first. Errors are captured rather than thrown so this
        cannot reject while nothing is awaiting it yet. */
     const bookPending = fetchRaw('book').then(parseBook, e => e instanceof Error ? e : new Error(String(e)));
+    /* Same reasoning as the book: independent of the live trackers, so it goes
+       out now rather than after them, and it fails soft — a missing archive
+       file is the normal case for most months, not a load failure. */
+    const archivePending = Promise.all([fetchArchive('internal'), fetchArchive('client')])
+      .catch(() => [[], []]);
     const [internal, client] = await trackers;
     /* If both sources come back byte-identical, the function is ignoring ?src=
        and serving one sheet for both. That silently makes every person with no
        entries in the served sheet read as 0% on the other tab — a wrong answer
-       that looks exactly like a real one. Refuse to render it. */
+       that looks exactly like a real one. Refuse to render it. This has to run
+       on the live fetch alone, before the archive joins it — two archived
+       sheets would be identical too, for a real reason, and must not trip it. */
     if (LAST_BODY.internal && LAST_BODY.internal === LAST_BODY.client){
       return failed(
         'Both trackers returned the same sheet, so the Client tab would be showing internal data.',
@@ -3873,11 +3997,24 @@ async function load(){
         'Upload the current api/data.js to the repository. To confirm, open /api/data?src=internal ' +
         'and /api/data?src=client — right now they return identical content.');
     }
+    /* Fill in whatever the live export no longer reaches, then let the merged
+       set stand for what the sheet covers — reliableFrom() and the month
+       picker read COVER, not the raw fetch, so a month rescued from the
+       archive stops being flagged as outside the data. capped is left alone:
+       it describes the live sheet's own state, which the archive does not
+       change, and is still worth knowing even once the gap is covered. */
+    const [archInternal, archClient] = await archivePending;
+    const internalAll = mergeArchive(internal, archInternal);
+    const clientAll = mergeArchive(client, archClient);
+    for (const [src, merged] of [['internal', internalAll], ['client', clientAll]]){
+      const dues = merged.map(r => r.due).sort();
+      COVER[src] = {...COVER[src], rows: merged.length, from: dues[0], to: dues[dues.length - 1]};
+    }
     /* Drop hidden people once, here, rather than at each place that counts.
        Every downstream total — entry counts, turnout, the board, the scorecard —
        then reads the same set of rows, so none of them can disagree. */
-    DATA = {internal: internal.filter(r => !isHidden(r.name)),
-            client:   client.filter(r => !isHidden(r.name))};
+    DATA = {internal: internalAll.filter(r => !isHidden(r.name)),
+            client:   clientAll.filter(r => !isHidden(r.name))};
     buildRoster();
     buildPods();
 

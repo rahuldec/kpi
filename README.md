@@ -124,8 +124,57 @@ columns; `book` and `feedback` are published-to-web CSVs fetched by their full U
 domain, so cross-origin restrictions never apply — which is why this is a function
 and not a direct `fetch` to Google.
 
-No employee data is stored in this repository. Everything is read live and parsed in
-the browser. Responses are cached at Vercel's edge for 5 minutes.
+Everything else is read live and parsed in the browser. Responses are cached at
+Vercel's edge for 5 minutes. The one thing that *is* stored here is the tracker
+archive — see below, and note what it means for a public repository.
+
+## The archive, and why it exists
+
+The Asana → Sheets sync keeps roughly the **last 500 tasks** and drops the oldest
+to make room. That is a rolling window, not a history. It is fine for the daily
+boards, which only ask about the last few days, and fatal for the monthly
+scorecard: once July's rows fall out, July stops reading as a month that was
+filed and starts reading as a month of missed days. The figures stay confident
+and become wrong.
+
+So `scripts/archive.js` runs on a schedule, reads the same two sheets the
+dashboard reads, and writes every `{person, due date}` it sees into
+`archive/<tracker>/<month>.json`. Entries already recorded are left alone, so a
+re-run is free and adds nothing; the files only ever grow. The page then reads
+those files back alongside the live fetch and uses them for any date the export
+no longer reaches, so a month rescued from the archive is scored from what was
+captured while it was still there.
+
+**Daily, not monthly.** The window is measured in rows, not in time — a busy
+fortnight can push a month out well before that month ends, and a run scheduled
+after the rows are gone has nothing left to save.
+
+**One parser, not two.** The archiver does not reimplement the CSV parsing. It
+lifts `parseExport()` (and the three helpers it needs) straight out of
+`index.html` and runs them as-is, because a second parser is a second set of
+rules about headers, spacer rows, quoted names and blank assignees — and the
+moment the two disagree the archive stops describing what the dashboard would
+have shown. If those functions are ever renamed or reshaped, the archiver throws
+at the top of the run rather than quietly saving nothing, since an archive that
+silently stops growing looks exactly like a quiet month.
+
+**Live data always wins.** Archived rows only fill dates the live export no
+longer covers, keyed on person + due date, so a month present in both is never
+double-counted.
+
+    ARCHIVE_FROM = '2026-07'      // in index.html — nothing to fetch before this
+
+Backfill or re-run by hand from the Actions tab (**Archive tracker entries** →
+Run workflow), or locally with `node scripts/archive.js` — add `--dry-run` to see
+what it would write without writing it.
+
+> **This repository is public, and the archive contains employee names against
+> the dates they did and did not file.** That is per-person compliance history,
+> readable by anyone with the URL, and it does not age out the way the Asana
+> window does. Before the first run, decide whether that is acceptable — the
+> alternative is making the repository private (the dashboard reads the archive
+> over its own domain, so a private repo with the same Vercel deployment serves
+> it exactly the same way).
 
 **The sheet must be readable without signing in.** In the sheet: Share → General
 access → **Anyone with the link → Viewer**. Without that, Google returns a login page

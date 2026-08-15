@@ -2133,13 +2133,15 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
   {
     const { doc, errs, calls } = boot(); await settle();
     check('boots with no JS errors', errs.length === 0, errs.join(' | '));
-    check('called the data endpoint for all six sheets', calls.length === 6 &&
-          calls.every(u => /^\/api\/data\?src=/.test(u)), calls.join());
+    const apiCalls = calls.filter(u => /^\/api\/data\?src=/.test(u));
+    check('called the data endpoint for all six sheets', apiCalls.length === 6, calls.join());
     /* Order is load-bearing, not incidental: buildEscalations matches escalation
        names against the client book, so the book has to be in place first or the
-       matching silently runs against the fallback. */
+       matching silently runs against the fallback. Archive requests are excluded
+       from this ordering — they run on their own leg alongside the book and are
+       checked separately below. */
     check('trackers together, then the book, then adoption and escalations', (() => {
-      const src = calls.map(u => u.match(/src=(\w+)/)[1]);
+      const src = apiCalls.map(u => u.match(/src=(\w+)/)[1]);
       /* Both adoption and escalations match against client names, so both must
          follow the book — neither may overtake it. */
       return src[0] === 'internal' && src[1] === 'client' && src[2] === 'book' &&
@@ -2148,6 +2150,14 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
              src.indexOf('feedback') > 2;
     })(), calls.join());
     check('cache-busted the request', /[?&]t=\d+/.test(calls[0] || ''), calls[0]);
+    /* The archive leg: one request per tracker per covered month, none of them
+       carrying ?src= — a fixture with no /archive on disk answers every one of
+       these with the tracker CSV instead of a 404, which is exactly the shape
+       fetchArchiveMonth() has to survive without it reaching parseExport(). */
+    check('also reaches for the archive, tolerant of it not existing',
+          calls.some(u => /^\/archive\//.test(u)), calls.join());
+    check('an archive fetch answered with the wrong body does not crash the page',
+          errs.length === 0, errs.join(' | '));
     check('content revealed', doc.getElementById('content').hidden === false);
     check('state panel hidden', doc.getElementById('state').hidden === true);
     check('freshness line populated', /entries/.test(txt(doc, '#fresh')), txt(doc, '#fresh'));
@@ -2267,7 +2277,11 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
   {
     const { doc, calls } = boot(); await settle();
     doc.getElementById('refresh').click(); await settle();
-    check('refresh refetches every sheet', calls.length === 12, calls.length + ' calls');
+    const apiCalls = calls.filter(u => /^\/api\/data\?src=/.test(u));
+    check('refresh refetches every sheet', apiCalls.length === 12, apiCalls.length + ' calls');
+    const archiveCalls = calls.filter(u => /^\/archive\//.test(u));
+    check('and the archive leg too', archiveCalls.length > 0 && archiveCalls.length % 2 === 0,
+          archiveCalls.length + ' archive calls');
   }
 
   // ── 7. internal consistency of the figures ─────────────────────
