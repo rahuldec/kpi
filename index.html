@@ -163,15 +163,15 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
 .dial .sub{font-size:12.5px;color:var(--faint);margin-left:auto;text-align:right}
 .track{height:7px;border-radius:4px;background:var(--hair);overflow:hidden;margin:0 0 14px}
 .track i{display:block;height:100%;border-radius:4px;background:var(--brand)}
-.track.low i{background:var(--miss)}
-/* A dial that has met its target used to switch its bar to --deep, the dark
-   wordmark maroon — close enough to --miss in hue that a met dial and a
-   failing one read as the same "something's wrong" color at a glance,
-   exactly backwards from what met is supposed to say. The number already
-   carries "target met" (it is the percentage past 100, or the dial simply
-   not going hot); the bar stays the same brand orange every other dial
-   uses, met or not, so business does not look like the odd one out on a
-   card where every other bar is orange. */
+/* .low and .met used to repaint the bar — --miss (red) under 60%, --deep (dark
+   maroon) at target — so four dials on one card could each be a different
+   color and a met dial and a failing one, in particular, read as close to the
+   same "something's wrong" hue at a glance. The number already carries the
+   status (79% vs 35%, met or not); every bar is the one brand orange now,
+   regardless of value, so a card is never doing two different jobs with
+   color — data value in the number, category in the label — at once. The
+   classes themselves are untouched (dial() still computes them, qa.js still
+   asserts .met's presence for "target met"), only what paints them. */
 .mcard .dial:last-of-type + .track{margin-bottom:0}
 
 /* ── how-it-adds-up panel ─────────────────────────────────────────────────────
