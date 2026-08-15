@@ -116,13 +116,14 @@ No build step, no backend, no runtime dependencies at all.
     browser  ->  /api/data  (this project)  ->  docs.google.com  ->  the sheet
 
 `api/data.js` is a serverless function on your own Vercel project. It takes
-`?src=internal`, `?src=client`, `?src=escalations`, `?src=book`, `?src=adoption` or
-`?src=feedback`, fetches the matching sheet server-side and hands back raw CSV. The
-first three are Google Sheets fetched by id with the right tab discovered by its
-columns; `book` and `feedback` are published-to-web CSVs fetched by their full URLs;
-`adoption` fetches several tabs by name and returns them together. The browser only ever talks to your own
-domain, so cross-origin restrictions never apply — which is why this is a function
-and not a direct `fetch` to Google.
+`?src=internal`, `?src=client`, `?src=escalations`, `?src=book`, `?src=adoption`,
+`?src=feedback` or `?src=implementation`, fetches the matching sheet server-side and
+hands back raw CSV. The first three are Google Sheets fetched by id with the right tab
+discovered by its columns; `book`, `feedback` and `implementation` are published-to-web
+CSVs fetched by their full URLs; `adoption` fetches several tabs by name and returns
+them together. The browser only ever talks to your own domain, so cross-origin
+restrictions never apply — which is why this is a function and not a direct `fetch` to
+Google.
 
 Everything else is read live and parsed in the browser. Responses are cached at
 Vercel's edge for 5 minutes. The one thing that *is* stored here is the tracker
@@ -1459,3 +1460,91 @@ check that the **scored** stat sits inside the adoption `<h5>`'s own section, no
 drifted into feedback's, which is the same failure mode the original checks existed
 to catch, just asked of the panel instead of the card. `extreme_qa.js` gained the
 inverse assertion outright: `.covline` count is now pinned at zero, not two.
+
+
+## Implementation projects — added 16 Aug 2026
+
+A new source, `?src=implementation`: an Asana portfolio report ("Client
+Implementation"), published to the web the same way the book and feedback are. One
+row per **project**, not per client — task counts, a due date, and Asana's own
+`OVERDUE` figure — matched against the client book exactly the way escalations
+already are, because the two are typed into different systems by different people
+and cannot be trusted to agree on a name.
+
+### The card
+
+A new **Implementation** line, the same shape as Escalations and directly below it:
+"None overdue" and grey, or "N of M overdue" and red with the affected clients named.
+Deliberately **projects**, not tasks — a project with seven overdue tasks and one
+with a single overdue task are both one red flag on the card, and summing raw task
+counts across projects of very different sizes would read as a severity difference
+that isn't the question being asked. The (i) panel breaks it down further: every
+overdue project with its due date and how many tasks are still open, projects on
+schedule collapsed to a count.
+
+A past due date is not the same signal as Asana's own overdue count, and only the
+second one drives the card. A project can be behind schedule with `OVERDUE` reading
+0 — no due dates set on the individual tasks, for instance — and the card says
+"None overdue" for it regardless, because that is what Asana itself is reporting.
+Read the due date in the (i) panel for that case; it is shown, just not counted.
+
+### Ownership comes from the book, never from the sheet's own OWNER column
+
+Same rule module adoption already learned the hard way (**Module adoption**, above:
+"The book decides who owns a client"). This portfolio's `OWNER` column is whoever did
+the Asana work, which drifts from who carries the account exactly the way an
+assistant's tab did for adoption scoring. A project always lands on the same card its
+client's revenue does, or it is reported as unmatched — never attributed by the
+sheet's own say-so.
+
+### `IMPL_ALIAS`, and the Hindu/Dalmia/Shah Satnam problem
+
+Same shape as `ESC_ALIAS`, same reasoning, same place to fix a miss: on evidence,
+never on resemblance. Most of the 51 real projects resolved without any alias at all
+— 7 exact, 8 more by the existing prefix-containment rule (`MVN University` inside
+`MVN University Palwal`, and so on) — but three groups needed a human decision before
+any alias could be written:
+
+* **Dalmia** — five branch projects (Dalmiapuram, Kalyanpur, Thangskai, Kadappa,
+  Rajgangpur), one owner (Ankush Rana) throughout, one book row ("Dalmia Group").
+  Real evidence, not a guess: all five are aliased to it.
+* **Hindu** — fourteen projects, two book rows ("Hindu College", "Hindu School"),
+  and *three different* Asana owners across them. No single row is the evidence-based
+  answer the way Dalmia's is. Split by the word each project name actually carries —
+  "College" vs "School"/"Vidyalaya", a real signal — wherever it has one; the three
+  that carry neither (`SM Hindu`, `Hindu Vidyapeeth, Sonipat`, `Hindu Global, Sonipat`)
+  are left unmatched and named on the client book tab rather than coin-flipped.
+* **Shah Satnam** — three projects, two book rows ("Sirsa", "Non Sirsa"), and
+  nothing in any of the three names says which is which. Left unmatched entirely:
+  unlike Hindu, there was no textual evidence to split on at all, only the general
+  "pick one" instruction — and picking wrong here would put a real overdue flag on
+  the wrong team's card, which is worse than the gap staying visible.
+
+`buildImplementation()` also validates `IMPL_ALIAS` itself the moment it runs: every
+alias target has to actually be in the current book, or the alias is worse than
+useless — it looks resolved and flags nothing. This caught a real gap before it
+shipped: `IMPL_ALIAS` points five Dalmia projects at "Dalmia Group", which is in the
+**live** book but was missing from `CLIENTS_FALLBACK`, the 3 Aug snapshot compiled
+into this page for when the live book is unreachable. Had that gone out as written,
+the moment the live book failed over, five real overdue projects would have gone
+unmatched with the page giving no clue why. Added the missing row (`Dalmia Group`,
+Ankush Rana, ₹2.75L) rather than silencing the check — the gap was in the snapshot,
+not in the alias, and the check exists to catch exactly that class of drift.
+
+### The note is shared with escalations, not given its own home
+
+`#escnote`, on the client book tab, now reports both: "N escalations could not be
+matched" and "N implementation projects could not be matched" sit in the same
+paragraph, because they are the same failure — some row from an outside sheet
+couldn't be matched to the book — appearing in the same place a reader already knows
+to check, rather than scattered across tabs by which sheet happened to produce them.
+
+### Verified against the live sheet, not only fixtures
+
+Fetched `/api/data?src=implementation` and the book directly: 51 real projects, 37
+currently carrying at least one overdue task. Matched by hand against the book to
+build the picture above — 7 exact, 8 prefix, 16 safe spelling/abbreviation aliases,
+21 in the three group cases, 3 genuinely absent from the book under any name
+(`Saraswati Mahila Mahavidhyalaya, Palwal`, `IAIT`, `CDS Modern School`) — before any
+of it was written as code. 725 assertions total (648 + 77), passing across
+UTC/IST/PST/UTC+14.

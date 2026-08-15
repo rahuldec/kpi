@@ -22,8 +22,11 @@ const sheet = rows => [',,', ',,url', ',,', HEAD, ...rows].join('\n');
 const asClient = csv => csv.replace(/\n(\d+),/g, (m, d) => '\n' + (Number(d) + 900) + ',');
 const MIN_BOOK = 'Sr No.,Client Name,Old/New,TYPE1,Category,Type, Total Billing FY , Team ,RM,Retention/Imp,,,';
 const MIN_FEED = '"Timestamp","Name of the Institution?"';
+const MIN_IMPL = 'NAME,URL,TEAM,OWNER,DESCRIPTION,CREATED,START DATE,FIRST TASK COMPLETED,' +
+  'DUE DATE,ALL TASKS,COMPLETE,INCOMPLETE,ASSIGNED,OVERDUE,TASKS ADDED,TASKS COMPLETED\n' +
+  'No Matching Client,https://x,,Nobody,,2026-07-01,2026-07-01,,2026-07-01,1,1,0,0,0,0,0';
 
-function boot({ body, clientBody = sheet([]), escBody = sheet([]), bookBody = MIN_BOOK, adoptBody = '', feedBody = MIN_FEED, archive = {} } = {}) {
+function boot({ body, clientBody = sheet([]), escBody = sheet([]), bookBody = MIN_BOOK, adoptBody = '', feedBody = MIN_FEED, implBody = MIN_IMPL, archive = {} } = {}) {
   const errs = [], calls = [];
   const dom = new JSDOM(HTML, {
     runScripts: 'dangerously', pretendToBeVisual: true, url: 'https://kpi.test/',
@@ -44,6 +47,7 @@ function boot({ body, clientBody = sheet([]), escBody = sheet([]), bookBody = MI
             src === 'escalations' ? escBody :
             src === 'adoption' ? adoptBody :
             src === 'feedback' ? feedBody :
+            src === 'implementation' ? implBody :
             src === 'book' ? bookBody :
             src === 'client' ? clientBody : body)
         });
@@ -476,6 +480,68 @@ const settle = () => new Promise(r => setTimeout(r, 30));
     check('the far larger implementation revenue drives the wider flex-grow',
           imp && ret && Number(imp.style.flexGrow) > Number(ret.style.flexGrow),
           imp && ret && `${imp.style.flexGrow} vs ${ret.style.flexGrow}`);
+  }
+
+  // ── J. Overdue is counted in projects, not raw tasks ───────────────
+  {
+    /* One project with seven overdue tasks and one with a single overdue task
+       both have to read as "1 project" toward the headline count — summing raw
+       task counts across projects of very different sizes would read as a
+       severity difference that isn't the point of the figure. */
+    const IHEAD = 'NAME,URL,TEAM,OWNER,DESCRIPTION,CREATED,START DATE,FIRST TASK COMPLETED,' +
+      'DUE DATE,ALL TASKS,COMPLETE,INCOMPLETE,ASSIGNED,OVERDUE,TASKS ADDED,TASKS COMPLETED';
+    const book = [
+      'Sr No.,Client Name,Old/New,TYPE1,Category,Type, Total Billing FY , Team ,RM,Retention/Imp,,,',
+      '1,Alpha College,Old,College,Large,B," ₹ 1,000,000.00 ",Mansi Rana,,Implementation,,,',
+      '2,Beta School,Old,School,Large,B," ₹ 400,000.00 ",Mansi Rana,,Implementation,,,',
+    ].join('\n');
+    const impl = [IHEAD,
+      // one project, seven overdue tasks
+      'Alpha College,https://x,,Mansi Rana,,2026-07-01,2026-07-01,,2026-07-20,20,10,10,3,3,0,7',
+      // a second project, one overdue task
+      'Beta School,https://x,,Mansi Rana,,2026-07-01,2026-07-01,,2026-07-20,10,8,2,1,1,0,1',
+    ].join('\n');
+    const trk = sheet(['1,2026-07-01,,,x,S,Mansi Rana,m@x.com,,2026-07-27,,n']);
+    const { doc, errs } = boot({ body: trk, clientBody: asClient(trk), bookBody: book, implBody: impl });
+    await settle();
+    doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
+    check('boots cleanly with two overdue projects of very different sizes', errs.length === 0, errs.join(' | '));
+
+    const card = [...doc.querySelectorAll('.mcard')]
+      .find(c => /Mansi Rana/.test(c.querySelector('h4').textContent));
+    const line = card && card.querySelector('.implline .n');
+    check('the headline reads "2 of 2 overdue" — projects, not the eight overdue tasks between them',
+          line && line.textContent.trim() === '2 of 2 overdue', line && line.textContent);
+  }
+
+  // ── J2. A project's due date passing is not the same signal as Asana's
+  //        own overdue count — only the latter drives the card ──────────
+  {
+    const IHEAD = 'NAME,URL,TEAM,OWNER,DESCRIPTION,CREATED,START DATE,FIRST TASK COMPLETED,' +
+      'DUE DATE,ALL TASKS,COMPLETE,INCOMPLETE,ASSIGNED,OVERDUE,TASKS ADDED,TASKS COMPLETED';
+    const book = [
+      'Sr No.,Client Name,Old/New,TYPE1,Category,Type, Total Billing FY , Team ,RM,Retention/Imp,,,',
+      '1,Alpha College,Old,College,Large,B," ₹ 1,000,000.00 ",Mansi Rana,,Implementation,,,',
+    ].join('\n');
+    // Due date is well in the past and 11 tasks remain incomplete, but Asana's
+    // own OVERDUE column reads 0 — the exact shape flagged in review: a
+    // project can be behind schedule without any single task being marked
+    // overdue (no due dates set on the tasks themselves, for instance).
+    const impl = [IHEAD,
+      'Alpha College,https://x,,Mansi Rana,,2026-07-01,2026-07-01,,2026-07-01,15,4,11,0,0,0,0',
+    ].join('\n');
+    const trk = sheet(['1,2026-07-01,,,x,S,Mansi Rana,m@x.com,,2026-07-27,,n']);
+    const { doc, errs } = boot({ body: trk, clientBody: asClient(trk), bookBody: book, implBody: impl });
+    await settle();
+    doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
+    check('boots cleanly with a past-due, zero-overdue project', errs.length === 0, errs.join(' | '));
+
+    const card = [...doc.querySelectorAll('.mcard')]
+      .find(c => /Mansi Rana/.test(c.querySelector('h4').textContent));
+    const line = card && card.querySelector('.implline .n');
+    check('a project with 0 overdue tasks reads "None overdue" regardless of its due date',
+          line && line.textContent.trim() === 'None overdue', line && line.textContent);
+    check('and is not marked hot', !card.querySelector('.implline').classList.contains('hot'));
   }
 
   const w = Math.max(...results.map(r => r[1].length));

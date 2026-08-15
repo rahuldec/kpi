@@ -192,8 +192,33 @@ const FEED_SHEET = [
   '31/07/2026 10:00:00,OPS Karnal,Vinod,Extremely user-friendly,Library,,Improved,Stupendous,Good,None,Highly Likely to Recommend,9'
 ].join('\n');
 
+/* The Asana portfolio export, banner rows and all — the real shape
+   parseImplementation has to scan past to find its header. Every NAME below is
+   chosen to exercise one matching path against BOOK_SHEET (itself derived from
+   CLIENTS_FALLBACK, so these are real client/owner pairs, not invented ones):
+   an exact match, an auto-prefix match, a real IMPL_ALIAS spelling fix, a real
+   IMPL_ALIAS group-split entry, and a name nothing in the book resembles. */
+const IMPL_HEAD = 'NAME,URL,TEAM,OWNER,DESCRIPTION,CREATED,START DATE,FIRST TASK COMPLETED,' +
+  'DUE DATE,ALL TASKS,COMPLETE,INCOMPLETE,ASSIGNED,OVERDUE,TASKS ADDED,TASKS COMPLETED';
+const IMPL_SHEET = [
+  'Live source data,,,,,,,,,,,,,,,',
+  'PROJECT,,,,,PROJECT DATES,,,,CURRENT TASK COUNT,,,,,IN THE LAST WEEK,',
+  IMPL_HEAD,
+  // exact match — PIET College is Mansi Rana's in the fallback
+  'PIET College,https://x,,Mansi Rana,,2026-07-01,2026-07-01,,2026-07-20,10,6,4,2,3,0,0',
+  // auto-prefix — "GNAV" is a prefix of the book's "GNAV Kurukshetra" (Sukhmeet Singh)
+  'GNAV,https://x,,Sukhmeet Singh,,2026-07-01,2026-07-01,2026-07-10,2026-07-20,8,8,0,0,0,0,0',
+  // real IMPL_ALIAS entry: a spelling difference, not a resemblance guess
+  'Puran Murti Group,https://x,,Mansi Rana,,2026-07-01,2026-07-01,,2026-07-20,12,9,3,1,1,0,0',
+  // real IMPL_ALIAS entry: the Hindu group split, this one to Hindu College
+  'Hindu Girls College,https://x,,Kashish Goel,,2026-07-01,2026-07-01,,2026-07-20,15,10,5,2,2,0,0',
+  // nothing in the book resembles this — must be reported, never guessed
+  'Nonexistent Institute XYZ,https://x,,Rahul Sharma,,2026-07-01,2026-07-01,,2026-07-20,5,1,4,0,1,0,0'
+].join('\n');
+
 function boot({ body = SHEET, clientBody = CLIENT_DEFAULT, escBody = ESC_SHEET,
                 bookBody = BOOK_SHEET, adoptBody = ADOPT_SHEET, feedBody = FEED_SHEET,
+                implBody = IMPL_SHEET,
                 status = 200, reject = false, store = null } = {}) {
   const errs = [], calls = [];
   // beforeParse installs the mock before the page's own <script> runs, so the
@@ -220,6 +245,7 @@ function boot({ body = SHEET, clientBody = CLIENT_DEFAULT, escBody = ESC_SHEET,
             src === 'escalations' ? escBody :
             src === 'adoption' ? adoptBody :
             src === 'feedback' ? feedBody :
+            src === 'implementation' ? implBody :
             src === 'book' ? bookBody :
             src === 'client' ? clientBody : body)
         });
@@ -1768,9 +1794,14 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
           !/Dhanna/.test(uh), uh.slice(0, 260));
 
     /* And silence when there is nothing to report — a warning that is always on
-       is a warning nobody reads. */
+       is a warning nobody reads. Implementation shares this note (added 16 Aug
+       2026), so a clean, fully-matched sheet has to be supplied for it too, or
+       IMPL_SHEET's own deliberately-unmatched row would speak here instead. */
     const q = boot({ body: teamSheet(), clientBody: teamSheet(TEAM_PEOPLE, 500),
-                     escBody: ESC_SHEET.split('\n').filter(l => !/Zzz Unknown/.test(l)).join('\n') });
+                     escBody: ESC_SHEET.split('\n').filter(l => !/Zzz Unknown/.test(l)).join('\n'),
+                     implBody: [IMPL_HEAD,
+                       'Budha College Karnal,https://x,,Sukhmeet Singh,,2026-07-01,2026-07-01,,' +
+                       '2026-07-20,4,4,0,0,0,0,0'].join('\n') });
     await settle();
     q.doc.querySelector('#sources2 button[data-src="clients"]').click(); await settle();
     check('nothing unmatched means nothing said',
@@ -1897,6 +1928,81 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
           b2.doc.querySelector('.escwho')?.textContent);
     check('no team is wrongly marked clean',
           ![...b2.doc.querySelectorAll('.escline')].some(l => /None open/.test(l.textContent)));
+  }
+
+  // ── 1f14b. implementation projects on the team cards ─────────────
+  {
+    /* Default boot() now carries IMPL_SHEET, so the default fixture already
+       exercises real matching: PIET College (exact), GNAV -> GNAV Kurukshetra
+       (auto-prefix), Puran Murti Group -> Pooranmurti (a real IMPL_ALIAS
+       spelling fix), Hindu Girls College -> Hindu College (a real IMPL_ALIAS
+       group-split entry), and one name nothing in the book resembles. */
+    const { doc } = boot({ body: teamSheet(), clientBody: teamSheet(TEAM_PEOPLE, 500) });
+    await settle();
+    doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
+    pickMonths(doc, '2026-07');
+
+    const cards = [...doc.querySelectorAll('.mcard')];
+    const card = n => cards.find(c => new RegExp(n).test(c.querySelector('h4').textContent));
+
+    check('implementation is not drawn as a dial — a count has no denominator',
+          cards.every(c => c.querySelectorAll('.track').length === 4));
+    check('its own class, not escline — a card-scoped querySelector(\'.escline\') must never find it',
+          cards.every(c => !c.querySelector('.escline')?.textContent.includes('Implementation')));
+
+    // Mansi Rana owns PIET College (overdue) and Pooranmurti via alias (overdue)
+    const mansi = card('Mansi Rana');
+    check('a team with an overdue project says so',
+          /overdue/.test(mansi.querySelector('.implline .n')?.textContent || ''),
+          mansi.querySelector('.implline .n')?.textContent);
+    check('and it is marked hot', mansi.querySelector('.implline').classList.contains('hot'));
+    check('the spelling-fixed alias reached her card (Puran Murti Group -> Pooranmurti)',
+          /Pooranmurti/.test(mansi.querySelector('.implwho')?.textContent || ''),
+          mansi.querySelector('.implwho')?.textContent);
+
+    // Sukhmeet Singh owns GNAV Kurukshetra, matched by prefix, with 0 overdue
+    const sk = card('Sukhmeet Singh');
+    check('a team with no overdue project reads "None overdue"',
+          /None overdue/.test(sk.querySelector('.implline .n')?.textContent || ''),
+          sk.querySelector('.implline .n')?.textContent);
+    check('and is not marked hot', !sk.querySelector('.implline').classList.contains('hot'));
+
+    // Kashish Goel owns Hindu College, which the Hindu-group alias lands on
+    const kg = card('Kashish Goel');
+    check('the group-split alias reached the right card (Hindu Girls College -> Hindu College)',
+          /Hindu College/.test(kg.querySelector('.implwho')?.textContent || ''),
+          kg.querySelector('.implwho')?.textContent);
+
+    // the (i) panel must detail what the line summarises
+    mansi.querySelector('button.info').click();
+    const how = mansi.querySelector('.how').textContent.replace(/\s+/g, ' ');
+    check('the panel lists the overdue project', /Implementation/.test(how) &&
+          /Pooranmurti/.test(how), how.slice(0, 200));
+    check('with its due date and how far behind it is',
+          /overdue task/.test(how) && /still open/.test(how), how.slice(0, 300));
+
+    // the client book note must name what could not be matched, and how to fix it
+    doc.querySelector('#sources2 button[data-src="clients"]').click(); await settle();
+    const note = txt(doc, '#escnote');
+    check('the client book reports implementation projects it could not place',
+          /implementation project.*could not be matched/i.test(note), note.slice(0, 400));
+    check('and names the one that matched nothing',
+          /Nonexistent Institute XYZ/.test(note), note.slice(0, 400));
+    check('the note says where to fix it',
+          /IMPL_ALIAS/.test(note), note.slice(0, 400));
+
+    // and a failure must not take the cards down
+    const b2 = boot({ body: teamSheet(), clientBody: teamSheet(TEAM_PEOPLE, 500),
+                      implBody: 'nonsense\n1' });
+    await settle();
+    b2.doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
+    check('a broken implementation sheet still renders the cards',
+          b2.doc.querySelectorAll('.mcard').length > 0);
+    check('and the line says so rather than reading zero or going quiet',
+          /not loaded/.test(b2.doc.querySelector('.implwho')?.textContent || ''),
+          b2.doc.querySelector('.implwho')?.textContent);
+    check('no team is wrongly marked clean',
+          ![...b2.doc.querySelectorAll('.implline')].some(l => /None overdue/.test(l.textContent)));
   }
 
   // ── 1f15. the month picker ──────────────────────────────────────
@@ -2141,7 +2247,9 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     const { doc, errs, calls } = boot(); await settle();
     check('boots with no JS errors', errs.length === 0, errs.join(' | '));
     const apiCalls = calls.filter(u => /^\/api\/data\?src=/.test(u));
-    check('called the data endpoint for all six sheets', apiCalls.length === 6, calls.join());
+    // Seven since 16 Aug 2026: internal, client, book, adoption, feedback,
+    // escalations, implementation.
+    check('called the data endpoint for all seven sheets', apiCalls.length === 7, calls.join());
     /* Order is load-bearing, not incidental: buildEscalations matches escalation
        names against the client book, so the book has to be in place first or the
        matching silently runs against the fallback. Archive requests are excluded
@@ -2153,8 +2261,9 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
          follow the book — neither may overtake it. */
       return src[0] === 'internal' && src[1] === 'client' && src[2] === 'book' &&
              src.indexOf('adoption') > 2 && src.indexOf('escalations') > 2 &&
-             /* Feedback matches on client names too, so it may not overtake the book. */
-             src.indexOf('feedback') > 2;
+             /* Feedback and implementation match on client names too, so
+                neither may overtake the book either. */
+             src.indexOf('feedback') > 2 && src.indexOf('implementation') > 2;
     })(), calls.join());
     check('cache-busted the request', /[?&]t=\d+/.test(calls[0] || ''), calls[0]);
     /* The archive leg: one request per tracker per covered month, none of them
@@ -2285,7 +2394,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     const { doc, calls } = boot(); await settle();
     doc.getElementById('refresh').click(); await settle();
     const apiCalls = calls.filter(u => /^\/api\/data\?src=/.test(u));
-    check('refresh refetches every sheet', apiCalls.length === 12, apiCalls.length + ' calls');
+    check('refresh refetches every sheet', apiCalls.length === 14, apiCalls.length + ' calls');
     const archiveCalls = calls.filter(u => /^\/archive\//.test(u));
     check('and the archive leg too', archiveCalls.length > 0 && archiveCalls.length % 2 === 0,
           archiveCalls.length + ' archive calls');

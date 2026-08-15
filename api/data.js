@@ -96,7 +96,24 @@ const SOURCES = {
                  envVar: 'BOOK_CSV_URL',
                  mismatch: 'It has no "Client Name" and "Total Billing FY" columns — the link ' +
                            'probably points at the wrong tab. Re-publish with the Clients tab ' +
-                           'selected and update BOOK_CSV_URL.' }
+                           'selected and update BOOK_CSV_URL.' },
+  /* An Asana portfolio report ("Client Implementation"), exported the same way
+     the Asana project itself would be — File -> Export -> CSV, or in this case a
+     live "Open Report in Google Sheets" published to the web, so it stays
+     current without anyone re-exporting by hand. One row per implementation
+     project, not per client: the join to the client book happens entirely in
+     index.html, the same way escalations do, because the two are typed into
+     different systems by different people and can't be trusted to agree on a
+     name. */
+  implementation: { url: process.env.IMPLEMENTATION_CSV_URL ||
+                   'https://docs.google.com/spreadsheets/d/e/2PACX-1vTa-IsaEuSdjzhsy_Vclm-4bTWeDmtz7pAbleMxaQJo32zMBSz1-eUl8aZ6dZX1SpeD_4h-3ClLsQAr' +
+                   '/pub?gid=523747668&single=true&output=csv',
+                 signature: csv => /owner/i.test(csv) && /overdue/i.test(csv) && /due date/i.test(csv),
+                 envVar: 'IMPLEMENTATION_CSV_URL',
+                 mismatch: 'It has no "Owner", "Overdue" and "Due Date" columns — the link ' +
+                           'probably points at the wrong tab, or the Asana portfolio export ' +
+                           'changed shape. Re-export the "Client Implementation" portfolio to ' +
+                           'Google Sheets and update IMPLEMENTATION_CSV_URL.' }
 };
 
 const trackerSignature = csv => /due date/i.test(csv) && /assignee/i.test(csv);

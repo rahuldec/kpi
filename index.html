@@ -322,8 +322,12 @@ html.modalopen{overflow:hidden}
    sitting on the card face. The selectors below are what is left of that
    layout; .covwho is untouched because it is still drawn elsewhere (the
    adoption and feedback tabs' own "by RM" tables), just no longer on this
-   card. */
-.visitline,.escline,.mixline{
+   card. .implline (added the same day) is visually identical to .escline —
+   same label/figure/names shape, same red-when-there's-something-to-see rule —
+   but kept as its own class rather than sharing .escline outright, so a
+   card-scoped querySelector('.escline') elsewhere in the suite can never
+   silently pick up implementation's row instead of escalations'. */
+.visitline,.escline,.implline,.mixline{
   display:flex;align-items:baseline;gap:2px 9px;margin:2px 0 0;flex-wrap:wrap;
   padding-top:12px;border-top:1px solid var(--hair);
 }
@@ -335,19 +339,19 @@ html.modalopen{overflow:hidden}
    suggest they were two different things. The dial after the bar is what
    needs the rule. */
 .covwho + .dial,.mixbar + .dial{padding-top:14px;border-top:1px solid var(--hair)}
-.visitline .lbl,.escline .lbl,.mixline .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.07em;
+.visitline .lbl,.escline .lbl,.implline .lbl,.mixline .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.07em;
   color:var(--faint);width:88px;flex:none}
 /* The figure reads as one phrase — "2 open" — so it must never break across
    lines the way it did when other text beside it was allowed to squeeze it.
    Below about 300px of card the row wraps instead; the value stays beside its
    label at every width, which is the thing being read. */
-.visitline .n,.escline .n,.mixline .n{font-size:15px;font-weight:600;letter-spacing:-.012em;
+.visitline .n,.escline .n,.implline .n,.mixline .n{font-size:15px;font-weight:600;letter-spacing:-.012em;
   white-space:nowrap}
 /* Two phrases joined by a separator rather than one indivisible figure, so this
    is the one value on a card that may break — between them, never inside them. */
 .mixline .n{white-space:normal;font-size:14px}
-.escline.hot .n{color:var(--miss)}
-.escline.cool .n,.visitline .n,.mixline.cool .n{color:var(--faint);font-weight:500}
+.escline.hot .n,.implline.hot .n{color:var(--miss)}
+.escline.cool .n,.implline.cool .n,.visitline .n,.mixline.cool .n{color:var(--faint);font-weight:500}
 .how .gaps{font-size:12.5px;line-height:1.7;color:var(--ink);margin:6px 0 0}
 .how .gaps.none{color:var(--faint);font-size:12px;margin-top:8px}
 /* A figure attached to a name, not a column of its own. */
@@ -394,8 +398,8 @@ html.modalopen{overflow:hidden}
 .board tr.flat td{color:var(--faint)}
 
 #meterhint .period{margin:0}
-.escwho,.covwho{font-size:12.5px;line-height:1.45;color:var(--miss);margin:5px 0 0 97px}
-.escwho.cool,.covwho.cool{color:var(--faint)}
+.escwho,.covwho,.implwho{font-size:12.5px;line-height:1.45;color:var(--miss);margin:5px 0 0 97px}
+.escwho.cool,.covwho.cool,.implwho.cool{color:var(--faint)}
 
 /* ── client book ─
    A pod's members sit under the lead's name rather than in their own column:
@@ -1061,11 +1065,20 @@ table.board td.tot.zero{font-weight:400;color:var(--faint)}
    carry a Sr No. Filtering on the name alone swept those in and inflated the
    total.
 
-   Keys are short because there are 148 of them: n name, o owning RM,
+   Keys are short because there are 149 of them: n name, o owning RM,
    r revenue for the financial year (rupees, null where the sheet is blank),
-   t institution type, c size band, a old or new. Sorted by revenue. */
+   t institution type, c size band, a old or new. Sorted by revenue.
+
+   "Dalmia Group" (Ankush Rana, ₹2.75L) was added 16 Aug 2026 — present in the
+   live book but missing from the original 3 Aug snapshot, which only surfaced
+   because IMPL_ALIAS now points five implementation projects at it: the
+   book-consistency check in buildImplementation() (same one buildEscalations
+   already runs for ESC_ALIAS) correctly reported every one of them as aliased
+   to a client the book doesn't have — the moment the live book failed and this
+   snapshot took over, real overdue projects would have gone unmatched with no
+   clear reason why. The gap was in the snapshot, not the alias. */
 const CLIENTS_FALLBACK_ASOF = '2026-08-03';
-const CLIENTS_FALLBACK = [{"n":"PIET College","o":"Mansi Rana","r":1368000,"t":"University","c":"Large","a":"Old"},{"n":"SNCF Schools","o":"Amit Kumar","r":1296000,"t":"School","c":"Large","a":"Old"},{"n":"Sanskaram University","o":"Sultan Malik","r":1050000,"t":"University","c":"Large","a":"New"},{"n":"Haridwar University","o":"Mansi Rana","r":787500,"t":"University","c":"Large","a":"New"},{"n":"MVN University Palwal","o":"Sultan Malik","r":720000,"t":"University","c":"Large","a":"New"},{"n":"Hindu College","o":"Kashish Goel","r":610000,"t":"College","c":"","a":"New"},{"n":"Hindu School","o":"Sukhmeet Singh","r":610000,"t":"School","c":"","a":"New"},{"n":"SDGI Global University","o":"Ankush Rana","r":480000,"t":"University","c":"Large","a":"Old"},{"n":"Arya College Panipat","o":"Sultan Malik","r":468000,"t":"Degree College","c":"Large","a":"Old"},{"n":"DAV CC Faridabad","o":"Ankush Rana","r":457627,"t":"Degree College","c":"Large","a":"New"},{"n":"Pooranmurti","o":"Mansi Rana","r":440000,"t":"College","c":"","a":"New"},{"n":"GNKC","o":"Mansi Rana","r":400000,"t":"Degree College","c":"Large","a":"Old"},{"n":"Aggarwal College Faridabad","o":"Ankush Rana","r":400000,"t":"Degree College","c":"Large","a":"New"},{"n":"RKSD College Kaithal","o":"Sukhmeet Singh","r":390000,"t":"Degree College","c":"Large","a":"Old"},{"n":"GNAV Kurukshetra","o":"Sukhmeet Singh","r":340000,"t":"School","c":"Large","a":"New"},{"n":"MPPS School kkr","o":"Sukhmeet Singh","r":336000,"t":"School","c":"Large","a":"Old"},{"n":"Wisdom Kurukshetra","o":"Sukhmeet Singh","r":336000,"t":"School","c":"Large","a":"Old"},{"n":"Budha College Karnal","o":"Sukhmeet Singh","r":334000,"t":"College","c":"Large","a":"New"},{"n":"Scholar Rosary Rohtak","o":"Ankush Rana","r":324000,"t":"School","c":"Large","a":"Old"},{"n":"Tulsi College Ambala","o":"Sukhmeet Singh","r":324000,"t":"College","c":"Large","a":"Old"},{"n":"IEC College Noida","o":"Amit Kumar","r":312500,"t":"College","c":"Medium","a":"New"},{"n":"Tagore Group","o":"Sultan Malik","r":310000,"t":"School","c":"Large","a":"Old"},{"n":"Aravali Group Faridabad","o":"Kashish Goel","r":309000,"t":"College","c":"Medium","a":"New"},{"n":"Tagore+Wisdom Pehowa","o":"Sukhmeet Singh","r":300000,"t":"School","c":"Large","a":"New"},{"n":"Sir Chotu Ram","o":"Kashish Goel","r":295176,"t":"School","c":"Large","a":"Old"},{"n":"HIMT Group Noida","o":"Amit Kumar","r":291200,"t":"College","c":"Large","a":"Old"},{"n":"IAMR Group","o":"Amit Kumar","r":284407,"t":"College","c":"Large","a":"Old"},{"n":"Masonic Public","o":"Amit Kumar","r":279000,"t":"School","c":"Large","a":"Old"},{"n":"GITM Gurugram","o":"Sultan Malik","r":268200,"t":"College","c":"Large","a":"Old"},{"n":"Gurukul KKR","o":"Mansi Rana","r":262000,"t":"School","c":"Large","a":"Old"},{"n":"Shri Mahavir Jain School","o":"Kashish Goel","r":240000,"t":"School","c":"Medium","a":"Old"},{"n":"Shah Satnam Sirsa","o":"Sukhmeet Singh","r":225000,"t":"School","c":"Large","a":"Old"},{"n":"Genesis School Karnal","o":"Sukhmeet Singh","r":219000,"t":"School","c":"Large","a":"New"},{"n":"MAIMT Ynr","o":"Mansi Rana","r":215000,"t":"College","c":"Medium","a":"New"},{"n":"BM Group of Institutions","o":"Kashish Goel","r":215000,"t":"College","c":"Medium","a":"New"},{"n":"Mukand JMIETI","o":"Kashish Goel","r":204000,"t":"College","c":"Large","a":"Old"},{"n":"Mukand JMIT","o":"Kashish Goel","r":204000,"t":"College","c":"Large","a":"Old"},{"n":"Mukand MLNC","o":"Mansi Rana","r":204000,"t":"Degree College","c":"Large","a":"Old"},{"n":"Mukand Radaur Schools","o":"Sukhmeet Singh","r":204000,"t":"School","c":"Large","a":"Old"},{"n":"Mukand SJPP","o":"Kashish Goel","r":204000,"t":"College","c":"Large","a":"Old"},{"n":"Mukand TIMT","o":"Mansi Rana","r":204000,"t":"College","c":"Large","a":"Old"},{"n":"Mukand VMLG","o":"Sukhmeet Singh","r":204000,"t":"Degree College","c":"Large","a":"Old"},{"n":"Shah Satnam Non Sirsa","o":"Kashish Goel","r":200000,"t":"School","c":"Large","a":"Old"},{"n":"Linagaya's Vidyapeeth","o":"Ankush Rana","r":200000,"t":"University","c":"Medium","a":"New"},{"n":"Lal Bahadur Shastri Bilaspur","o":"Mansi Rana","r":194400,"t":"College","c":"Medium","a":"Old"},{"n":"MRRA Kharindwa","o":"Sukhmeet Singh","r":180000,"t":"School","c":"Medium","a":"New"},{"n":"Milestone Kaithal","o":"Sultan Malik","r":180000,"t":"School","c":"Medium","a":"New"},{"n":"Mukand Analytics","o":"Mansi Rana","r":175000,"t":"","c":"Large","a":"Old"},{"n":"Rishikul World Academy","o":"Amit Kumar","r":174000,"t":"School","c":"Medium","a":"Old"},{"n":"Vishvas Public School","o":"Sukhmeet Singh","r":171072,"t":"School","c":"Medium","a":"Old"},{"n":"GVM Girls College Sonipat","o":"Kashish Goel","r":170000,"t":"Degree College","c":"Medium","a":"Old"},{"n":"IB College Panipat","o":"Kashish Goel","r":168000,"t":"Degree College","c":"Medium","a":"Old"},{"n":"Rukmani AKMV","o":"Kashish Goel","r":162000,"t":"Degree College","c":"Large","a":"Old"},{"n":"SA Jain (PG) College + AIMT","o":"Kashish Goel","r":160000,"t":"College","c":"Medium","a":"Old"},{"n":"SD College Panipat","o":"Kashish Goel","r":158898,"t":"Degree College","c":"Medium","a":"Old"},{"n":"SKS","o":"Sukhmeet Singh","r":150000,"t":"School","c":"Medium","a":"Old"},{"n":"Golden Star","o":"Sultan Malik","r":150000,"t":"School","c":"","a":"New"},{"n":"OPS Ambala","o":"Kashish Goel","r":142800,"t":"School","c":"Medium","a":"Old"},{"n":"DAV College Ambala","o":"Mansi Rana","r":137500,"t":"Degree College","c":"Medium","a":"Old"},{"n":"Maharaja Agrasen Adarsh","o":"Amit Kumar","r":135000,"t":"School","c":"Medium","a":"Old"},{"n":"SD Modern Hansi","o":"Ankush Rana","r":130200,"t":"School","c":"Medium","a":"Old"},{"n":"GNKC Karnal","o":"Mansi Rana","r":130000,"t":"Degree College","c":"Medium","a":"Old"},{"n":"UARSchool Gharaunda","o":"Ankush Rana","r":130000,"t":"School","c":"Small","a":"Old"},{"n":"Nirmal Public Kalayat","o":"Sukhmeet Singh","r":130000,"t":"School","c":"Small","a":"New"},{"n":"DAV Girls Yamuna Nagar","o":"Ankush Rana","r":127119,"t":"Degree College","c":"Medium","a":"Old"},{"n":"Sahara Group","o":"Sukhmeet Singh","r":124894,"t":"School","c":"Small","a":"Old"},{"n":"Cambridge World School","o":"Sultan Malik","r":122400,"t":"School","c":"Medium","a":"Old"},{"n":"Springdales, Ismailabad","o":"Sultan Malik","r":120000,"t":"School","c":"Small","a":"Old"},{"n":"Satya Pharmacy Rohtak","o":"Sukhmeet Singh","r":120000,"t":"Degree College","c":"Small","a":"New"},{"n":"OPS Karnal","o":"Kashish Goel","r":117000,"t":"School","c":"Medium","a":"Old"},{"n":"Cambridge Delhi","o":"Amit Kumar","r":116000,"t":"School","c":"Medium","a":"Old"},{"n":"GGDSD College Palwal","o":"Ankush Rana","r":116000,"t":"Degree College","c":"Medium","a":"New"},{"n":"Mukand MLPS","o":"Sukhmeet Singh","r":115000,"t":"School","c":"Large","a":"Old"},{"n":"Puneet EDPS","o":"Sukhmeet Singh","r":113000,"t":"School","c":"Medium","a":"Old"},{"n":"Kalp Vriksh School Nissing","o":"Mansi Rana","r":110000,"t":"School","c":"Medium","a":"Old"},{"n":"St Joseph Ambala","o":"Sukhmeet Singh","r":109831,"t":"School","c":"Small","a":"Old"},{"n":"PKG College","o":"Kashish Goel","r":108000,"t":"College","c":"Medium","a":"Old"},{"n":"TSUS Rohtak","o":"Sultan Malik","r":108000,"t":"School","c":"Small","a":"Old"},{"n":"Manish Papneja","o":"Sukhmeet Singh","r":108000,"t":"School","c":"Medium","a":"New"},{"n":"Shemford Futuristic School","o":"Kashish Goel","r":101695,"t":"School","c":"Medium","a":"Old"},{"n":"Dhanna Bhagat School","o":"Mansi Rana","r":100000,"t":"School","c":"Medium","a":"Old"},{"n":"Greenfield Public School","o":"Kashish Goel","r":100000,"t":"School","c":"Medium","a":"Old"},{"n":"IBMR Business School","o":"Amit Kumar","r":100000,"t":"College","c":"Small","a":"Old"},{"n":"Satluj Shahbad","o":"Sukhmeet Singh","r":100000,"t":"School","c":"Small","a":"New"},{"n":"Manav Mangal School Faridabad","o":"Amit Kumar","r":97000,"t":"School","c":"Small","a":"Old"},{"n":"SD Kanya Ambala","o":"Mansi Rana","r":96000,"t":"School","c":"Small","a":"Old"},{"n":"Vidya Public School","o":"Amit Kumar","r":96000,"t":"School","c":"Medium","a":"Old"},{"n":"DN College","o":"Mansi Rana","r":94710,"t":"Degree College","c":"Medium","a":"Old"},{"n":"DAV College Cheeka","o":"Sultan Malik","r":93220,"t":"Degree College","c":"Small","a":"Old"},{"n":"DAV College Pehowa","o":"Mansi Rana","r":93220,"t":"Degree College","c":"Small","a":"Old"},{"n":"Rukmani MRRA Barara Road","o":"Sukhmeet Singh","r":92400,"t":"School","c":"Large","a":"Old"},{"n":"Rukmani BMAS","o":"Sukhmeet Singh","r":91800,"t":"School","c":"Large","a":"Old"},{"n":"Ideal College","o":"Ankush Rana","r":90000,"t":"College","c":"Medium","a":"Old"},{"n":"Little Angel, Karnal","o":"Sukhmeet Singh","r":90000,"t":"School","c":"Small","a":"Old"},{"n":"SIS Academy","o":"Sukhmeet Singh","r":84000,"t":"School","c":"Small","a":"Old"},{"n":"BPR College","o":"Sukhmeet Singh","r":80500,"t":"Degree College","c":"Small","a":"Old"},{"n":"Bharat College of Law","o":"Sukhmeet Singh","r":80000,"t":"Degree College","c":"Small","a":"Old"},{"n":"Bharat Public School","o":"Sukhmeet Singh","r":80000,"t":"School","c":"Small","a":"Old"},{"n":"GNKITM-TC","o":"Mansi Rana","r":80000,"t":"College","c":"Large","a":"Old"},{"n":"Vedashree School","o":"Kashish Goel","r":80000,"t":"School","c":"Medium","a":"Old"},{"n":"Shiv Shakti School","o":"Sukhmeet Singh","r":79200,"t":"School","c":"Small","a":"Old"},{"n":"Puneet Public School, Shahdra","o":"Sultan Malik","r":78000,"t":"School","c":"Small","a":"Old"},{"n":"IG College Ladwa","o":"Kashish Goel","r":76271,"t":"Degree College","c":"Small","a":"Old"},{"n":"Swastik Bal Vikas Panipat","o":"Kashish Goel","r":75600,"t":"School","c":"Small","a":"Old"},{"n":"Oxford","o":"Amit Kumar","r":75000,"t":"School","c":"Small","a":"Old"},{"n":"Partap Public School Kunjpura","o":"Amit Kumar","r":75000,"t":"School","c":"Small","a":"Old"},{"n":"SPS Convent School","o":"Ankush Rana","r":75000,"t":"School","c":"Small","a":"Old"},{"n":"Saraswati Sansthan S7","o":"Sukhmeet Singh","r":72000,"t":"School","c":"Small","a":"Old"},{"n":"Vishvas, Hisar","o":"Sukhmeet Singh","r":71940,"t":"School","c":"Small","a":"Old"},{"n":"OPS Int","o":"Kashish Goel","r":71400,"t":"School","c":"Medium","a":"Old"},{"n":"Cambridge Field Global Panipat","o":"Sultan Malik","r":70632,"t":"School","c":"Small","a":"Old"},{"n":"Akshara","o":"Sukhmeet Singh","r":70000,"t":"School","c":"Small","a":"Old"},{"n":"Mukand Swaraj Damla","o":"Kashish Goel","r":70000,"t":"School","c":"Small","a":"Old"},{"n":"Surya Model Uttam Nagar","o":"Amit Kumar","r":70000,"t":"School","c":"Medium","a":"New"},{"n":"DPS YNR CRM","o":"","r":67797,"t":"School","c":"Medium","a":"Old"},{"n":"BR International","o":"Sultan Malik","r":65000,"t":"School","c":"Small","a":"Old"},{"n":"Cecil City & Cantt","o":"Amit Kumar","r":65000,"t":"School","c":"Small","a":"Old"},{"n":"Lord Krishna Public School Ugala","o":"Sukhmeet Singh","r":61728,"t":"School","c":"Small","a":"Old"},{"n":"Aryakulam International Munak","o":"Ankush Rana","r":60000,"t":"School","c":"Small","a":"Old"},{"n":"DIMT Law College","o":"Ankush Rana","r":60000,"t":"Degree College","c":"Small","a":"Old"},{"n":"Mukand MPS","o":"Kashish Goel","r":60000,"t":"School","c":"Large","a":"Old"},{"n":"Mukand Sushila","o":"Sukhmeet Singh","r":60000,"t":"School","c":"Small","a":"Old"},{"n":"SD APIIT","o":"Sukhmeet Singh","r":60000,"t":"Degree College","c":"Small","a":"Old"},{"n":"SD International","o":"Sukhmeet Singh","r":60000,"t":"School","c":"Small","a":"Old"},{"n":"Tallentian Officers Academy","o":"Sultan Malik","r":60000,"t":"School","c":"Small","a":"Old"},{"n":"Imperial Public School Delhi","o":"Amit Kumar","r":59460,"t":"School","c":"Small","a":"Old"},{"n":"Geeta Niketan Vidyapeeth","o":"Sukhmeet Singh","r":54000,"t":"School","c":"Small","a":"Old"},{"n":"GGSCOP Ynr","o":"Mansi Rana","r":50000,"t":"College","c":"Large","a":"Old"},{"n":"Guru Nanak Kurukshetra","o":"Amit Kumar","r":50000,"t":"School","c":"Small","a":"Old"},{"n":"Mukand Shyama Public School","o":"Sukhmeet Singh","r":50000,"t":"School","c":"Medium","a":"Old"},{"n":"Muni International Delhi","o":"Amit Kumar","r":50000,"t":"School","c":"Small","a":"Old"},{"n":"Navyug Kurukshetra","o":"Amit Kumar","r":50000,"t":"School","c":"Small","a":"Old"},{"n":"Pooja Modern Kurukshetra","o":"Sukhmeet Singh","r":50000,"t":"School","c":"Small","a":"Old"},{"n":"Prachya School","o":"Sukhmeet Singh","r":50000,"t":"School","c":"Small","a":"Old"},{"n":"Rpdav","o":"Sukhmeet Singh","r":50000,"t":"School","c":"Small","a":"Old"},{"n":"Excel International Gohana","o":"Ankush Rana","r":48000,"t":"School","c":"Small","a":"New"},{"n":"IsharJyot Degree College","o":"Sukhmeet Singh","r":45000,"t":"Degree College","c":"Small","a":"Old"},{"n":"Mavericks International KKR","o":"Sultan Malik","r":45000,"t":"School","c":"Small","a":"Old"},{"n":"Rational World School","o":"Sultan Malik","r":45000,"t":"School","c":"Small","a":"Old"},{"n":"Silver Spot Covent","o":"Sukhmeet Singh","r":35000,"t":"School","c":"Small","a":"Old"},{"n":"LNT B.Ed College","o":"Sukhmeet Singh","r":30000,"t":"Degree College","c":"Small","a":"Old"},{"n":"Vidya Training Institute","o":"Amit Kumar","r":28800,"t":"School","c":"Medium","a":"Old"},{"n":"Baba Shravan Nath","o":"Sukhmeet Singh","r":25000,"t":"School","c":"Small","a":"Old"},{"n":"Shaheed Bhagat Singh","o":"Sukhmeet Singh","r":25000,"t":"School","c":"Small","a":"Old"},{"n":"Hindu Group of Colleges Sonipat","o":"","r":0,"t":"","c":"Large","a":"Old"},{"n":"Hindu Group of Schools Sonipat","o":"","r":0,"t":"","c":"Large","a":"Old"},{"n":"KM University Mathura","o":"Sultan Malik","r":0,"t":"University","c":"Large","a":"Old"},{"n":"SD Society Panipat","o":"","r":null,"t":"School","c":"Small","a":"Old"}];
+const CLIENTS_FALLBACK = [{"n":"PIET College","o":"Mansi Rana","r":1368000,"t":"University","c":"Large","a":"Old"},{"n":"SNCF Schools","o":"Amit Kumar","r":1296000,"t":"School","c":"Large","a":"Old"},{"n":"Sanskaram University","o":"Sultan Malik","r":1050000,"t":"University","c":"Large","a":"New"},{"n":"Haridwar University","o":"Mansi Rana","r":787500,"t":"University","c":"Large","a":"New"},{"n":"MVN University Palwal","o":"Sultan Malik","r":720000,"t":"University","c":"Large","a":"New"},{"n":"Hindu College","o":"Kashish Goel","r":610000,"t":"College","c":"","a":"New"},{"n":"Hindu School","o":"Sukhmeet Singh","r":610000,"t":"School","c":"","a":"New"},{"n":"SDGI Global University","o":"Ankush Rana","r":480000,"t":"University","c":"Large","a":"Old"},{"n":"Arya College Panipat","o":"Sultan Malik","r":468000,"t":"Degree College","c":"Large","a":"Old"},{"n":"DAV CC Faridabad","o":"Ankush Rana","r":457627,"t":"Degree College","c":"Large","a":"New"},{"n":"Pooranmurti","o":"Mansi Rana","r":440000,"t":"College","c":"","a":"New"},{"n":"GNKC","o":"Mansi Rana","r":400000,"t":"Degree College","c":"Large","a":"Old"},{"n":"Aggarwal College Faridabad","o":"Ankush Rana","r":400000,"t":"Degree College","c":"Large","a":"New"},{"n":"RKSD College Kaithal","o":"Sukhmeet Singh","r":390000,"t":"Degree College","c":"Large","a":"Old"},{"n":"GNAV Kurukshetra","o":"Sukhmeet Singh","r":340000,"t":"School","c":"Large","a":"New"},{"n":"MPPS School kkr","o":"Sukhmeet Singh","r":336000,"t":"School","c":"Large","a":"Old"},{"n":"Wisdom Kurukshetra","o":"Sukhmeet Singh","r":336000,"t":"School","c":"Large","a":"Old"},{"n":"Budha College Karnal","o":"Sukhmeet Singh","r":334000,"t":"College","c":"Large","a":"New"},{"n":"Scholar Rosary Rohtak","o":"Ankush Rana","r":324000,"t":"School","c":"Large","a":"Old"},{"n":"Tulsi College Ambala","o":"Sukhmeet Singh","r":324000,"t":"College","c":"Large","a":"Old"},{"n":"IEC College Noida","o":"Amit Kumar","r":312500,"t":"College","c":"Medium","a":"New"},{"n":"Tagore Group","o":"Sultan Malik","r":310000,"t":"School","c":"Large","a":"Old"},{"n":"Aravali Group Faridabad","o":"Kashish Goel","r":309000,"t":"College","c":"Medium","a":"New"},{"n":"Tagore+Wisdom Pehowa","o":"Sukhmeet Singh","r":300000,"t":"School","c":"Large","a":"New"},{"n":"Sir Chotu Ram","o":"Kashish Goel","r":295176,"t":"School","c":"Large","a":"Old"},{"n":"HIMT Group Noida","o":"Amit Kumar","r":291200,"t":"College","c":"Large","a":"Old"},{"n":"IAMR Group","o":"Amit Kumar","r":284407,"t":"College","c":"Large","a":"Old"},{"n":"Masonic Public","o":"Amit Kumar","r":279000,"t":"School","c":"Large","a":"Old"},{"n":"Dalmia Group","o":"Ankush Rana","r":275000,"t":"School","c":"","a":"New"},{"n":"GITM Gurugram","o":"Sultan Malik","r":268200,"t":"College","c":"Large","a":"Old"},{"n":"Gurukul KKR","o":"Mansi Rana","r":262000,"t":"School","c":"Large","a":"Old"},{"n":"Shri Mahavir Jain School","o":"Kashish Goel","r":240000,"t":"School","c":"Medium","a":"Old"},{"n":"Shah Satnam Sirsa","o":"Sukhmeet Singh","r":225000,"t":"School","c":"Large","a":"Old"},{"n":"Genesis School Karnal","o":"Sukhmeet Singh","r":219000,"t":"School","c":"Large","a":"New"},{"n":"MAIMT Ynr","o":"Mansi Rana","r":215000,"t":"College","c":"Medium","a":"New"},{"n":"BM Group of Institutions","o":"Kashish Goel","r":215000,"t":"College","c":"Medium","a":"New"},{"n":"Mukand JMIETI","o":"Kashish Goel","r":204000,"t":"College","c":"Large","a":"Old"},{"n":"Mukand JMIT","o":"Kashish Goel","r":204000,"t":"College","c":"Large","a":"Old"},{"n":"Mukand MLNC","o":"Mansi Rana","r":204000,"t":"Degree College","c":"Large","a":"Old"},{"n":"Mukand Radaur Schools","o":"Sukhmeet Singh","r":204000,"t":"School","c":"Large","a":"Old"},{"n":"Mukand SJPP","o":"Kashish Goel","r":204000,"t":"College","c":"Large","a":"Old"},{"n":"Mukand TIMT","o":"Mansi Rana","r":204000,"t":"College","c":"Large","a":"Old"},{"n":"Mukand VMLG","o":"Sukhmeet Singh","r":204000,"t":"Degree College","c":"Large","a":"Old"},{"n":"Shah Satnam Non Sirsa","o":"Kashish Goel","r":200000,"t":"School","c":"Large","a":"Old"},{"n":"Linagaya's Vidyapeeth","o":"Ankush Rana","r":200000,"t":"University","c":"Medium","a":"New"},{"n":"Lal Bahadur Shastri Bilaspur","o":"Mansi Rana","r":194400,"t":"College","c":"Medium","a":"Old"},{"n":"MRRA Kharindwa","o":"Sukhmeet Singh","r":180000,"t":"School","c":"Medium","a":"New"},{"n":"Milestone Kaithal","o":"Sultan Malik","r":180000,"t":"School","c":"Medium","a":"New"},{"n":"Mukand Analytics","o":"Mansi Rana","r":175000,"t":"","c":"Large","a":"Old"},{"n":"Rishikul World Academy","o":"Amit Kumar","r":174000,"t":"School","c":"Medium","a":"Old"},{"n":"Vishvas Public School","o":"Sukhmeet Singh","r":171072,"t":"School","c":"Medium","a":"Old"},{"n":"GVM Girls College Sonipat","o":"Kashish Goel","r":170000,"t":"Degree College","c":"Medium","a":"Old"},{"n":"IB College Panipat","o":"Kashish Goel","r":168000,"t":"Degree College","c":"Medium","a":"Old"},{"n":"Rukmani AKMV","o":"Kashish Goel","r":162000,"t":"Degree College","c":"Large","a":"Old"},{"n":"SA Jain (PG) College + AIMT","o":"Kashish Goel","r":160000,"t":"College","c":"Medium","a":"Old"},{"n":"SD College Panipat","o":"Kashish Goel","r":158898,"t":"Degree College","c":"Medium","a":"Old"},{"n":"SKS","o":"Sukhmeet Singh","r":150000,"t":"School","c":"Medium","a":"Old"},{"n":"Golden Star","o":"Sultan Malik","r":150000,"t":"School","c":"","a":"New"},{"n":"OPS Ambala","o":"Kashish Goel","r":142800,"t":"School","c":"Medium","a":"Old"},{"n":"DAV College Ambala","o":"Mansi Rana","r":137500,"t":"Degree College","c":"Medium","a":"Old"},{"n":"Maharaja Agrasen Adarsh","o":"Amit Kumar","r":135000,"t":"School","c":"Medium","a":"Old"},{"n":"SD Modern Hansi","o":"Ankush Rana","r":130200,"t":"School","c":"Medium","a":"Old"},{"n":"GNKC Karnal","o":"Mansi Rana","r":130000,"t":"Degree College","c":"Medium","a":"Old"},{"n":"UARSchool Gharaunda","o":"Ankush Rana","r":130000,"t":"School","c":"Small","a":"Old"},{"n":"Nirmal Public Kalayat","o":"Sukhmeet Singh","r":130000,"t":"School","c":"Small","a":"New"},{"n":"DAV Girls Yamuna Nagar","o":"Ankush Rana","r":127119,"t":"Degree College","c":"Medium","a":"Old"},{"n":"Sahara Group","o":"Sukhmeet Singh","r":124894,"t":"School","c":"Small","a":"Old"},{"n":"Cambridge World School","o":"Sultan Malik","r":122400,"t":"School","c":"Medium","a":"Old"},{"n":"Springdales, Ismailabad","o":"Sultan Malik","r":120000,"t":"School","c":"Small","a":"Old"},{"n":"Satya Pharmacy Rohtak","o":"Sukhmeet Singh","r":120000,"t":"Degree College","c":"Small","a":"New"},{"n":"OPS Karnal","o":"Kashish Goel","r":117000,"t":"School","c":"Medium","a":"Old"},{"n":"Cambridge Delhi","o":"Amit Kumar","r":116000,"t":"School","c":"Medium","a":"Old"},{"n":"GGDSD College Palwal","o":"Ankush Rana","r":116000,"t":"Degree College","c":"Medium","a":"New"},{"n":"Mukand MLPS","o":"Sukhmeet Singh","r":115000,"t":"School","c":"Large","a":"Old"},{"n":"Puneet EDPS","o":"Sukhmeet Singh","r":113000,"t":"School","c":"Medium","a":"Old"},{"n":"Kalp Vriksh School Nissing","o":"Mansi Rana","r":110000,"t":"School","c":"Medium","a":"Old"},{"n":"St Joseph Ambala","o":"Sukhmeet Singh","r":109831,"t":"School","c":"Small","a":"Old"},{"n":"PKG College","o":"Kashish Goel","r":108000,"t":"College","c":"Medium","a":"Old"},{"n":"TSUS Rohtak","o":"Sultan Malik","r":108000,"t":"School","c":"Small","a":"Old"},{"n":"Manish Papneja","o":"Sukhmeet Singh","r":108000,"t":"School","c":"Medium","a":"New"},{"n":"Shemford Futuristic School","o":"Kashish Goel","r":101695,"t":"School","c":"Medium","a":"Old"},{"n":"Dhanna Bhagat School","o":"Mansi Rana","r":100000,"t":"School","c":"Medium","a":"Old"},{"n":"Greenfield Public School","o":"Kashish Goel","r":100000,"t":"School","c":"Medium","a":"Old"},{"n":"IBMR Business School","o":"Amit Kumar","r":100000,"t":"College","c":"Small","a":"Old"},{"n":"Satluj Shahbad","o":"Sukhmeet Singh","r":100000,"t":"School","c":"Small","a":"New"},{"n":"Manav Mangal School Faridabad","o":"Amit Kumar","r":97000,"t":"School","c":"Small","a":"Old"},{"n":"SD Kanya Ambala","o":"Mansi Rana","r":96000,"t":"School","c":"Small","a":"Old"},{"n":"Vidya Public School","o":"Amit Kumar","r":96000,"t":"School","c":"Medium","a":"Old"},{"n":"DN College","o":"Mansi Rana","r":94710,"t":"Degree College","c":"Medium","a":"Old"},{"n":"DAV College Cheeka","o":"Sultan Malik","r":93220,"t":"Degree College","c":"Small","a":"Old"},{"n":"DAV College Pehowa","o":"Mansi Rana","r":93220,"t":"Degree College","c":"Small","a":"Old"},{"n":"Rukmani MRRA Barara Road","o":"Sukhmeet Singh","r":92400,"t":"School","c":"Large","a":"Old"},{"n":"Rukmani BMAS","o":"Sukhmeet Singh","r":91800,"t":"School","c":"Large","a":"Old"},{"n":"Ideal College","o":"Ankush Rana","r":90000,"t":"College","c":"Medium","a":"Old"},{"n":"Little Angel, Karnal","o":"Sukhmeet Singh","r":90000,"t":"School","c":"Small","a":"Old"},{"n":"SIS Academy","o":"Sukhmeet Singh","r":84000,"t":"School","c":"Small","a":"Old"},{"n":"BPR College","o":"Sukhmeet Singh","r":80500,"t":"Degree College","c":"Small","a":"Old"},{"n":"Bharat College of Law","o":"Sukhmeet Singh","r":80000,"t":"Degree College","c":"Small","a":"Old"},{"n":"Bharat Public School","o":"Sukhmeet Singh","r":80000,"t":"School","c":"Small","a":"Old"},{"n":"GNKITM-TC","o":"Mansi Rana","r":80000,"t":"College","c":"Large","a":"Old"},{"n":"Vedashree School","o":"Kashish Goel","r":80000,"t":"School","c":"Medium","a":"Old"},{"n":"Shiv Shakti School","o":"Sukhmeet Singh","r":79200,"t":"School","c":"Small","a":"Old"},{"n":"Puneet Public School, Shahdra","o":"Sultan Malik","r":78000,"t":"School","c":"Small","a":"Old"},{"n":"IG College Ladwa","o":"Kashish Goel","r":76271,"t":"Degree College","c":"Small","a":"Old"},{"n":"Swastik Bal Vikas Panipat","o":"Kashish Goel","r":75600,"t":"School","c":"Small","a":"Old"},{"n":"Oxford","o":"Amit Kumar","r":75000,"t":"School","c":"Small","a":"Old"},{"n":"Partap Public School Kunjpura","o":"Amit Kumar","r":75000,"t":"School","c":"Small","a":"Old"},{"n":"SPS Convent School","o":"Ankush Rana","r":75000,"t":"School","c":"Small","a":"Old"},{"n":"Saraswati Sansthan S7","o":"Sukhmeet Singh","r":72000,"t":"School","c":"Small","a":"Old"},{"n":"Vishvas, Hisar","o":"Sukhmeet Singh","r":71940,"t":"School","c":"Small","a":"Old"},{"n":"OPS Int","o":"Kashish Goel","r":71400,"t":"School","c":"Medium","a":"Old"},{"n":"Cambridge Field Global Panipat","o":"Sultan Malik","r":70632,"t":"School","c":"Small","a":"Old"},{"n":"Akshara","o":"Sukhmeet Singh","r":70000,"t":"School","c":"Small","a":"Old"},{"n":"Mukand Swaraj Damla","o":"Kashish Goel","r":70000,"t":"School","c":"Small","a":"Old"},{"n":"Surya Model Uttam Nagar","o":"Amit Kumar","r":70000,"t":"School","c":"Medium","a":"New"},{"n":"DPS YNR CRM","o":"","r":67797,"t":"School","c":"Medium","a":"Old"},{"n":"BR International","o":"Sultan Malik","r":65000,"t":"School","c":"Small","a":"Old"},{"n":"Cecil City & Cantt","o":"Amit Kumar","r":65000,"t":"School","c":"Small","a":"Old"},{"n":"Lord Krishna Public School Ugala","o":"Sukhmeet Singh","r":61728,"t":"School","c":"Small","a":"Old"},{"n":"Aryakulam International Munak","o":"Ankush Rana","r":60000,"t":"School","c":"Small","a":"Old"},{"n":"DIMT Law College","o":"Ankush Rana","r":60000,"t":"Degree College","c":"Small","a":"Old"},{"n":"Mukand MPS","o":"Kashish Goel","r":60000,"t":"School","c":"Large","a":"Old"},{"n":"Mukand Sushila","o":"Sukhmeet Singh","r":60000,"t":"School","c":"Small","a":"Old"},{"n":"SD APIIT","o":"Sukhmeet Singh","r":60000,"t":"Degree College","c":"Small","a":"Old"},{"n":"SD International","o":"Sukhmeet Singh","r":60000,"t":"School","c":"Small","a":"Old"},{"n":"Tallentian Officers Academy","o":"Sultan Malik","r":60000,"t":"School","c":"Small","a":"Old"},{"n":"Imperial Public School Delhi","o":"Amit Kumar","r":59460,"t":"School","c":"Small","a":"Old"},{"n":"Geeta Niketan Vidyapeeth","o":"Sukhmeet Singh","r":54000,"t":"School","c":"Small","a":"Old"},{"n":"GGSCOP Ynr","o":"Mansi Rana","r":50000,"t":"College","c":"Large","a":"Old"},{"n":"Guru Nanak Kurukshetra","o":"Amit Kumar","r":50000,"t":"School","c":"Small","a":"Old"},{"n":"Mukand Shyama Public School","o":"Sukhmeet Singh","r":50000,"t":"School","c":"Medium","a":"Old"},{"n":"Muni International Delhi","o":"Amit Kumar","r":50000,"t":"School","c":"Small","a":"Old"},{"n":"Navyug Kurukshetra","o":"Amit Kumar","r":50000,"t":"School","c":"Small","a":"Old"},{"n":"Pooja Modern Kurukshetra","o":"Sukhmeet Singh","r":50000,"t":"School","c":"Small","a":"Old"},{"n":"Prachya School","o":"Sukhmeet Singh","r":50000,"t":"School","c":"Small","a":"Old"},{"n":"Rpdav","o":"Sukhmeet Singh","r":50000,"t":"School","c":"Small","a":"Old"},{"n":"Excel International Gohana","o":"Ankush Rana","r":48000,"t":"School","c":"Small","a":"New"},{"n":"IsharJyot Degree College","o":"Sukhmeet Singh","r":45000,"t":"Degree College","c":"Small","a":"Old"},{"n":"Mavericks International KKR","o":"Sultan Malik","r":45000,"t":"School","c":"Small","a":"Old"},{"n":"Rational World School","o":"Sultan Malik","r":45000,"t":"School","c":"Small","a":"Old"},{"n":"Silver Spot Covent","o":"Sukhmeet Singh","r":35000,"t":"School","c":"Small","a":"Old"},{"n":"LNT B.Ed College","o":"Sukhmeet Singh","r":30000,"t":"Degree College","c":"Small","a":"Old"},{"n":"Vidya Training Institute","o":"Amit Kumar","r":28800,"t":"School","c":"Medium","a":"Old"},{"n":"Baba Shravan Nath","o":"Sukhmeet Singh","r":25000,"t":"School","c":"Small","a":"Old"},{"n":"Shaheed Bhagat Singh","o":"Sukhmeet Singh","r":25000,"t":"School","c":"Small","a":"Old"},{"n":"Hindu Group of Colleges Sonipat","o":"","r":0,"t":"","c":"Large","a":"Old"},{"n":"Hindu Group of Schools Sonipat","o":"","r":0,"t":"","c":"Large","a":"Old"},{"n":"KM University Mathura","o":"Sultan Malik","r":0,"t":"University","c":"Large","a":"Old"},{"n":"SD Society Panipat","o":"","r":null,"t":"School","c":"Small","a":"Old"}];
 
 /* Live values. CLIENTS is rebound by load() from the published CSV; until that
    lands — and after it, if it failed — these hold the compiled-in snapshot, and
@@ -2259,6 +2272,144 @@ function escForTeam(lead){
   return out;
 }
 
+/* ---------------- implementation ----------------
+   An Asana portfolio report, one row per implementation project rather than per
+   client — added 16 Aug 2026. The header sits under two banner rows ("Live
+   source data", then a grouped-column header naming the sections), so the scan
+   below looks for the real one by its columns rather than assuming row 0, the
+   same way parseExport does for the trackers. */
+function parseImplementation(text){
+  const rows = splitRows(text, ',');
+  let head = -1, ix = {};
+  for (let i = 0; i < Math.min(rows.length, 10); i++){
+    const h = rows[i].map(x => String(x).trim().toLowerCase());
+    const owner = h.indexOf('owner'), overdue = h.indexOf('overdue'), due = h.indexOf('due date');
+    if (owner > -1 && overdue > -1 && due > -1){
+      head = i;
+      ix = {name: h.indexOf('name'), owner, due, overdue,
+            all: h.indexOf('all tasks'), complete: h.indexOf('complete'),
+            incomplete: h.indexOf('incomplete')};
+      break;
+    }
+  }
+  if (head < 0) throw new Error(
+    'Could not find a header row with "Owner", "Overdue" and "Due Date" in the sheet.');
+
+  const out = [];
+  for (let i = head + 1; i < rows.length; i++){
+    const r = rows[i]; if (!r) continue;
+    const name = String(r[ix.name] || '').trim();
+    if (!name) continue;
+    out.push({
+      name, owner: String(r[ix.owner] || '').trim(), due: normDate(r[ix.due]),
+      all: Number(r[ix.all]) || 0, complete: Number(r[ix.complete]) || 0,
+      incomplete: Number(r[ix.incomplete]) || 0, overdue: Number(r[ix.overdue]) || 0
+    });
+  }
+  if (!out.length) throw new Error('Found the header, but no rows had a project name.');
+  return out;
+}
+
+/* Matching a project name to the client book, exactly the same shape as
+   ESC_ALIAS just above and for the same reason — the two are typed into
+   different systems by different people, so exact equality and safe prefix
+   containment catch most of it, and IMPL_ALIAS is where the rest gets
+   resolved on evidence rather than guessed at.
+
+   This portfolio's own OWNER column is deliberately never used to decide whose
+   card a project lands on — same rule adoption already learned the hard way
+   (README, "The book decides who owns a client"): OWNER here is whoever did
+   the Asana work, which drifts from who carries the account exactly the way an
+   assistant's tab did for module adoption. Attribution comes from the book's
+   Team column alone, so a project always lands on the same card its client's
+   revenue does. */
+const IMPL_ALIAS = {
+  /* Five branches of one group, one owner (Ankush Rana) throughout, and the
+     book carries them as a single row — real evidence, not a guess. */
+  'Dalmia Vidya Mandir, Dalmiapuram (Extramarks)': 'Dalmia Group',
+  'Dalmia Vidya Mandir, Kalyanpur (Extramarks)':   'Dalmia Group',
+  'Dalmia Vidya Mandir- Thangskai (Extramarks)':   'Dalmia Group',
+  'Dalmiya Vidya Mandir, Kadappa (Extramarks)':    'Dalmia Group',
+  'Dalmia Vidya Mandir, Rajgangpur (Extramarks)':  'Dalmia Group',
+
+  /* Plain spelling and abbreviation differences — same institution, evidenced
+     by the name itself, not by resemblance to something nearby. */
+  'Puran Murti Group':               'Pooranmurti',
+  'Milestone School Kaithal':        'Milestone Kaithal',
+  "Lingaya's Vidyapeeth University": "Linagaya's Vidyapeeth",
+  'MAIMT Yamunanagar':               'MAIMT Ynr',
+  'MRRA Sen. Sec. School, Kharindwa':'MRRA Kharindwa',
+  'The Genesis School':              'Genesis School Karnal',
+  'DPS Yamuna Nagar':                'DPS YNR CRM',
+  'NPS Kalayat':                     'Nirmal Public Kalayat',
+  'Satluj School Shahbad':           'Satluj Shahbad',
+  'BM Group Gurugram':               'BM Group of Institutions',
+
+  /* The "Hindu" group: fourteen Asana projects, two book rows ("Hindu College",
+     "Hindu School"), and three different Asana owners across them — there is no
+     single evidence-based row the way Dalmia has one. Split by the word the
+     project itself carries ("College" vs "School"/"Vidyalaya", a real signal,
+     not a resemblance guess) wherever the name has one. */
+  'Hindu Engineering College, Sonipat':  'Hindu College',
+  'Hindu Girls College':                 'Hindu College',
+  'Hindu Architecture College, Sonipat':  'Hindu College',
+  'Hindu Institute of Management (HIM)': 'Hindu College',   // "Institute of Management" reads as tertiary, not school
+  'Hindu Senior Secondary School':       'Hindu School',
+  'Hindu Malviya school':                'Hindu School',
+  'Hindu Kanya Vidyalaya':               'Hindu School',    // Vidyalaya
+  // 'SM Hindu', 'Hindu Vidyapeeth, Sonipat' and 'Hindu Global, Sonipat' carry
+  // no College/School word either way — left unmatched and named on the page
+  // rather than assigned a coin flip. 'Rhuchi School' sits beside these in the
+  // portfolio (same Asana owner) but its name has no "Hindu" in it at all and
+  // is not aliased here on that basis alone.
+};
+const iNorm = eNorm;   // same normaliser escalations already uses
+
+let IMPLEMENTATION = [], IMPL_BY_CLIENT = new Map(), IMPL_UNMATCHED = [], IMPL_ERROR = null;
+
+function buildImplementation(){
+  IMPL_BY_CLIENT = new Map(); IMPL_UNMATCHED = [];
+  const book = CLIENTS.map(c => c.n);
+  const byNorm = new Map(book.map(n => [iNorm(n), n]));
+  const aliasByNorm = new Map(
+    Object.entries(IMPL_ALIAS).map(([from, to]) => [iNorm(from), to]));
+
+  for (const [from, to] of Object.entries(IMPL_ALIAS))
+    if (!byNorm.has(iNorm(to)))
+      IMPL_UNMATCHED.push(`"${from}" is aliased to "${to}", which is not in the client book`);
+
+  for (const p of IMPLEMENTATION){
+    const alias = aliasByNorm.get(iNorm(p.name)) || p.name;
+    const k = iNorm(alias);
+    let hit = byNorm.get(k);
+    if (!hit){
+      const cands = book.filter(n => {
+        const nk = iNorm(n);
+        return nk.startsWith(k) || k.startsWith(nk);
+      });
+      if (cands.length === 1) hit = cands[0];
+    }
+    if (!hit){
+      if (!IMPL_UNMATCHED.includes(p.name)) IMPL_UNMATCHED.push(p.name);
+      continue;
+    }
+    IMPL_BY_CLIENT.set(hit, (IMPL_BY_CLIENT.get(hit) || []).concat(p));
+  }
+}
+const implFor = name => IMPL_BY_CLIENT.get(name) || [];
+
+/* Same shape as escForTeam: a project belongs to a client, a client to a lead. */
+function implForTeam(lead){
+  const out = [];
+  for (const c of CLIENTS){
+    if (c.o !== lead) continue;
+    const all = implFor(c.n);
+    if (all.length) out.push({client: c.n, projects: all,
+      overdue: all.filter(p => p.overdue > 0)});
+  }
+  return out;
+}
+
 /* ---------------- analysis ---------------- */
 function analyse(rows,from,to,joined){
   const days=range(from,to,true), dayset=new Set(days);
@@ -2482,8 +2633,9 @@ function meterRows(){
     const adopt = adoptForTeam(e.lead);
     const feed = feedForTeam(e.lead);
     const visits = visitsForTeam(e.lead, MONTHS);
+    const impl = implForTeam(e.lead);
     return {
-      ...e, revenue, target, esc, adopt, feed, visits,
+      ...e, revenue, target, esc, adopt, feed, visits, impl,
       escOpen: esc.filter(x => x.open.length),
       compliance: e.expected ? e.filed / e.expected : null,
       business: target ? revenue / target : 0
@@ -2527,6 +2679,7 @@ function howHtml(r){
   h += feedDetail(r);
   h += visitDetail(r);
   h += escDetail(r);
+  h += implDetail(r);
 
   if (!r.members.length) return h + `<p class="none">Nobody on this team has any expected days.</p>`;
 
@@ -2775,6 +2928,36 @@ function escDetail(r){
   return h;
 }
 
+/* The implementation projects behind the count on the card. Overdue ones
+   first and named with their due date and how far behind they are; the rest
+   summarised, because a project on schedule is context rather than a task —
+   same split as escDetail makes between open and resolved escalations. */
+function implDetail(r){
+  if (IMPL_ERROR || !r.impl.length) return '';
+  const pretty2 = d => {
+    if (!d) return 'no due date';
+    const [y, m, day] = d.split('-');
+    return `${Number(day)} ${MONTHS_SHORT[Number(m) - 1]}`;
+  };
+  let h = `<h5 data-sec="implementation">Implementation</h5>`;
+  const overdue = r.impl.filter(x => x.overdue.length);
+  if (overdue.length) h += `<div class="asks">`;
+  for (const x of overdue){
+    h += `<p class="who2">${esc(x.client)}</p>`;
+    for (const p of x.overdue)
+      h += `<p class="dates"><span>${esc(p.name)} — due ${esc(pretty2(p.due))}</span>` +
+           `<span>${p.overdue} overdue task${p.overdue === 1 ? '' : 's'}, ` +
+           `${p.incomplete} of ${p.all} still open</span></p>`;
+  }
+  if (overdue.length) h += `</div>`;
+  const onTrack = r.impl.reduce((n, x) => n + x.projects.length, 0) -
+    overdue.reduce((n, x) => n + x.overdue.length, 0);
+  if (onTrack)
+    h += `<p class="${overdue.length ? 'dates none' : 'none'}">${onTrack} ` +
+         `${onTrack === 1 ? 'project has' : 'projects have'} no overdue tasks.</p>`;
+  return h;
+}
+
 /* The feedback dial, shown working. The denominator matters more here than
    anywhere else on the page: an RM whose one happy client replied outscores an
    RM whose ten mixed ones did, and nothing about the dial itself says so. */
@@ -2899,6 +3082,37 @@ function escLine(r, info){
   return `<div class="escline hot"><span class="lbl">Escalations</span>${info || ''}` +
          `<span class="n">${open} open</span></div>` +
          `<p class="escwho">${esc(r.escOpen.map(x => x.client).join(', '))}</p>`;
+}
+
+/* Same shape as escLine, one card lower — but its own class rather than reused
+   .escline: a card-scoped querySelector('.escline') elsewhere in the suite
+   assumes escalations wording ("None open"), and this says "None overdue".
+   Sharing the class would make that query ambiguous about which row it found;
+   sharing the CSS instead (below) costs nothing and keeps every query exact.
+
+   Implementation is also "here is what needs attention right now", not a
+   score with a target. Overdue is counted in PROJECTS, not tasks — a project
+   seven tasks overdue and one two tasks overdue are both one red flag on this
+   card, and summing task counts across projects of very different sizes would
+   read as a severity it isn't. */
+function implLine(r, info){
+  if (IMPL_ERROR)
+    return `<div class="implline cool"><span class="lbl">Implementation</span>${info || ''}` +
+           `<span class="n">—</span></div>` +
+           `<p class="implwho cool">not loaded</p>`;
+
+  const total = r.impl.reduce((n, c) => n + c.projects.length, 0);
+  if (!total) return '';   // no implementation project touches this team at all
+
+  const overdue = r.impl.filter(c => c.overdue.length);
+  if (!overdue.length)
+    return `<div class="implline cool"><span class="lbl">Implementation</span>${info || ''}` +
+           `<span class="n">None overdue</span></div>` +
+           `<p class="implwho cool">${total} ${total === 1 ? 'project' : 'projects'} tracked</p>`;
+
+  return `<div class="implline hot"><span class="lbl">Implementation</span>${info || ''}` +
+         `<span class="n">${overdue.length} of ${total} overdue</span></div>` +
+         `<p class="implwho">${esc(overdue.map(c => c.client).join(', '))}</p>`;
 }
 
 function renderMonthPicker(){
@@ -3377,6 +3591,7 @@ function renderMeter(){
            mi('feedback', 'client feedback')) +
       visitLine(r, mi('visits', 'client visits')) +
       escLine(r, mi('escalations', 'escalations')) +
+      implLine(r, mi('implementation', 'implementation')) +
       `<div class="how" id="how${i}" hidden>${panel}</div>` +
       `</div>`;
   }).join('');
@@ -3560,17 +3775,40 @@ function fillClientFilters(){
   opts($('ctype'),  [...new Set(CLIENTS.map(c => c.t).filter(Boolean))].sort(), 'types');
 }
 
+/* Implementation shares this note rather than getting its own: both are "some
+   rows from an outside sheet could not be matched to the book," the same
+   failure in the same place, so a reader checking one reason to distrust a
+   count finds the other right beside it instead of on a different tab. */
+function implUnmatchedHtml(){
+  if (IMPL_ERROR)
+    return `<b>Implementation projects could not be loaded:</b> ${esc(IMPL_ERROR)}. ` +
+           `No client's card reflects them.`;
+  if (!IMPL_UNMATCHED.length) return '';
+  return ` <b>${IMPL_UNMATCHED.length} implementation ` +
+    `project${IMPL_UNMATCHED.length === 1 ? '' : 's'} could not be matched to a client:</b> ` +
+    `${esc(IMPL_UNMATCHED.join(', '))}. Those are not counted on any card. Add them to ` +
+    `<code>IMPL_ALIAS</code> in index.html — guessing would land an overdue flag on the ` +
+    `wrong team.`;
+}
+
 function renderEscNote(){
   const el = $('escnote');
+  const implNote = implUnmatchedHtml();
   if (ESC_ERROR){
     el.hidden = false; el.className = 'escnote warn';
     el.innerHTML = `Escalations could not be loaded, so no client is flagged below. ` +
-      `${esc(ESC_ERROR)} The rest of this page is unaffected.`;
+      `${esc(ESC_ERROR)} The rest of this page is unaffected.` +
+      (implNote ? ` ${implNote}` : '');
     return;
   }
   const open = ESCALATIONS.filter(e => !e.closed).length;
   const flagged = [...ESC_BY_CLIENT.keys()].filter(n => openEsc(n).length);
-  if (!ESCALATIONS.length){ el.hidden = true; return; }
+  if (!ESCALATIONS.length){
+    if (!implNote){ el.hidden = true; return; }
+    el.hidden = false; el.className = 'escnote warn';
+    el.innerHTML = implNote;
+    return;
+  }
 
   el.hidden = false; el.className = 'escnote';
   el.innerHTML =
@@ -3582,7 +3820,8 @@ function renderEscNote(){
         `could not be matched to a client:</b> ${esc(ESC_UNMATCHED.join(', '))}. ` +
         `Those are not flagged anywhere. Add them to <code>ESC_ALIAS</code> in ` +
         `index.html — guessing would put a red flag on the wrong client.`
-      : '');
+      : '') +
+    implNote;
 }
 
 function renderClients(){
@@ -4197,6 +4436,19 @@ async function load(){
       ESC_ERROR = (e && e.message) || String(e);
     }
     buildEscalations();
+
+    /* Implementation projects join on client names the same way escalations do,
+       so it waits on the book for the same reason and fails the same soft way —
+       an Asana portfolio going unreachable should never take the compliance
+       figures down with it. */
+    try {
+      IMPLEMENTATION = parseImplementation(await fetchRaw('implementation'));
+      IMPL_ERROR = null;
+    } catch (e) {
+      IMPLEMENTATION = [];
+      IMPL_ERROR = (e && e.message) || String(e);
+    }
+    buildImplementation();
 
     /* Only now is COVER populated, so only now can the picker know which months
        have data behind them. Rendering it earlier offers months that produce a
