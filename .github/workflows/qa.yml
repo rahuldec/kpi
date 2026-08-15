@@ -1,0 +1,89 @@
+# Run the test suite on anything that can change what the page computes.
+#
+# Why this exists: the README tells people to change EXEMPT, HIDDEN, PODS and
+# ADOPTION_TARGET by opening index.html on GitHub, clicking the pencil and
+# committing. That is the right workflow for a page with no build step, and it
+# walks straight past all 668 assertions — nothing else runs them. A misspelled
+# name in HIDDEN drops a person from every count on the page, and it would
+# deploy in about a minute either way. This is the gate on that path.
+#
+# The timezone matrix is not decoration. iso() reads local date parts and
+# CHASE_DAY is re-derived from the clock rather than captured once, so date
+# handling here is genuinely timezone-dependent — and qa.js asserts against
+# that directly ("fixed range identical in every TZ"). Kiritimati is UTC+14 and
+# Los Angeles is UTC-7; between them they bracket every "already tomorrow" and
+# "still yesterday" case the page can meet. Asia/Kolkata is where it is
+# actually read.
+name: QA
+
+# archive/** is deliberately absent: the archiver commits there daily and none
+# of it changes what the code does. (Commits pushed with the default token do
+# not trigger workflows anyway — this keeps that true if the token ever changes.)
+#
+# The two lists are duplicated rather than shared through a YAML anchor.
+# Actions does not support anchors, and a workflow it cannot parse does not run
+# at all — the same failure mode as a comment in vercel.json, and the same
+# reason not to be clever in a file something else validates.
+on:
+  push:
+    paths:
+      - 'index.html'
+      - 'qa.js'
+      - 'extreme_qa.js'
+      - 'vercel.json'
+      - 'api/**'
+      - 'scripts/**'
+      - '.github/workflows/qa.yml'
+  pull_request:
+    paths:
+      - 'index.html'
+      - 'qa.js'
+      - 'extreme_qa.js'
+      - 'vercel.json'
+      - 'api/**'
+      - 'scripts/**'
+      - '.github/workflows/qa.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # A second push to the same branch makes the first run's answer irrelevant.
+  group: qa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    strategy:
+      # Which timezones fail is the diagnostic — cancelling the rest on the
+      # first failure throws away exactly the information worth having.
+      fail-fast: false
+      matrix:
+        tz: [UTC, Asia/Kolkata, America/Los_Angeles, Pacific/Kiritimati]
+    name: ${{ matrix.tz }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # jsdom is a TEST dependency only. The page itself still ships with no
+      # dependencies at all, which is why there is no package.json here to
+      # install from — and why this must stay --no-save, so running the suite
+      # never adds one. Pinned to a major so a jsdom release cannot turn this
+      # red on its own.
+      - name: Install jsdom
+        run: npm install --no-save jsdom@30
+
+      - name: qa.js
+        env:
+          TZ: ${{ matrix.tz }}
+        run: node qa.js index.html
+
+      - name: extreme_qa.js
+        env:
+          TZ: ${{ matrix.tz }}
+        run: node extreme_qa.js index.html
