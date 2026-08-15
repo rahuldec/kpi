@@ -69,8 +69,15 @@ const BOOK_SHEET = (() => {
                    : r === 0   ? ' ₹ - '
                    : ` ₹ ${r.toLocaleString('en-US')}.00 `;
   const head = 'Sr No.,Client Name,Old/New,TYPE1,Category,Type, Total Billing FY , Team ,RM,Retention/Imp,,,';
+  /* The Retention/Imp cell carries whatever the snapshot row carries, so the
+     round trip below stays a round trip. Hardcoding a value here would make
+     every parsed row claim a kind the snapshot does not have, and the
+     "reproduces the book exactly" check would fail for a reason that has
+     nothing to do with the book. The column itself is exercised directly in
+     the retention/implementation tests instead. */
+  const kind = c => c.k ? c.k[0].toUpperCase() + c.k.slice(1) : '';
   const body = BOOK_ROWS.map((c, i) =>
-    [i + 1, q(c.n), c.a, c.t || '-', c.c, 'B', q(money(c.r)), c.o || '-', '', 'Retention', '', '', ''].join(','));
+    [i + 1, q(c.n), c.a, c.t || '-', c.c, 'B', q(money(c.r)), c.o || '-', '', kind(c), '', '', ''].join(','));
   /* The scratch below the numbered block, reproduced: rows with a name and no
      Sr No. Any of these reaching the book inflates it — the IBMR line alone adds
      ₹1L to a client that is already counted. */
@@ -3117,10 +3124,15 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
        because the money beside it was allowed to squeeze it. Nothing headless can
        measure a line break, so the rule is asserted statically. */
     const css = HTML.slice(HTML.indexOf('<style>') + 7, HTML.indexOf('</style>'));
+    /* Matched on .covline rather than on the whole selector list: the list is
+       shared with every other line on the card and grows when one is added
+       (.mixline did exactly that), which is not a reason for this to fail.
+       [^{}]* allows more selectors in the group without letting the match run
+       on into the next rule. */
     check('a coverage figure is not allowed to break mid-phrase',
-          /\.escline \.n,\.covline \.n\{[^}]*white-space:nowrap/s.test(css));
+          /\.covline \.n[^{}]*\{[^}]*white-space:nowrap/s.test(css));
     check('and the row wraps instead, so the money moves rather than the value',
-          /\.escline,\.covline\{[^}]*flex-wrap:wrap/s.test(css));
+          /\.covline[^{}]*\{[^}]*flex-wrap:wrap/s.test(css));
     check('a dial row wraps by the same rule, now that it carries a control too',
           /\.dial\{[^}]*flex-wrap:wrap/s.test(css));
   }

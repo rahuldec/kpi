@@ -297,6 +297,37 @@ it: the dial showed the day the snapshot was cut while the client book tab showe
 today, and nothing on screen compared the two. The adoption card now prints the same
 team's book total beside it, and `qa.js` asserts the two agree on every card.
 
+### Retention and implementation
+
+Under the business dial sits a **Mix** line: how many of the team's clients are
+retention against how many are implementation, and the book split the same way —
+"14 retention · 5 implementation" with both totals beside it. Not a fifth dial:
+there is no target either half is chasing, and a dial would invite reading "more
+retention is better" into a number that says no such thing about a book that is
+supposed to carry both. It is a composition of the business figure above it, not a
+score of its own, so it gets a line the way adoption's coverage does, not a track.
+
+The source is the client book's own **Retention/Imp** column, added by hand
+alongside Team. Matched on the stem rather than the whole word — `Imp` is the
+obvious abbreviation and the sheet has used it — so `bookKind()` reads "Retention"
+and "Implementation" the same as it reads "Ret" and "Imp". A client the column
+does not label is left out of *both* sides of the split, the same rule adoption
+uses for a never-scored client: counting it as either would invent an answer the
+sheet never gave. The card's Scored line and this one can therefore name different
+denominators — one is "how many clients have a module score", the other is "how
+many have a retention/implementation label" — and both are correct about what they
+each measure.
+
+Money and headcount are shown separately because they can disagree, and did the
+first time this was checked: a team can be one-third retention by client count and
+half-and-half by revenue, which is a different fact about the book each way, so one
+number does not stand in for the other.
+
+The (i) beside the line opens to the same panel as every other row — the split
+named again with the count and the money side by side, and, when the book has no
+such column at all (the compiled fallback predates it), a line saying there is
+nothing to split rather than a silent 0/0.
+
 Module adoption is the third dial — see **Module adoption** below.
 
 Below the three dials, each card carries an **escalation line**: how many are open on
@@ -1319,3 +1350,42 @@ Nobody is miscounted; nobody is told either.
 The tests were redirected rather than deleted, which is the part worth insisting
 on: a check that reads a removed sentence should point at wherever the fact
 lives now, not be dropped along with the sentence.
+
+
+## Retention and implementation on the meter — added 15 Aug 2026
+
+The client book's **Retention/Imp** column reached the sheet a while back and had
+no reader. It is now a **Mix** line under each team's business dial: client count
+and revenue, split retention against implementation, with both totals so neither
+stands in for the other — see **KPI meter -> Retention and implementation** above
+for why it is a line and not a fifth dial, and why an unlabelled client counts
+towards neither side rather than the more common one.
+
+`bookKind()` matches on the stem (`/^ret/`, `/^imp/`) so the hand-typed
+abbreviation is read the same as the full word, and returns `''` — not a guess —
+for anything else. `parseBook()` only sets a client's `k` when that comes back
+non-empty, so a book with no such column, or the compiled fallback, which predates
+it, parses exactly as it did before: no key, not an empty one. That distinction is
+what let the round-trip test in `qa.js` (1a3) stay a round trip — the fixture now
+carries whatever kind each snapshot row actually has, rather than a constant that
+would make every parsed row claim a label the snapshot never gave it.
+
+Two things were caught by the existing suite rather than by hand:
+
+* Adding a line under the business dial pushed the next element down by one, which
+  is exactly the shape `.covline + .dial` was already guarding for adoption's own
+  coverage line. `.mixline` picked up the same rule (§ 12d-ii, "sits directly under
+  the dial it describes") for free.
+* Two CSS assertions matched on the full `.escline,.covline{...}` selector list
+  rather than on `.covline` alone, so adding `.mixline` to that list — needed for
+  the no-line-break rule every other line on the card already has — broke them for
+  a reason that had nothing to do with either rule. Loosened to match `.covline`
+  wherever it sits in the group, so the next line added does not fail the same way.
+
+Verified against the live book, not only fixtures: fetched `/api/data?src=book`
+directly and confirmed two clean values across 146 numbered rows (no blanks, no
+third spelling), then rendered the real KPI meter against it end to end — every
+team carries a real, differently-shaped split (Sukhmeet Singh 39 retention / 9
+implementation by count but a closer ₹44.9L/₹21.4L by revenue; Sultan Malik almost
+even by count and revenue-heavier on implementation), which is the both-figures
+case the line exists to show.

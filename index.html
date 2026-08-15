@@ -308,7 +308,7 @@ html.modalopen{overflow:hidden}
 
 /* Escalations on a team card. Not a dial: a count of live problems has no
    denominator, and a progress bar would invite reading "2 of 5" into it. */
-.visitline,.escline,.covline{
+.visitline,.escline,.covline,.mixline{
   display:flex;align-items:baseline;gap:2px 9px;margin:2px 0 0;flex-wrap:wrap;
   padding-top:12px;border-top:1px solid var(--hair);
 }
@@ -317,19 +317,24 @@ html.modalopen{overflow:hidden}
    adoption "Scored" line sat immediately above the Client feedback dial and read
    as feedback's own coverage. The rule moves to the start of the next dial, so
    each block is dial -> track -> its coverage line. */
-.covline{border-top:0;padding-top:6px}
-.covline + .dial,.covwho + .dial{padding-top:14px;border-top:1px solid var(--hair)}
-.visitline .lbl,.escline .lbl,.covline .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.07em;
+/* The mix line hugs the business dial by the same rule and for the same
+   reason — it describes the dial above it, not the one below. */
+.covline,.mixline{border-top:0;padding-top:6px}
+.covline + .dial,.covwho + .dial,.mixline + .dial{padding-top:14px;border-top:1px solid var(--hair)}
+.visitline .lbl,.escline .lbl,.covline .lbl,.mixline .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.07em;
   color:var(--faint);width:88px;flex:none}
 /* The figure reads as one phrase — "36 of 48 clients" — so it must never break
    across lines the way it did when the money beside it was allowed to squeeze
    it. Below about 300px of card the row wraps instead and the money drops to a
    line of its own, still flush right; the value stays beside its label at every
    width, which is the thing being read. */
-.visitline .n,.escline .n,.covline .n{font-size:15px;font-weight:600;letter-spacing:-.012em;
+.visitline .n,.escline .n,.covline .n,.mixline .n{font-size:15px;font-weight:600;letter-spacing:-.012em;
   white-space:nowrap}
+/* Two phrases joined by a separator rather than one indivisible figure, so this
+   is the one value on a card that may break — between them, never inside them. */
+.mixline .n{white-space:normal;font-size:14px}
 .escline.hot .n,.covline.hot .n{color:var(--miss)}
-.escline.cool .n,.covline.cool .n,.visitline .n{color:var(--faint);font-weight:500}
+.escline.cool .n,.covline.cool .n,.visitline .n,.mixline.cool .n{color:var(--faint);font-weight:500}
 .how .gaps{font-size:12.5px;line-height:1.7;color:var(--ink);margin:6px 0 0}
 .how .gaps.none{color:var(--faint);font-size:12px;margin-top:8px}
 /* A figure attached to a name, not a column of its own. */
@@ -351,7 +356,7 @@ html.modalopen{overflow:hidden}
 .how details > summary:hover{color:var(--brand-dark)}
 /* The figure on the right of a coverage line, matching a dial's .sub exactly so
    the four rows of a card line up down the same edge. */
-.visitline .sub,.escline .sub,.covline .sub{font-size:12.5px;color:var(--faint);margin-left:auto;
+.visitline .sub,.escline .sub,.covline .sub,.mixline .sub{font-size:12.5px;color:var(--faint);margin-left:auto;
   text-align:right;white-space:nowrap}
 .how .vlist{margin-top:4px}
 .board tr.flat td{color:var(--faint)}
@@ -1269,8 +1274,20 @@ function buildBook(){
   for (const c of CLIENTS){
     if (!c.o) continue;
     const k = c.o.toLowerCase();
-    const e = m.get(k) || {clients: 0, revenue: 0, name: c.o};
+    const e = m.get(k) || {clients: 0, revenue: 0, name: c.o,
+      /* The same book, split by what the team is doing with each account.
+         `labelled` is the denominator that makes the split readable: without
+         it, a book where half the rows carry no kind looks like a book that
+         is half retention. */
+      labelled: 0,
+      retention:      {clients: 0, revenue: 0},
+      implementation: {clients: 0, revenue: 0}};
     e.clients++; e.revenue += c.r || 0;
+    if (c.k && e[c.k]){
+      e.labelled++;
+      e[c.k].clients++;
+      e[c.k].revenue += c.r || 0;
+    }
     m.set(k, e);
   }
   return m;
@@ -1621,6 +1638,20 @@ const tc=s=>s.split(/\s+/).map(w=>w?w[0].toUpperCase()+w.slice(1).toLowerCase():
    sheet never filled in. The first is a number, the second is 0, the third is
    null and must stay null — averaging or summing it as 0 would quietly invent a
    client billing nothing. */
+/* Retention or implementation, from whatever the sheet wrote. Today it is
+   exactly "Retention" and "Implementation", but this column is typed by hand
+   and "Imp" is the obvious abbreviation, so match on the stem rather than the
+   whole word. Anything else returns '' and the client is left out of the mix
+   on both sides — the line on the card then shows a coverage figure smaller
+   than the book, which is the honest way to say "some of these are unlabelled"
+   without inventing a category for them. */
+function bookKind(v){
+  const s = String(v || '').trim().toLowerCase();
+  if (/^imp/.test(s)) return 'implementation';
+  if (/^ret/.test(s)) return 'retention';
+  return '';
+}
+
 function parseBook(text){
   const dl = (text.split('\n')[0].match(/\t/g) || []).length >= 2 ? '\t' : ',';
   const rows = splitRows(text, dl);
@@ -1634,7 +1665,11 @@ function parseBook(text){
       head = i;
       ix = {sr: find(h, 'sr no.', 'sr no', 'sr. no.'), name, bill,
             oldnew: find(h, 'old/new'), type: find(h, 'type1'),
-            cat: find(h, 'category'), team: find(h, 'team')};
+            cat: find(h, 'category'), team: find(h, 'team'),
+            /* "Retention/Imp" — whether the team is holding an account or
+               standing one up. Matched loosely because the header has been
+               spelled both ways; a book without the column parses as before. */
+            kind: h.findIndex(x => x.includes('retention'))};
       break;
     }
   }
@@ -1654,9 +1689,16 @@ function parseBook(text){
     const r = rows[i]; if (!r) continue;
     const sr = cell(r, ix.sr), n = cell(r, ix.name);
     if (!n || !/^\d+$/.test(sr)) continue;
-    out.push({n, o: dash(cell(r, ix.team)), r: money(cell(r, ix.bill)),
-              t: dash(cell(r, ix.type)), c: dash(cell(r, ix.cat)),
-              a: cell(r, ix.oldnew)});
+    const row = {n, o: dash(cell(r, ix.team)), r: money(cell(r, ix.bill)),
+                 t: dash(cell(r, ix.type)), c: dash(cell(r, ix.cat)),
+                 a: cell(r, ix.oldnew)};
+    /* Only set when the sheet actually said something recognisable. An absent
+       key is how a book with no such column — or the compiled snapshot, which
+       predates it — stays byte-identical to what it parsed as before, rather
+       than growing an empty field that reads as a real answer of "neither". */
+    const k = bookKind(cell(r, ix.kind));
+    if (k) row.k = k;
+    out.push(row);
   }
   // Highest billing first; the unfilled ones sink rather than reading as zero.
   out.sort((x, y) => (y.r === null ? -1 : y.r) - (x.r === null ? -1 : x.r));
@@ -2579,7 +2621,75 @@ function bookDetail(r){
        it outright, in the same words the adoption section uses. */
     (BOOK_LIVE ? '' : ` Read from the snapshot built into this page` +
       (BOOK_ERROR ? ` because the live book failed: ${esc(BOOK_ERROR)}` : '') + `.`) +
+    `</p>` +
+    mixDetail(r);
+}
+
+/* The book split by what the team is doing with each account. Deliberately not
+   a fifth dial: retention against implementation is a composition, not a score,
+   and there is no target either half is trying to reach — a dial would invite
+   reading "more retention is better" into a number that says no such thing.
+   It is one line under the business dial it describes, and a section here.
+
+   The revenue split is the half that carries the meaning. A team can be mostly
+   retention by client count and mostly implementation by money, which is a
+   different job from the same book read the other way round — so both are
+   printed rather than one standing in for the other. */
+function mixDetail(r){
+  const b = bookOf(r.lead);
+  if (!b || !b.clients) return '';
+  const head = `<h5 data-sec="mix">Retention and implementation</h5>`;
+  if (!b.labelled)
+    return head + `<p class="sum">The client book has no retention or ` +
+      `implementation against any of this team's ${b.clients} ` +
+      `${b.clients === 1 ? 'client' : 'clients'}` +
+      (BOOK_LIVE ? `, so there is nothing to split it by.`
+                 : ` — the snapshot built into this page predates that column, ` +
+                   `so the split is unavailable until the live book loads.`) +
+      `</p>`;
+
+  const ret = b.retention, imp = b.implementation;
+  const share = x => b.labelled ? Math.round(x.clients / b.labelled * 100) : 0;
+  return head +
+    stats([
+      [ret.clients, 'retention'],
+      [inr(ret.revenue), 'retention book'],
+      [imp.clients, 'implementation'],
+      [inr(imp.revenue), 'implementation book'],
+    ]) +
+    `<p class="sum">` +
+    `Of the ${b.labelled} of ${b.clients} ` +
+    `${b.clients === 1 ? 'client' : 'clients'} the book labels, ` +
+    `<b>${ret.clients}</b> ${ret.clients === 1 ? 'is' : 'are'} retention ` +
+    `(${share(ret)}% by count, <b>${esc(inr(ret.revenue))}</b>) and ` +
+    `<b>${imp.clients}</b> ${imp.clients === 1 ? 'is' : 'are'} implementation ` +
+    `(${share(imp)}%, <b>${esc(inr(imp.revenue))}</b>). ` +
+    `Both are already inside the business figure above; this says what it is ` +
+    `made of, not how much of it there is.` +
+    (b.labelled < b.clients
+      ? ` The other ${b.clients - b.labelled} ${b.clients - b.labelled === 1
+          ? 'client carries' : 'clients carry'} no label and ` +
+        `${b.clients - b.labelled === 1 ? 'is' : 'are'} left out of both sides ` +
+        `rather than counted as either.`
+      : '') +
     `</p>`;
+}
+
+/* The mix, as one row under the business dial — the same shape as the adoption
+   coverage line, and for the same reason: it describes the dial above it and
+   the dial itself cannot show it. Its own class rather than .covline, because
+   that class means "how much of the book this dial actually describes" and this
+   is not that. */
+function mixLine(r, info){
+  const b = bookOf(r.lead);
+  if (!b || !b.clients) return '';
+  if (!b.labelled)
+    return `<div class="mixline cool"><span class="lbl">Mix</span>${info || ''}` +
+           `<span class="n">not in this book</span></div>`;
+  const ret = b.retention, imp = b.implementation;
+  return `<div class="mixline cool"><span class="lbl">Mix</span>${info || ''}` +
+         `<span class="n">${ret.clients} retention &middot; ${imp.clients} implementation</span>` +
+         `<span class="sub">${esc(inr(ret.revenue))} / ${esc(inr(imp.revenue))}</span></div>`;
 }
 
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -3250,6 +3360,7 @@ function renderMeter(){
       dial('Business', r.business,
            `${inr(r.revenue)} of ${inr(Math.round(r.target))}`, bizMet,
            mi('business', 'business')) +
+      mixLine(r, mi('mix', 'the retention and implementation split')) +
       dial('Module adoption', r.adopt.adoption,
            r.adopt.applicable
              ? `${r.adopt.adopted}/${r.adopt.applicable} modules`

@@ -12,6 +12,14 @@ const check = (n, c, d) => c ? (pass++, results.push([1, n, ''])) : (fail++, res
 
 const HEAD = 'Task ID,Created At,Completed At,Last Modified,Name,Section/Column,Assignee,Assignee Email,Start Date,Due Date,Tags,Notes';
 const sheet = rows => [',,', ',,url', ',,', HEAD, ...rows].join('\n');
+/* load() refuses to render when internal and client come back byte-identical
+   — the real signal of an old api/data.js ignoring ?src=. A fixture that
+   hands the same CSV to both trips that guard and the page bails before the
+   book ever loads, which looks like the feature under test failing when it
+   is really the fixture. Offsetting the row ids, the same way qa.js's own
+   CLIENT_DEFAULT does, keeps the two bodies distinct without changing what
+   either one says. */
+const asClient = csv => csv.replace(/\n(\d+),/g, (m, d) => '\n' + (Number(d) + 900) + ',');
 const MIN_BOOK = 'Sr No.,Client Name,Old/New,TYPE1,Category,Type, Total Billing FY , Team ,RM,Retention/Imp,,,';
 const MIN_FEED = '"Timestamp","Name of the Institution?"';
 
@@ -281,6 +289,140 @@ const settle = () => new Promise(r => setTimeout(r, 30));
     check('a day present in both live and archive is not duplicated',
           out.count === 2 && out.dues.join(',') === '2026-07-15,2026-07-16', JSON.stringify(out));
     check('no crash merging overlapping live/archive data', errs.length === 0, errs.join(' | '));
+  }
+
+  // ── H. Retention / implementation split ──────────────────────────
+  {
+    /* The real sheet's header and its two real values, verbatim. Two teams so
+       the split is per-team rather than global, a client with no label so the
+       "left out of both sides" path is live, and an abbreviation because the
+       column is typed by hand. */
+    const book = [
+      'Sr No.,Client Name,Old/New,TYPE1,Category,Type, Total Billing FY , Team ,RM,Retention/Imp,,,',
+      '1,Alpha College,Old,College,Large,B," ₹ 1,000,000.00 ",Mansi Rana,,Retention,,,',
+      '2,Beta School,Old,School,Large,B," ₹ 400,000.00 ",Mansi Rana,,Implementation,,,',
+      '3,Gamma University,New,University,Large,B," ₹ 600,000.00 ",Mansi Rana,,Imp,,,',
+      '4,Delta Institute,Old,College,Small,B," ₹ 250,000.00 ",Mansi Rana,,,,,',
+      '5,Epsilon Academy,Old,School,Large,B," ₹ 300,000.00 ",Sultan Malik,,Retention,,,',
+    ].join('\n');
+    const rows = sheet(['1,2026-07-01,,,x,S,Mansi Rana,m@x.com,,2026-07-27,,n']);
+    const { win, errs } = boot({ body: rows, clientBody: asClient(rows), bookBody: book });
+    await settle();
+    check('boots cleanly with a book carrying Retention/Imp', errs.length === 0, errs.join(' | '));
+
+    const parsed = win.eval(`JSON.stringify(CLIENTS)`);
+    const cl = JSON.parse(parsed);
+    const byName = n => cl.find(c => c.n === n);
+    check('"Retention" parses to a kind', byName('Alpha College').k === 'retention',
+          JSON.stringify(byName('Alpha College')));
+    check('"Implementation" parses to a kind',
+          byName('Beta School').k === 'implementation', JSON.stringify(byName('Beta School')));
+    check('the hand-typed abbreviation "Imp" is understood too',
+          byName('Gamma University').k === 'implementation', JSON.stringify(byName('Gamma University')));
+    check('an unlabelled client gets no kind key at all rather than an empty one',
+          !('k' in byName('Delta Institute')), JSON.stringify(byName('Delta Institute')));
+
+    const b = JSON.parse(win.eval(`JSON.stringify(bookOf('Mansi Rana'))`));
+    check('the split is counted per team, not globally',
+          b.retention.clients === 1 && b.implementation.clients === 2,
+          JSON.stringify(b));
+    check('revenue is split the same way',
+          b.retention.revenue === 1000000 && b.implementation.revenue === 1000000,
+          JSON.stringify(b));
+    check('an unlabelled client is left out of both sides, not counted as either',
+          b.labelled === 3 && b.clients === 4, JSON.stringify(b));
+    check('but it still counts towards the team total the business dial uses',
+          b.revenue === 2250000, String(b.revenue));
+
+    /* The whole point of printing both: this book is 1-of-3 retention by count
+       and 50/50 by money. One figure standing in for the other would be wrong. */
+    check('count and revenue can disagree, and both are kept',
+          b.retention.clients !== b.implementation.clients &&
+          b.retention.revenue === b.implementation.revenue, JSON.stringify(b));
+  }
+
+  // ── H2. The mix line on the card, and the section behind its (i) ──
+  {
+    const book = [
+      'Sr No.,Client Name,Old/New,TYPE1,Category,Type, Total Billing FY , Team ,RM,Retention/Imp,,,',
+      '1,Alpha College,Old,College,Large,B," ₹ 1,000,000.00 ",Mansi Rana,,Retention,,,',
+      '2,Beta School,Old,School,Large,B," ₹ 400,000.00 ",Mansi Rana,,Implementation,,,',
+    ].join('\n');
+    const people = ['Mansi Rana', 'Vansh Saini', 'Divya Gupta'];
+    const trk = sheet(people.map((p, i) =>
+      `${i + 1},2026-07-01,,,x,S,${p},x@x.com,,2026-07-27,,n`));
+    const { doc, win, errs } = boot({ body: trk, clientBody: asClient(trk), bookBody: book });
+    await settle();
+    doc.querySelector('#sources3 button[data-src="meter"]').click();
+    await settle();
+    check('the meter renders with the mix line', errs.length === 0, errs.join(' | '));
+
+    const card = [...doc.querySelectorAll('.mcard')]
+      .find(c => /Mansi Rana/.test(c.querySelector('h4').textContent));
+    check('a card is drawn for the team', !!card);
+    if (card) {
+      const mix = card.querySelector('.mixline');
+      check('the card carries a mix line', !!mix, card.textContent.slice(0, 120));
+      check('and it names both halves with their counts',
+            /1 retention/.test(mix.textContent) && /1 implementation/.test(mix.textContent),
+            mix && mix.textContent);
+      // inr() drops a whole lakh's trailing ".0" — ₹10L, not ₹10.0L.
+      check('and prints both books beside it',
+            /₹10L/.test(mix.textContent) && /₹4L/.test(mix.textContent),
+            mix && mix.querySelector('.sub')?.textContent);
+
+      /* The rule the suite already enforces for every other row: the line has
+         to sit under the dial it describes, which is Business. */
+      const kids = [...card.children];
+      const i = kids.indexOf(mix);
+      check('the mix line sits directly under the business dial it describes',
+            kids[i - 1].classList.contains('track') &&
+            kids[i - 2].querySelector('.lbl').textContent === 'Business',
+            kids[i - 2] && kids[i - 2].textContent);
+
+      /* Adding a line must not add a dial — the four dial labels are read
+         positionally by the main suite and by the eye. */
+      check('it did not become a fifth dial',
+            [...card.querySelectorAll('.dial .lbl')].map(x => x.textContent).join('|') ===
+            'Compliance|Business|Module adoption|Client feedback',
+            [...card.querySelectorAll('.dial .lbl')].map(x => x.textContent).join('|'));
+      check('and did not disturb the coverage-line count the suite pins',
+            card.querySelectorAll('.covline').length === 2,
+            String(card.querySelectorAll('.covline').length));
+
+      // its (i) must open a section that actually exists
+      const btn = mix.querySelector('button.mi');
+      check('the mix line has its own (i)', !!btn);
+      check('and it names a section the panel really has',
+            btn && !!card.querySelector(`.how [data-sec="${btn.dataset.sec}"]`),
+            btn && btn.dataset.sec);
+      const how = card.querySelector('.how').textContent.replace(/\s+/g, ' ');
+      check('the panel explains the split in full',
+            /retention/i.test(how) && /implementation/i.test(how), how.slice(0, 200));
+      check('and says the split is inside the business figure, not extra to it',
+            /already inside the business figure/i.test(how), how.slice(0, 300));
+    }
+  }
+
+  // ── H3. A book with no such column still works ────────────────────
+  {
+    // The compiled snapshot predates the column; the page must not invent one.
+    const book = [
+      'Sr No.,Client Name,Old/New,TYPE1,Category,Type, Total Billing FY , Team ,RM',
+      '1,Alpha College,Old,College,Large,B," ₹ 1,000,000.00 ",Mansi Rana,',
+    ].join('\n');
+    const trk = sheet(['1,2026-07-01,,,x,S,Mansi Rana,m@x.com,,2026-07-27,,n']);
+    const { win, errs } = boot({ body: trk, clientBody: asClient(trk), bookBody: book });
+    await settle();
+    check('a book with no Retention/Imp column does not crash', errs.length === 0, errs.join(' | '));
+    const cl = JSON.parse(win.eval(`JSON.stringify(CLIENTS)`));
+    check('and its clients carry no kind key', !('k' in cl[0]), JSON.stringify(cl[0]));
+    const b = JSON.parse(win.eval(`JSON.stringify(bookOf('Mansi Rana'))`));
+    check('the team still has a book, with nothing labelled',
+          b.clients === 1 && b.labelled === 0, JSON.stringify(b));
+    check('and the mix line says so rather than showing a zero split',
+          /not in this book/.test(win.eval(`mixLine(meterRows().rows[0] || {lead:'Mansi Rana'}, '')`)),
+          win.eval(`mixLine({lead:'Mansi Rana'}, '')`));
   }
 
   const w = Math.max(...results.map(r => r[1].length));
