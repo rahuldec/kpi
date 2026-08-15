@@ -1956,8 +1956,12 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
           /overdue/.test(mansi.querySelector('.implline .n')?.textContent || ''),
           mansi.querySelector('.implline .n')?.textContent);
     check('and it is marked hot', mansi.querySelector('.implline').classList.contains('hot'));
+    /* implwho names the PROJECT ("Puran Murti Group", Asana's own spelling),
+       not the book client it resolved to ("Pooranmurti") — so what proves the
+       alias fired is the project landing on the right lead's card at all, not
+       the text itself naming the client. */
     check('the spelling-fixed alias reached her card (Puran Murti Group -> Pooranmurti)',
-          /Pooranmurti/.test(mansi.querySelector('.implwho')?.textContent || ''),
+          /Puran Murti Group/.test(mansi.querySelector('.implwho')?.textContent || ''),
           mansi.querySelector('.implwho')?.textContent);
 
     // Sukhmeet Singh owns GNAV Kurukshetra, matched by prefix, with 0 overdue
@@ -1970,7 +1974,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     // Kashish Goel owns Hindu College, which the Hindu-group alias lands on
     const kg = card('Kashish Goel');
     check('the group-split alias reached the right card (Hindu Girls College -> Hindu College)',
-          /Hindu College/.test(kg.querySelector('.implwho')?.textContent || ''),
+          /Hindu Girls College/.test(kg.querySelector('.implwho')?.textContent || ''),
           kg.querySelector('.implwho')?.textContent);
 
     // the (i) panel must detail what the line summarises

@@ -1513,14 +1513,33 @@ and cannot be trusted to agree on a name.
 
 ### The card
 
-A new **Implementation** line, the same shape as Escalations and directly below it:
-"None overdue" and grey, or "N of M overdue" and red with the affected clients named.
-Deliberately **projects**, not tasks — a project with seven overdue tasks and one
-with a single overdue task are both one red flag on the card, and summing raw task
-counts across projects of very different sizes would read as a severity difference
-that isn't the question being asked. The (i) panel breaks it down further: every
-overdue project with its due date and how many tasks are still open, projects on
-schedule collapsed to a count.
+A new **Implementation** line, the same visual shape as Escalations but grouped
+with **Business and Mix** rather than down by Escalations — moved there 17 Aug 2026,
+on request. Overdue implementation is a business-relationship signal about the same
+clients Mix just described, not a "something's wrong right now" line in the same
+family as an open escalation; the panel order (`bookDetail()`, then `implDetail()`,
+then `adoptDetail()`) follows the card the same way it always has.
+
+"None overdue" and grey, or "N of M overdue" and red with the overdue **projects**
+named individually — by their own Asana name, not by the client they belong to.
+That distinction matters as soon as more than one project aliases to a single book
+row: naming the client for Dalmia Group's five branches would print "Dalmia Group"
+five times and say nothing about which branch is actually behind, so the line names
+`Dalmia Vidya Mandir, Kalyanpur (Extramarks)` and its siblings instead.
+
+Both sides of "N of M" are **projects**, deliberately — not tasks, and, since 17 Aug
+2026, not clients either. Counting projects rather than tasks was there from the
+start: a project with seven overdue tasks and one with a single overdue task are
+both one red flag, and summing task counts across projects of very different sizes
+would read as a severity difference that isn't the question. Counting projects
+rather than clients in the numerator is the fix that landed with the move: a
+client-level count only ever adds one for "Dalmia Group" however many of its five
+projects are actually late, which is how a real card read "3 of 7 overdue" when
+every single one of those seven projects was overdue — the true figure was 7 of 7,
+and a client-level numerator against a project-level denominator was quietly
+comparing two different things. The (i) panel breaks the same figure down further:
+every overdue project with its due date and how many tasks are still open, grouped
+under the client it belongs to, projects on schedule collapsed to a count.
 
 A past due date is not the same signal as Asana's own overdue count, and only the
 second one drives the card. A project can be behind schedule with `OVERDUE` reading

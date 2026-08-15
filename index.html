@@ -336,9 +336,13 @@ html.modalopen{overflow:hidden}
 .mixline{border-top:0;padding-top:6px}
 /* The bar sits directly under its own line with no rule between them — one
    is the figure, the other is the same figure drawn, and separating them would
-   suggest they were two different things. The dial after the bar is what
-   needs the rule. */
-.covwho + .dial,.mixbar + .dial{padding-top:14px;border-top:1px solid var(--hair)}
+   suggest they were two different things. Whichever element actually ends up
+   right before the next dial is what needs the rule: .mixbar when a team has
+   no implementation line at all (implLine() returns nothing, so the dial
+   follows the bar directly, same as before 16 Aug 2026); .implwho — the
+   overdue-projects paragraph, always the last thing implLine() prints,
+   success or error — once a team has one. */
+.covwho + .dial,.mixbar + .dial,.implwho + .dial{padding-top:14px;border-top:1px solid var(--hair)}
 .visitline .lbl,.escline .lbl,.implline .lbl,.mixline .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.07em;
   color:var(--faint);width:88px;flex:none}
 /* The figure reads as one phrase — "2 open" — so it must never break across
@@ -2675,11 +2679,11 @@ function howHtml(r){
     `${r.expected ? Math.round(r.filed / r.expected * 100) : 0}%.</p>`;
 
   h += bookDetail(r);
+  h += implDetail(r);
   h += adoptDetail(r);
   h += feedDetail(r);
   h += visitDetail(r);
   h += escDetail(r);
-  h += implDetail(r);
 
   if (!r.members.length) return h + `<p class="none">Nobody on this team has any expected days.</p>`;
 
@@ -3125,15 +3129,27 @@ function implLine(r, info){
   const total = r.impl.reduce((n, c) => n + c.projects.length, 0);
   if (!total) return '';   // no implementation project touches this team at all
 
-  const overdue = r.impl.filter(c => c.overdue.length);
-  if (!overdue.length)
+  /* Flattened to PROJECTS, on both sides of "N of M" and in the names below —
+     not to clients. Counting clients-with-an-overdue-project in the numerator
+     against total projects in the denominator looks plausible but understates
+     real trouble: every one of Dalmia Group's projects can be overdue and
+     this would still read "1 of 7", because all five alias to one book row
+     and a client-level count only ever adds one for "Dalmia Group", however
+     many of its own projects are actually late. Counting projects throughout
+     makes the two sides of the ratio mean the same thing. */
+  const overdueProjects = r.impl.flatMap(c => c.overdue);
+  if (!overdueProjects.length)
     return `<div class="implline cool"><span class="lbl">Implementation</span>${info || ''}` +
            `<span class="n">None overdue</span></div>` +
            `<p class="implwho cool">${total} ${total === 1 ? 'project' : 'projects'} tracked</p>`;
 
+  /* Named by PROJECT, not by client — the client name alone is not enough to
+     act on when several projects alias to one book row (naming the client
+     would print "Dalmia Group" once per overdue project and not say which
+     branch is actually behind). */
   return `<div class="implline hot"><span class="lbl">Implementation</span>${info || ''}` +
-         `<span class="n">${overdue.length} of ${total} overdue</span></div>` +
-         `<p class="implwho">${esc(overdue.map(c => c.client).join(', '))}</p>`;
+         `<span class="n">${overdueProjects.length} of ${total} overdue</span></div>` +
+         `<p class="implwho">${esc(overdueProjects.map(p => p.name).join(', '))}</p>`;
 }
 
 function renderMonthPicker(){
@@ -3599,6 +3615,11 @@ function renderMeter(){
            `${inr(r.revenue)} of ${inr(Math.round(r.target))}`, bizMet,
            mi('business', 'business')) +
       mixLine(r, mi('mix', 'the retention and implementation split')) +
+      /* Grouped with Business and Mix rather than sitting after Escalations —
+         overdue implementation is a business-relationship signal about the
+         same clients Mix just described, not a "something's currently wrong"
+         line in the same family as Escalations. */
+      implLine(r, mi('implementation', 'implementation')) +
       dial('Module adoption', r.adopt.adoption,
            r.adopt.applicable
              ? `${r.adopt.adopted}/${r.adopt.applicable} modules`
@@ -3612,7 +3633,6 @@ function renderMeter(){
            mi('feedback', 'client feedback')) +
       visitLine(r, mi('visits', 'client visits')) +
       escLine(r, mi('escalations', 'escalations')) +
-      implLine(r, mi('implementation', 'implementation')) +
       `<div class="how" id="how${i}" hidden>${panel}</div>` +
       `</div>`;
   }).join('');

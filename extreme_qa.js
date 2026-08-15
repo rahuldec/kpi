@@ -623,6 +623,99 @@ const settle = () => new Promise(r => setTimeout(r, 30));
           cap.hidden === false, String(cap.hidden));
   }
 
+  // ── L. Implementation sits with Business/Mix, not after Escalations —
+  //      moved 16 Aug 2026, on request: overdue implementation is a
+  //      business-relationship signal about the same clients Mix just
+  //      described, not a "something's wrong right now" line in the same
+  //      family as Escalations. ─────────────────────────────────────────
+  {
+    const book = [
+      'Sr No.,Client Name,Old/New,TYPE1,Category,Type, Total Billing FY , Team ,RM,Retention/Imp,,,',
+      '1,Alpha College,Old,College,Large,B," ₹ 1,000,000.00 ",Mansi Rana,,Implementation,,,',
+    ].join('\n');
+    const impl = [
+      'NAME,URL,TEAM,OWNER,DESCRIPTION,CREATED,START DATE,FIRST TASK COMPLETED,DUE DATE,ALL TASKS,COMPLETE,INCOMPLETE,ASSIGNED,OVERDUE,TASKS ADDED,TASKS COMPLETED',
+      'Alpha College,https://x,,Mansi Rana,,2026-07-01,2026-07-01,,2026-07-20,10,8,2,1,1,0,0',
+    ].join('\n');
+    const trk = sheet(['1,2026-07-01,,,x,S,Mansi Rana,m@x.com,,2026-07-27,,n']);
+    const { doc, errs } = boot({ body: trk, clientBody: asClient(trk), bookBody: book, implBody: impl });
+    await settle();
+    doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
+    check('boots cleanly with both mix and implementation data on one team', errs.length === 0, errs.join(' | '));
+
+    const card = [...doc.querySelectorAll('.mcard')]
+      .find(c => /Mansi Rana/.test(c.querySelector('h4').textContent));
+    const kids = [...card.children];
+    const implLine = card.querySelector('.implline');
+    const mixBar = card.querySelector('.mixbar');
+    check('the implementation line and mix bar are both present', !!implLine && !!mixBar);
+    if (implLine && mixBar) {
+      check('implementation sits directly after the mix bar, with nothing between them',
+            kids[kids.indexOf(mixBar) + 1] === implLine,
+            kids[kids.indexOf(mixBar) + 1] && kids[kids.indexOf(mixBar) + 1].className);
+      const implWho = implLine.nextElementSibling;
+      const nextDial = kids[kids.indexOf(implWho) + 1];
+      check('module adoption follows implementation\'s own paragraph, not the mix bar directly',
+            nextDial && nextDial.classList.contains('dial') &&
+            nextDial.querySelector('.lbl')?.textContent === 'Module adoption',
+            nextDial && nextDial.textContent.slice(0, 40));
+      check('it did not land after escalations — no dial-family line sits between it and mix',
+            kids.indexOf(implLine) < kids.indexOf(card.querySelector('.escline')),
+            `impl at ${kids.indexOf(implLine)}, escalations at ${kids.indexOf(card.querySelector('.escline'))}`);
+    }
+
+    /* And the panel order matches: implDetail() moved to sit right after
+       bookDetail()/mixDetail(), before adoptDetail(), the same way the card
+       moved. */
+    card.querySelector('button.info').click();
+    const secs = [...card.querySelectorAll('.how h5')].map(h => h.dataset.sec);
+    const businessAt = secs.indexOf('business'), implAt = secs.indexOf('implementation'),
+          adoptionAt = secs.indexOf('adoption');
+    check('the panel names business, implementation, then adoption in that order',
+          businessAt > -1 && businessAt < implAt && implAt < adoptionAt, secs.join(' > '));
+  }
+
+  // ── M. The headline counts overdue PROJECTS, not clients with an overdue
+  //      project — the real bug a live-data check turned up: every one of a
+  //      client's projects can be overdue and a client-level count still only
+  //      ever adds one, because however many projects alias to one book row,
+  //      it is still one client. ──────────────────────────────────────────
+  {
+    const book = [
+      'Sr No.,Client Name,Old/New,TYPE1,Category,Type, Total Billing FY , Team ,RM,Retention/Imp,,,',
+      '1,Multi Project Client,Old,College,Large,B," ₹ 1,000,000.00 ",Mansi Rana,,Implementation,,,',
+    ].join('\n');
+    // All three resolve to "Multi Project Client" by the ordinary auto-prefix
+    // rule (each name's normalised form starts with the client's) — no
+    // IMPL_ALIAS entry needed, so this is a plain multi-project client, the
+    // same shape Dalmia Group is in production, without depending on that
+    // specific alias staying exactly as written.
+    // Columns: ...,ALL TASKS,COMPLETE,INCOMPLETE,ASSIGNED,OVERDUE,TASKS ADDED,TASKS COMPLETED —
+    // OVERDUE is column 14 of 16 (index 13), not the trailing one.
+    const impl = [
+      'NAME,URL,TEAM,OWNER,DESCRIPTION,CREATED,START DATE,FIRST TASK COMPLETED,DUE DATE,ALL TASKS,COMPLETE,INCOMPLETE,ASSIGNED,OVERDUE,TASKS ADDED,TASKS COMPLETED',
+      'Multi Project Client Branch A,https://x,,Mansi Rana,,2026-07-01,2026-07-01,,2026-07-20,10,7,3,1,2,0,0',
+      'Multi Project Client Branch B,https://x,,Mansi Rana,,2026-07-01,2026-07-01,,2026-07-20,10,8,2,1,1,0,0',
+      'Multi Project Client Branch C,https://x,,Mansi Rana,,2026-07-01,2026-07-01,,2026-07-20,10,10,0,0,0,0,0',
+    ].join('\n');
+    const trk = sheet(['1,2026-07-01,,,x,S,Mansi Rana,m@x.com,,2026-07-27,,n']);
+    const { doc, errs } = boot({ body: trk, clientBody: asClient(trk), bookBody: book, implBody: impl });
+    await settle();
+    doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
+    check('boots cleanly with three projects on one client, two overdue', errs.length === 0, errs.join(' | '));
+
+    const card = [...doc.querySelectorAll('.mcard')]
+      .find(c => /Mansi Rana/.test(c.querySelector('h4').textContent));
+    const n = card.querySelector('.implline .n')?.textContent.trim();
+    check('the headline reads "2 of 3 overdue" — two overdue PROJECTS, not one overdue CLIENT',
+          n === '2 of 3 overdue', n);
+    const who = card.querySelector('.implwho')?.textContent || '';
+    check('both overdue branches are named individually',
+          /Branch A/.test(who) && /Branch B/.test(who), who);
+    check('the on-track branch is not named among the overdue ones',
+          !/Branch C/.test(who), who);
+  }
+
   const w = Math.max(...results.map(r => r[1].length));
   for (const [ok, n, d] of results) console.log(`${ok ? ' ok ' : 'FAIL'}  ${n.padEnd(Math.min(w,100))}  ${d}`);
   console.log(`\n${pass} passed, ${fail} failed`);
