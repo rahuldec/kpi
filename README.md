@@ -347,6 +347,17 @@ named again with the count and the money side by side, and, when the book has no
 such column at all (the compiled fallback predates it), a line saying there is
 nothing to split rather than a silent 0/0.
 
+Below that, each half gets its clients named — added 16 Aug 2026, on request, so
+"38 retention" is a list you can read, not just a number to trust. Same
+`clientMoney`/`longList` pair every other named list in this dialog already uses
+(Never scored, Not heard from): largest billing first, six shown, the rest behind
+"Show all N clients" rather than dumped — a team with forty retention clients would
+otherwise bury the implementation section right under it, which is the exact
+failure this dialog was rebuilt to stop doing (see **The (i) dialog was
+unreadable**, below). The names come from the same `CLIENTS` array the stats above
+are counted from, filtered on the same `k` field, so a client can never appear in
+the list without being counted in the number, or the other way round.
+
 Module adoption is the third dial — see **Module adoption** below.
 
 Below the three dials, each card carries an **escalation line**: how many are open on

@@ -2843,6 +2843,15 @@ function mixDetail(r){
 
   const ret = b.retention, imp = b.implementation;
   const share = x => b.labelled ? Math.round(x.clients / b.labelled * 100) : 0;
+  /* Same client objects the business dial's own list draws from — CLIENTS
+     filtered to this lead, split on the same `k` the stats above are counted
+     from, so the names named here can never disagree with the counts beside
+     them. Largest billing first, matching every other named list in this
+     panel (Never scored, Not heard from). */
+  const mine = CLIENTS.filter(c => c.o === r.lead);
+  const byRevenue = (a, b2) => (b2.r || 0) - (a.r || 0);
+  const retNames = mine.filter(c => c.k === 'retention').sort(byRevenue).map(clientMoney);
+  const impNames = mine.filter(c => c.k === 'implementation').sort(byRevenue).map(clientMoney);
   return head +
     stats([
       [ret.clients, 'retention'],
@@ -2865,7 +2874,9 @@ function mixDetail(r){
         `${b.clients - b.labelled === 1 ? 'is' : 'are'} left out of both sides ` +
         `rather than counted as either.`
       : '') +
-    `</p>`;
+    `</p>` +
+    (retNames.length ? `<p class="who2">Retention</p>` + longList(retNames, 6, 'clients') : '') +
+    (impNames.length ? `<p class="who2">Implementation</p>` + longList(impNames, 6, 'clients') : '');
 }
 
 /* The mix, as one row under the business dial — it describes the dial above it

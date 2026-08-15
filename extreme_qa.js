@@ -426,6 +426,12 @@ const settle = () => new Promise(r => setTimeout(r, 30));
             /retention/i.test(how) && /implementation/i.test(how), how.slice(0, 200));
       check('and says the split is inside the business figure, not extra to it',
             /already inside the business figure/i.test(how), how.slice(0, 300));
+      check('the retention client is named, not just counted',
+            /Alpha College/.test(how), how.slice(how.indexOf('made of'), how.indexOf('made of') + 120));
+      check('and so is the implementation one',
+            /Beta School/.test(how), how.slice(how.indexOf('made of'), how.indexOf('made of') + 200));
+      check('each name carries its own billing figure',
+            /Alpha College.*?₹10L/.test(how) && /Beta School.*?₹4L/.test(how), how.slice(0, 400));
     }
   }
 
@@ -542,6 +548,49 @@ const settle = () => new Promise(r => setTimeout(r, 30));
     check('a project with 0 overdue tasks reads "None overdue" regardless of its due date',
           line && line.textContent.trim() === 'None overdue', line && line.textContent);
     check('and is not marked hot', !card.querySelector('.implline').classList.contains('hot'));
+  }
+
+  // ── K. The mix panel's client lists cap and disclose, same as every
+  //      other named list in this dialog (Never scored, Not heard from) ──
+  {
+    const rows = ['Sr No.,Client Name,Old/New,TYPE1,Category,Type, Total Billing FY , Team ,RM,Retention/Imp,,,'];
+    for (let i = 1; i <= 9; i++)
+      rows.push(`${i},Retention Client ${i},Old,School,Small,B," ₹ ${i * 10000}.00 ",Mansi Rana,,Retention,,,`);
+    rows.push('10,The Only Implementation Client,New,College,Large,B," ₹ 500,000.00 ",Mansi Rana,,Implementation,,,');
+    const book = rows.join('\n');
+    const trk = sheet(['1,2026-07-01,,,x,S,Mansi Rana,m@x.com,,2026-07-27,,n']);
+    const { doc, errs } = boot({ body: trk, clientBody: asClient(trk), bookBody: book });
+    await settle();
+    doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
+    check('boots cleanly with nine retention clients', errs.length === 0, errs.join(' | '));
+
+    const card = [...doc.querySelectorAll('.mcard')]
+      .find(c => /Mansi Rana/.test(c.querySelector('h4').textContent));
+    card.querySelector('button.info').click();
+    const how = card.querySelector('.how');
+    /* Scoped to the mix section alone: with this fixture's adoption data left
+       empty, all ten clients read as never-scored too, which produces its own
+       unrelated "Show all 10 clients" disclosure in the adoption section right
+       after it — a coincidence of this fixture, not something the mix section
+       should be judged by. */
+    const mixSection = [];
+    let node = how.querySelector('h5[data-sec="mix"]')?.nextElementSibling;
+    while (node && node.tagName !== 'H5') { mixSection.push(node); node = node.nextElementSibling; }
+    const mixDetails = mixSection.filter(el => el.matches('details') || el.querySelector?.('details'))
+      .flatMap(el => el.matches('details') ? [el] : [...el.querySelectorAll('details')]);
+
+    const details = mixDetails.find(d => /Show all 9 clients/.test(d.querySelector('summary')?.textContent || ''));
+    check('nine retention clients disclose behind "Show all 9 clients"', !!details,
+          mixDetails.map(d => d.querySelector('summary')?.textContent).join(' | '));
+    check('the visible list before opening it is capped, not all nine',
+          details && details.previousElementSibling?.textContent.split('·').length < 9,
+          details && details.previousElementSibling?.textContent);
+    check('opening it reveals every one, including the smallest',
+          details && /Retention Client 9/.test(details.textContent), details && details.textContent);
+    check('a single implementation client needs no disclosure of its own — only the nine-strong retention list does',
+          mixDetails.length === 1 &&
+          mixSection.some(el => /The Only Implementation Client/.test(el.textContent)),
+          mixDetails.length + ' details inside the mix section');
   }
 
   const w = Math.max(...results.map(r => r[1].length));
