@@ -1629,8 +1629,8 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
        wrong, these fail rather than passing against the hidden original. */
     const how = doc.getElementById('howbody').textContent.replace(/\s+/g, ' ');
     check('it states the rule', /one expected entry per tracker/.test(how), how.slice(0, 90));
-    check('it names the Sunday and Saturday treatment',
-          /Sundays excluded/.test(how) && /Saturdays counted/.test(how));
+    check('it names the Sunday, holiday, and Saturday treatment',
+          /Sundays and company holidays excluded/.test(how) && /Saturdays counted/.test(how));
     check('it lists every member of the team',
           /Sultan Malik/.test(how) && /Lokesh Kumar/.test(how) && /Amar Kumar Pandit/.test(how));
     check('it gives actual dates', /\d+ Jul/.test(how), how.slice(-80));
@@ -2307,12 +2307,18 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
   }
 
   // ── 4. modes: Today / Yesterday / Date range ─────────────────────
+  // Mirrors index.html's own HOLIDAYS set — keep the two in sync.
+  const TEST_HOLIDAYS = new Set([
+    '2026-08-15', '2026-08-28', '2026-10-02', '2026-10-20',
+    '2026-11-06', '2026-11-07', '2026-11-09', '2026-12-25',
+  ]);
+  const testWorkingDay = d => d.getDay() !== 0 && !TEST_HOLIDAYS.has(isoLocal(d));
   const TODAY_W = (() => { const d = new Date();
-    while (d.getDay()===0) d.setDate(d.getDate()-1); return isoLocal(d); })();
+    while (!testWorkingDay(d)) d.setDate(d.getDate()-1); return isoLocal(d); })();
   const YEST_W = (() => { const d = new Date();
-    while (d.getDay()===0) d.setDate(d.getDate()-1);
+    while (!testWorkingDay(d)) d.setDate(d.getDate()-1);
     d.setDate(d.getDate()-1);
-    while (d.getDay()===0) d.setDate(d.getDate()-1); return isoLocal(d); })();
+    while (!testWorkingDay(d)) d.setDate(d.getDate()-1); return isoLocal(d); })();
 
   {
     const { doc } = boot(); await settle();
@@ -2513,6 +2519,36 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
       [...document.querySelectorAll('#kpis .fig')].map(e=>e.textContent.replace(/\\s+/g,'')).join('|');`);
     check('fixed range identical in every TZ', fixed === '4|56%|0/3|2',
           `TZ=${process.env.TZ || 'UTC'} gave ${fixed}`);
+  }
+
+  // ── 10b. company holidays — added 17 Aug 2026. 2026-08-15 is a real listed
+  //        holiday (Independence Day) that also happens to fall on a
+  //        Saturday, otherwise an ordinary working day here, so it is the
+  //        sharpest case: without the fix it would still count. The gap
+  //        grid must mark it as a gutter exactly like the Sunday beside it —
+  //        rendered on the page, not just excluded from the underlying
+  //        range(), or a holiday reads as a red "missed" cell for the whole
+  //        team. ──────────────────────────────────────────────────────────
+  {
+    const { doc, win } = boot(); await settle();
+    win.eval(`
+      document.getElementById('from').value='2026-08-13';
+      document.getElementById('to').value='2026-08-17';
+      render();`);
+    const heads = [...doc.querySelectorAll('#grid thead th')];
+    // Person · 13 Thu · 14 Fri · 15 (holiday, gutter) · 16 (Sunday, gutter) · 17 Mon · Missed
+    check('the grid has one column per calendar day plus Person and Missed',
+          heads.length === 7, heads.map(h => h.className).join('|'));
+    check('the holiday column is rendered as a gutter, exactly like the Sunday beside it',
+          heads[3]?.classList.contains('gutter') && heads[4]?.classList.contains('gutter'),
+          heads.map(h => h.className).join('|'));
+    check('the real working-day columns around it are not gutters',
+          !heads[1]?.classList.contains('gutter') && !heads[2]?.classList.contains('gutter') &&
+          !heads[5]?.classList.contains('gutter'),
+          heads.map(h => h.className).join('|'));
+    check('the body cells under the holiday and Sunday columns are gutters too',
+          [...doc.querySelectorAll('#grid tbody tr')].every(r =>
+            r.children[3].classList.contains('gutter') && r.children[4].classList.contains('gutter')));
   }
 
   // ── 11. injection from sheet content ───────────────────────────

@@ -722,6 +722,47 @@ const settle = () => new Promise(r => setTimeout(r, 30));
           !/Branch C/.test(who), who.slice(0, 300));
   }
 
+  // ── N. Company holidays — added 17 Aug 2026: a fixed list of dates (some of
+  //      them Saturdays, which are otherwise ordinary working days here) that
+  //      must be excluded from "expected" everywhere Sunday already is —
+  //      range() and analyse(), which the internal and client-call trackers
+  //      both run through. The gap grid's own gutter rendering (same
+  //      isWorkingDay() check, rendered on the page) is covered in qa.js
+  //      instead, against its richer default fixture. ────────────────────
+  {
+    const { win } = boot({ body: sheet([]) }); await settle();
+    // 2026-08-15 is a real listed holiday (Independence Day) and a Saturday,
+    // so it would count as an ordinary working day without the fix; 08-16 is
+    // an ordinary Sunday, already excluded before this change.
+    check('range() drops the holiday alongside the Sunday',
+          win.eval("JSON.stringify(range('2026-08-13','2026-08-17',true))") ===
+          '["2026-08-13","2026-08-14","2026-08-17"]',
+          win.eval("JSON.stringify(range('2026-08-13','2026-08-17',true))"));
+    check('a plain Saturday with no holiday is untouched',
+          win.eval("JSON.stringify(range('2026-08-20','2026-08-22',true))") ===
+          '["2026-08-20","2026-08-21","2026-08-22"]',
+          win.eval("JSON.stringify(range('2026-08-20','2026-08-22',true))"));
+  }
+  {
+    // A person who files on every real working day across the holiday span
+    // must show 0 missed — not 1 for a "skipped" Saturday that was never
+    // actually expected of them.
+    const rows = ['2026-08-10','2026-08-11','2026-08-12','2026-08-13','2026-08-14','2026-08-17']
+      .map((d, i) => `${i + 1},2026-08-01,,,x,S,Holiday Tester,h@x.com,,${d},,n`);
+    const { win, errs } = boot({ body: sheet(rows) }); await settle();
+    const a = JSON.parse(win.eval(`(() => {
+      const parsed = parseExport(${JSON.stringify(sheet(rows))});
+      const a = analyse(parsed, '2026-08-10', '2026-08-17', true);
+      const p = a.stats.find(s => s.name.toLowerCase() === 'holiday tester');
+      return JSON.stringify({expected: p.expected, filed: p.filed, missed: p.missed, days: a.days});
+    })()`));
+    check('boots cleanly across a fixture spanning the holiday', errs.length === 0, errs.join(' | '));
+    check('the holiday and the Sunday both fall out of the expected-day list',
+          a.days.length === 6 && !a.days.includes('2026-08-15') && !a.days.includes('2026-08-16'),
+          JSON.stringify(a.days));
+    check('a person who filed every real working day reads 0 missed, not 1 for the holiday',
+          a.expected === 6 && a.filed === 6 && a.missed === 0, JSON.stringify(a));
+  }
   const w = Math.max(...results.map(r => r[1].length));
   for (const [ok, n, d] of results) console.log(`${ok ? ' ok ' : 'FAIL'}  ${n.padEnd(Math.min(w,100))}  ${d}`);
   console.log(`\n${pass} passed, ${fail} failed`);

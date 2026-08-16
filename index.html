@@ -841,7 +841,7 @@ table.board td.tot.zero{font-weight:400;color:var(--faint)}
 <div class="wrap">
   <p class="eyebrow" id="eyebrow"></p>
   <h2 class="hero" id="h1">Who <em>hasn't</em> filed.</h2>
-  <p class="lede" id="lede">One entry per person per working day. Everything here counts what's absent — a person-day with no submission at all. Sundays are excluded.</p>
+  <p class="lede" id="lede">One entry per person per working day. Everything here counts what's absent — a person-day with no submission at all. Sundays and company holidays are excluded.</p>
 
   <div class="controls">
     <span class="presets" id="presets">
@@ -1000,7 +1000,7 @@ table.board td.tot.zero{font-weight:400;color:var(--faint)}
 
   <section id="gridsec">
     <h3>The gaps</h3>
-    <p class="hint">One square per person per working day. Filed days are deliberately quiet grey — the solid red is what you're looking for. Hollow squares are days before that person's first entry. Sundays are the dotted gutters.</p>
+    <p class="hint">One square per person per working day. Filed days are deliberately quiet grey — the solid red is what you're looking for. Hollow squares are days before that person's first entry. Sundays and company holidays are the dotted gutters.</p>
     <div class="gridscroll"><table class="grid" id="grid"></table></div>
     <div class="legend">
       <span><i class="cell m"></i> No entry filed</span>
@@ -1633,9 +1633,26 @@ const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'
 const DOW=['Su','Mo','Tu','We','Th','Fr','Sa'];
 const pretty=s=>D(s).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
 const shortDate=s=>D(s).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+/* Company-wide holidays, every employee, every tracker. A holiday is not a day
+   nobody happened to file — it is a day nobody was expected to, exactly like a
+   Sunday, so it must never inflate a missed count, break a streak, or count as
+   an expected entry on either the internal or client call tracker. Two of
+   these (15 Aug, 7 Nov) fall on a Saturday, which is otherwise a working day
+   here — without this list those two would still count. */
+const HOLIDAYS=new Set([
+  '2026-08-15', // Independence Day
+  '2026-08-28', // Raksha Bandhan
+  '2026-10-02', // Gandhi Jayanti
+  '2026-10-20',
+  '2026-11-06',
+  '2026-11-07',
+  '2026-11-09',
+  '2026-12-25', // Christmas
+]);
+const isWorkingDay=d=>d.getDay()!==0&&!HOLIDAYS.has(iso(d));
 function range(from,to,skipSun){
   const out=[],c=D(from),e=D(to);
-  while(c<=e){ if(!skipSun||c.getDay()!==0) out.push(iso(c)); c.setDate(c.getDate()+1); }
+  while(c<=e){ if(!skipSun||isWorkingDay(c)) out.push(iso(c)); c.setDate(c.getDate()+1); }
   return out;
 }
 
@@ -2452,10 +2469,11 @@ function analyse(rows,from,to,joined){
 
 /* ---------------- chase list ----------------
    Anchored to a single day, chosen by the Today / Yesterday buttons rather than
-   by the date range. Sundays are skipped, so "Yesterday" on a Monday means the
-   previous Saturday. The header always spells out the actual date so there is
-   no ambiguity about which day is being counted.                              */
-function stepBackToWorkingDay(d){ while (d.getDay() === 0) d.setDate(d.getDate() - 1); return d; }
+   by the date range. Sundays and holidays are skipped, so "Yesterday" on a
+   Monday means the previous Saturday, and either button lands on the last
+   real working day if today itself is a holiday. The header always spells out
+   the actual date so there is no ambiguity about which day is being counted. */
+function stepBackToWorkingDay(d){ while (!isWorkingDay(d)) d.setDate(d.getDate() - 1); return d; }
 function todayWorking(){ return iso(stepBackToWorkingDay(new Date())); }
 function yesterdayWorking(){
   const d = stepBackToWorkingDay(new Date());
@@ -2484,7 +2502,7 @@ function renderChase(){
     // consecutive working days missed, counting back from the anchor day
     let streak = 0; const d = D(day);
     while (true){
-      if (d.getDay() !== 0){
+      if (isWorkingDay(d)){
         if (p.filed.has(iso(d))) break;
         streak++;
       }
@@ -2674,8 +2692,8 @@ function howHtml(r){
     ]) +
     `<p class="sum">` +
     `Every working day counts as one expected entry per tracker — two a day, ` +
-    `Sundays excluded, Saturdays counted, and nothing counted for days that ` +
-    `have not happened yet. ` +
+    `Sundays and company holidays excluded, other Saturdays counted, and ` +
+    `nothing counted for days that have not happened yet. ` +
     (skipping ? `Days before a person's first ever entry are skipped. ` : '') +
     `For this team that is <b>${r.expected} expected</b>, <b>${r.filed} filed</b>, ` +
     `<b>${r.expected - r.filed} missed</b> — ` +
@@ -3971,14 +3989,14 @@ function render(){
   let h='<thead><tr><th class="who">Person</th>';
   for(const d of cols){
     const dt=D(d);
-    h+= dt.getDay()===0 ? '<th class="gutter"></th>'
-      : `<th class="day">${dt.getDate()}<span class="dow">${DOW[dt.getDay()]}</span></th>`;
+    h+= isWorkingDay(dt) ? `<th class="day">${dt.getDate()}<span class="dow">${DOW[dt.getDay()]}</span></th>`
+      : '<th class="gutter"></th>';
   }
   h+='<th class="tot">Missed</th></tr></thead><tbody>';
   for(const p of order){
     h+=`<tr><td class="who">${esc(p.name)}</td>`;
     for(const d of cols){
-      if(D(d).getDay()===0){h+='<td class="gutter"><i class="rule"></i></td>';continue;}
+      if(!isWorkingDay(D(d))){h+='<td class="gutter"><i class="rule"></i></td>';continue;}
       if(d<p.startsAt){h+=`<td><i class="cell na" title="${esc(p.name)} — before first entry"></i></td>`;continue;}
       const ok=p.filedSet.has(d);
       h+=`<td><i class="cell ${ok?'f':'m'}" title="${esc(p.name)} — ${pretty(d)}: ${ok?'filed':'no entry'}"></i></td>`;

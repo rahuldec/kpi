@@ -1610,3 +1610,49 @@ build the picture above — 7 exact, 8 prefix, 16 safe spelling/abbreviation ali
 (`Saraswati Mahila Mahavidhyalaya, Palwal`, `IAIT`, `CDS Modern School`) — before any
 of it was written as code. 725 assertions total (648 + 77), passing across
 UTC/IST/PST/UTC+14.
+
+## Company holidays — added 17 Aug 2026
+
+A fixed list, `HOLIDAYS`, of eight 2026 dates given by name — Independence Day,
+Raksha Bandhan, Gandhi Jayanti, and five more without a label attached. Two of them
+(15 Aug, 7 Nov) land on a Saturday, which this page otherwise treats as an ordinary
+working day — every other holiday would have been silently absorbed by the existing
+Sunday-only exclusion reading them as expected filing days regardless, but a
+Saturday holiday would not, and both of this year's do.
+
+### One check, reused everywhere Sunday already was
+
+`isWorkingDay(d)` is `d.getDay() !== 0 && !HOLIDAYS.has(iso(d))` — Sunday and holiday,
+one function, so nothing that already excluded Sunday can forget to exclude a
+holiday by only being taught one of the two rules. `range()`'s `skipSun` branch runs
+through it, and since `analyse()` (the one function both the internal and the client
+call tracker share) builds its whole notion of "expected" from `range()`'s output,
+compliance, the missed count, and every streak on both trackers inherit the fix for
+free — nothing about the compliance dial's own code changed. `stepBackToWorkingDay()`
+(what "Today" and "Yesterday" land on) and the chase panel's own missed-streak
+counter call `isWorkingDay()` directly, for the same reason: a streak that silently
+counted a holiday as a missed day, or a "Today" that opened on a holiday nobody was
+expected to file on, would both be the same class of bug the Sunday handling already
+guards against.
+
+### The gap grid marks a holiday the way it already marks a Sunday
+
+The per-day table on the internal/client tracker draws a blank "gutter" column for
+every Sunday rather than a red missed cell — the same `isWorkingDay()` check now
+decides that for a holiday column too, so a holiday reads as the dotted gutter it
+is instead of the whole team looking like they missed a day in unison. The rail's
+tagline, the grid's own hint text, and the compliance panel's explanation paragraph
+were all updated to say "Sundays and company holidays," not just "Sundays," so nothing
+on screen describes a rule the code no longer follows.
+
+### Verified against the live date, not only fixtures
+
+17 Aug 2026 is a Monday; the two days immediately before it are a real Sunday (16th)
+and a real Saturday holiday (15th, Independence Day). Booted the page against real
+production data and confirmed live: "Today" resolves to Friday the 14th, walking
+back over both the Sunday and the holiday exactly as `stepBackToWorkingDay()` is
+supposed to — before this fix it would have stopped one day early, on the holiday
+itself. A custom range across the same three days rendered the gap grid with both
+the 15th and the 16th as gutter columns and the KPI tile correctly reading "3
+working days," not 4. 765 assertions total (658 + 107), passing across
+UTC/IST/PST/UTC+14.
