@@ -1376,14 +1376,43 @@ function buildPods(){
       : `"${raw}" is not on the roster`};
   };
 
+  /* Every lead named anywhere in the sheet, resolved once, before any row is
+     applied — order-independent, so "is this name also somebody's lead" does
+     not depend on whether their own row happens to come before or after the
+     row that lists them as an assistant. A sheet edited by hand can end up
+     with the same lead split across two rows (a copy-pasted row not fully
+     retyped) or the same person claimed twice — three distinct mistakes, all
+     of which used to resolve by silent overwrite: the second row for a lead
+     replaced the first's whole team, a name repeated in one row appeared
+     twice on the card, and a name claimed by two different leads landed on
+     both their teams at once, though POD_OF (a Map, one value per key) could
+     only ever agree with one of them. Reported here, not guessed at. */
+  const leadNames = new Set();
+  for (const {lead} of TEAM_ROWS){
+    const r = resolve(lead);
+    if (!r.gap) leadNames.add(r.name);
+  }
+
   for (const {lead, members} of TEAM_ROWS){
     const r = resolve(lead);
     if (r.gap){ POD_GAPS.push(`Lead ${r.gap}`); continue; }
-    const team = [];
+    /* Reused, not reset — a second row for the same lead adds to their team
+       rather than replacing it. */
+    const team = POD_TEAM.get(r.name) || [];
     for (const m of members){
       const x = resolve(m);
-      if (x.gap) POD_GAPS.push(`${r.name}'s team: ${x.gap}`);
-      else { team.push(x.name); POD_OF.set(x.name, r.name); }
+      if (x.gap){ POD_GAPS.push(`${r.name}'s team: ${x.gap}`); continue; }
+      if (team.includes(x.name)) continue;   // named twice in the same row
+      if (leadNames.has(x.name) && x.name !== r.name){
+        POD_GAPS.push(`"${x.name}" is listed under ${r.name} but also runs their own team — kept as a lead, not moved`);
+        continue;
+      }
+      if (POD_OF.has(x.name) && POD_OF.get(x.name) !== r.name){
+        POD_GAPS.push(`"${x.name}" is listed under both ${POD_OF.get(x.name)} and ${r.name} — kept under ${POD_OF.get(x.name)}, the row it reaches first`);
+        continue;
+      }
+      team.push(x.name);
+      POD_OF.set(x.name, r.name);
     }
     POD_OF.set(r.name, r.name);
     POD_TEAM.set(r.name, team);

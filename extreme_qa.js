@@ -837,6 +837,262 @@ const settle = () => new Promise(r => setTimeout(r, 30));
           win.eval('TEAM_ERROR'));
   }
 
+  // ── P. Malformed sheet edits — added 17 Aug 2026, from an audit of the Team
+  //      tab migration. Three distinct hand-edit mistakes used to resolve by
+  //      silent overwrite, each one losing or duplicating a real person:
+  //      splitting one lead across two rows dropped the first row's team,
+  //      repeating a name in one row duplicated it on the card, and the same
+  //      assistant claimed by two leads landed on both their teams at once —
+  //      though POD_OF, a Map, could only ever agree with one of them. All
+  //      three are now merged/deduped/resolved instead, and reported in
+  //      POD_GAPS rather than guessed at. ─────────────────────────────────
+  {
+    const trk = sheet([
+      '1,2026-07-01,,,x,S,Kashish Goel,k@x.com,,2026-07-01,,n',
+      '2,2026-07-01,,,x,S,Anjali Verma,a@x.com,,2026-07-01,,n',
+      '3,2026-07-01,,,x,S,Tanvi Gupta,t@x.com,,2026-07-01,,n',
+    ]);
+    // The same lead, split across two rows — a copy-pasted row where only the
+    // assistant column was changed.
+    const team = ['RM,ARM', 'Kashish Goel,Anjali Verma', 'Kashish Goel,Tanvi Gupta'].join('\n');
+    const { win, errs } = boot({ body: trk, clientBody: asClient(trk), teamBody: team }); await settle();
+    check('boots cleanly with the same lead split across two rows', errs.length === 0, errs.join(' | '));
+    check('a lead split across two rows keeps both rows\' members — merged, not overwritten',
+          win.eval("JSON.stringify(POD_TEAM.get('Kashish Goel').slice().sort())") ===
+          JSON.stringify(['Anjali Verma', 'Tanvi Gupta']),
+          win.eval("JSON.stringify(POD_TEAM.get('Kashish Goel'))"));
+  }
+  {
+    const trk = sheet([
+      '1,2026-07-01,,,x,S,Kashish Goel,k@x.com,,2026-07-01,,n',
+      '2,2026-07-01,,,x,S,Anjali Verma,a@x.com,,2026-07-01,,n',
+    ]);
+    // The same assistant typed twice in one row.
+    const team = ['RM,ARM,CR', 'Kashish Goel,Anjali Verma,Anjali Verma'].join('\n');
+    const { doc, win, errs } = boot({ body: trk, clientBody: asClient(trk), teamBody: team }); await settle();
+    doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
+    check('boots cleanly with a repeated name in one row', errs.length === 0, errs.join(' | '));
+    check('a name typed twice in the same row is not duplicated on the team',
+          win.eval("JSON.stringify(POD_TEAM.get('Kashish Goel'))") === JSON.stringify(['Anjali Verma']),
+          win.eval("JSON.stringify(POD_TEAM.get('Kashish Goel'))"));
+    const card = [...doc.querySelectorAll('.mcard')]
+      .find(c => /Kashish Goel/.test(c.querySelector('h4')?.textContent || ''));
+    check('and does not print twice on the card either',
+          (card?.querySelector('.who')?.textContent.match(/Anjali Verma/g) || []).length === 1,
+          card?.querySelector('.who')?.textContent);
+  }
+  {
+    const trk = sheet([
+      '1,2026-07-01,,,x,S,Kashish Goel,k@x.com,,2026-07-01,,n',
+      '2,2026-07-01,,,x,S,Sultan Malik,s@x.com,,2026-07-01,,n',
+      '3,2026-07-01,,,x,S,Anjali Verma,a@x.com,,2026-07-01,,n',
+    ]);
+    // The same assistant claimed by two different leads.
+    const team = ['RM,ARM', 'Kashish Goel,Anjali Verma', 'Sultan Malik,Anjali Verma'].join('\n');
+    const { win, errs } = boot({ body: trk, clientBody: asClient(trk), teamBody: team }); await settle();
+    check('boots cleanly with one assistant claimed by two leads', errs.length === 0, errs.join(' | '));
+    check('POD_OF (one value per person) agrees with exactly one of the two claims',
+          win.eval("POD_OF.get('Anjali Verma')") === 'Kashish Goel',
+          win.eval("POD_OF.get('Anjali Verma')"));
+    check('she is on the winning lead\'s team...',
+          win.eval("POD_TEAM.get('Kashish Goel')").includes('Anjali Verma'));
+    check('...and not on the other lead\'s team too — no appearing on two cards at once',
+          !win.eval("POD_TEAM.get('Sultan Malik')").includes('Anjali Verma'),
+          win.eval("JSON.stringify(POD_TEAM.get('Sultan Malik'))"));
+    check('the conflict is named in POD_GAPS, not silently resolved',
+          /listed under both/.test(win.eval("POD_GAPS.join(' | ')")),
+          win.eval("POD_GAPS.join(' | ')"));
+  }
+  {
+    // A person who runs their own team AND is listed as somebody else's
+    // assistant elsewhere in the sheet — self-contradictory input with no
+    // "correct" answer, but it must not crash, and it must not silently cost
+    // the person their own card.
+    const trk = sheet([
+      '1,2026-07-01,,,x,S,Kashish Goel,k@x.com,,2026-07-01,,n',
+      '2,2026-07-01,,,x,S,Sultan Malik,s@x.com,,2026-07-01,,n',
+    ]);
+    const team = ['RM,ARM', 'Kashish Goel,', 'Sultan Malik,Kashish Goel'].join('\n');
+    const { doc, win, errs } = boot({ body: trk, clientBody: asClient(trk), teamBody: team }); await settle();
+    doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
+    check('boots cleanly when a lead is also listed as someone else\'s assistant',
+          errs.length === 0, errs.join(' | '));
+    check('the lead keeps their own card rather than being folded into the other team',
+          [...doc.querySelectorAll('.mcard h4')].some(h => h.textContent === 'Kashish Goel'),
+          [...doc.querySelectorAll('.mcard h4')].map(h => h.textContent).join(', '));
+    check('POD_OF still says they report to themselves, not to the row that also claimed them',
+          win.eval("POD_OF.get('Kashish Goel')") === 'Kashish Goel',
+          win.eval("POD_OF.get('Kashish Goel')"));
+    check('the contradiction is named in POD_GAPS',
+          /also runs their own team/.test(win.eval("POD_GAPS.join(' | ')")),
+          win.eval("POD_GAPS.join(' | ')"));
+  }
+
+  // ── Q. More sheet-editing mistakes — added 17 Aug 2026, from the same audit:
+  //      a real fetch failure (not just malformed content), a header missing
+  //      the one column that matters, a row with no lead name at all, names
+  //      that need CSV quoting or aren't ASCII, and a column nobody asked the
+  //      sheet to have. ─────────────────────────────────────────────────────
+  {
+    // A genuine transport failure — fetchRaw() itself throws on a non-2xx
+    // status, before parseTeam() ever runs — distinct from the "malformed
+    // content, 200 OK" case already covered above.
+    const trk = sheet(['1,2026-07-01,,,x,S,Kashish Goel,k@x.com,,2026-07-01,,n']);
+    const dom = new (require('jsdom').JSDOM)(HTML, {
+      runScripts: 'dangerously', pretendToBeVisual: true, url: 'https://kpi.test/',
+      beforeParse(window) {
+        window.fetch = (url) => {
+          const src = (url.match(/src=(\w+)/) || [])[1];
+          if (src === 'team') return Promise.resolve({ ok: false, status: 503, text: () => Promise.resolve('') });
+          return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve(
+            src === 'book' ? MIN_BOOK : src === 'client' ? asClient(trk) : trk) });
+        };
+      },
+    });
+    const errs = []; dom.virtualConsole.on('jsdomError', e => errs.push(e.message));
+    await settle();
+    check('a real 503 on the Team endpoint does not crash the page', errs.length === 0, errs.join(' | '));
+    check('falls back to the compiled snapshot, same as malformed content does',
+          dom.window.eval('TEAM_LIVE') === false, dom.window.eval('TEAM_ERROR'));
+    dom.window.document.querySelector('#sources3 button[data-src="meter"]')?.click();
+    await settle();
+    check('the meter still has cards to show',
+          dom.window.document.querySelectorAll('.mcard').length > 0,
+          String(dom.window.document.querySelectorAll('.mcard').length));
+  }
+  {
+    // A well-formed CSV, but the one column parseTeam() actually looks for —
+    // "RM" as the first header cell — isn't there at all.
+    const trk = sheet(['1,2026-07-01,,,x,S,Kashish Goel,k@x.com,,2026-07-01,,n']);
+    const team = 'Name,Assistant\nKashish Goel,Anjali Verma\n';
+    const { doc, win, errs } = boot({ body: trk, clientBody: asClient(trk), teamBody: team }); await settle();
+    doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
+    check('a sheet missing the RM column entirely does not crash', errs.length === 0, errs.join(' | '));
+    check('is reported as unreadable rather than silently parsed as zero leads',
+          /Could not find a header row/.test(win.eval('TEAM_ERROR') || ''), win.eval('TEAM_ERROR'));
+    check('and still falls back to a working meter',
+          doc.querySelectorAll('.mcard').length > 0, String(doc.querySelectorAll('.mcard').length));
+  }
+  {
+    // A row with no lead name but a filled-in assistant column — a stray
+    // half-deleted row, not a real team.
+    const trk = sheet([
+      '1,2026-07-01,,,x,S,Kashish Goel,k@x.com,,2026-07-01,,n',
+      '2,2026-07-01,,,x,S,Anjali Verma,a@x.com,,2026-07-01,,n',
+      '3,2026-07-01,,,x,S,Ghost Assistant,g@x.com,,2026-07-01,,n',
+    ]);
+    const team = ['RM,ARM', ',Ghost Assistant', 'Kashish Goel,Anjali Verma'].join('\n');
+    const { win, errs } = boot({ body: trk, clientBody: asClient(trk), teamBody: team }); await settle();
+    check('boots cleanly with a blank-lead row ahead of a real one', errs.length === 0, errs.join(' | '));
+    check('the blank-lead row is skipped outright — its assistant lands on nobody\'s team',
+          win.eval("POD_OF.has('Ghost Assistant')") === false,
+          win.eval("POD_OF.get('Ghost Assistant')"));
+    check('and it does not leak into the very next row\'s team either',
+          !win.eval("POD_TEAM.get('Kashish Goel')").includes('Ghost Assistant'),
+          win.eval("JSON.stringify(POD_TEAM.get('Kashish Goel'))"));
+    check('the real row right after the blank one still parses normally',
+          win.eval("POD_OF.get('Anjali Verma')") === 'Kashish Goel',
+          win.eval("POD_OF.get('Anjali Verma')"));
+  }
+  {
+    // A quoted name containing a comma, and a name in Devanagari — both have
+    // to survive the same CSV parser the book and escalations already lean on.
+    const trk = sheet([
+      '1,2026-07-01,,,x,S,"Sharma, Raj",r@x.com,,2026-07-01,,n',
+      '2,2026-07-01,,,x,S,सुनीता कुमारी,s@x.com,,2026-07-01,,n',
+    ]);
+    const team = 'RM,ARM\n"Sharma, Raj",सुनीता कुमारी\n';
+    const { win, errs } = boot({ body: trk, clientBody: asClient(trk), teamBody: team }); await settle();
+    check('boots cleanly with a quoted comma-containing name and a Devanagari name',
+          errs.length === 0, errs.join(' | '));
+    check('the quoted comma-containing lead name resolves to their own team',
+          Array.isArray(win.eval("POD_TEAM.get('Sharma, Raj')")), win.eval("POD_TEAM.get('Sharma, Raj')"));
+    check('and the Devanagari assistant name resolves under them, not reported as a gap',
+          win.eval("POD_OF.get('सुनीता कुमारी')") === 'Sharma, Raj',
+          win.eval("POD_OF.get('सुनीता कुमारी')") + ' | gaps: ' + win.eval("POD_GAPS.join(' | ')"));
+  }
+  {
+    // A column the Team tab was never asked to have.
+    const trk = sheet([
+      '1,2026-07-01,,,x,S,Kashish Goel,k@x.com,,2026-07-01,,n',
+      '2,2026-07-01,,,x,S,Anjali Verma,a@x.com,,2026-07-01,,n',
+    ]);
+    const team = ['RM,ARM,Region', 'Kashish Goel,Anjali Verma,North'].join('\n');
+    const { win, errs } = boot({ body: trk, clientBody: asClient(trk), teamBody: team }); await settle();
+    check('boots cleanly with an unrelated extra column', errs.length === 0, errs.join(' | '));
+    check('the real assistant still resolves correctly',
+          win.eval("POD_OF.get('Anjali Verma')") === 'Kashish Goel',
+          win.eval("POD_OF.get('Anjali Verma')"));
+    check('the stray column\'s value is reported as an unplaceable name, not silently added to the team',
+          !win.eval("POD_TEAM.get('Kashish Goel')").includes('North') &&
+          /"North" is not on the roster/.test(win.eval("POD_GAPS.join(' | ')")),
+          win.eval("JSON.stringify(POD_TEAM.get('Kashish Goel'))") + ' | ' + win.eval("POD_GAPS.join(' | ')"));
+  }
+  {
+    // Case variants of the same two names, exactly as they might be typed
+    // into the sheet by someone not matching the tracker's own casing.
+    //
+    // What actually has to hold, per resolve(): matching against the roster
+    // is always case-insensitive, so a mismatched casing in the sheet is
+    // never a *second* person — the identity always collapses to whichever
+    // one entry the roster already has for that lowercased name. Which exact
+    // spelling gets DISPLAYED is a separate, cosmetic question, decided by
+    // canonicalNames() — hand-typed sources (the Team tab, and the client
+    // book's own owner column) are trusted as authoritative there, on the
+    // same principle as everywhere else in this file: it is not this app's
+    // place to silently second-guess a name a human actually typed. Kashish
+    // resolves to "Kashish Goel" below because he also owns a client in the
+    // fallback book (a coincidence of this fixture, not a Team-tab mechanism);
+    // Anjali has no second hand-typed source, so the sheet's own "ANJALI
+    // VERMA" wins outright — correctly, by the same rule, even though it
+    // reads oddly. Either way there is exactly one of each, never two.
+    const trk = sheet([
+      '1,2026-07-01,,,x,S,Kashish Goel,k@x.com,,2026-07-01,,n',
+      '2,2026-07-01,,,x,S,Anjali Verma,a@x.com,,2026-07-01,,n',
+    ]);
+    const team = 'RM,ARM\nkashish goel, ANJALI VERMA \n';
+    const { doc, win, errs } = boot({ body: trk, clientBody: asClient(trk), teamBody: team }); await settle();
+    doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
+    check('boots cleanly with mismatched case and stray whitespace in the sheet',
+          errs.length === 0, errs.join(' | '));
+    check('a differently-cased lead name still resolves to the one real person, not a gap',
+          win.eval("POD_TEAM.has('Kashish Goel')"), win.eval("POD_GAPS.join(' | ')"));
+    check('the card is rendered under a real casing, not the sheet\'s literal "kashish goel"',
+          [...doc.querySelectorAll('.mcard h4')].length === 1 &&
+          ![...doc.querySelectorAll('.mcard h4')].some(h => h.textContent === 'kashish goel'),
+          [...doc.querySelectorAll('.mcard h4')].map(h => h.textContent).join(', '));
+    check('the roster is not inflated — case variance never creates a second person',
+          win.eval('ROSTER.size') === 2, win.eval('ROSTER.size'));
+    check('the padded, all-caps assistant is still exactly one team member, resolved and self-consistent',
+          win.eval("POD_TEAM.get('Kashish Goel').length") === 1 &&
+          win.eval("(() => { const nm = POD_TEAM.get('Kashish Goel')[0]; return POD_OF.get(nm) === 'Kashish Goel'; })()"),
+          win.eval("JSON.stringify(POD_TEAM.get('Kashish Goel'))"));
+  }
+  {
+    // The same isolated claim, without the client-book coincidence muddying
+    // which mechanism did the work: two leads' rows reference the same
+    // assistant under two different casings. If case-folding did not happen
+    // before the duplicate-claim check runs, this would misread as two
+    // different people and silently double her onto both teams — the
+    // conflict-detection added earlier in this file would never fire, since
+    // it compares resolved (roster) names, not raw sheet text.
+    const trk = sheet([
+      '1,2026-07-01,,,x,S,Kashish Goel,k@x.com,,2026-07-01,,n',
+      '2,2026-07-01,,,x,S,Sultan Malik,s@x.com,,2026-07-01,,n',
+      '3,2026-07-01,,,x,S,Anjali Verma,a@x.com,,2026-07-01,,n',
+    ]);
+    const team = ['RM,ARM', 'Kashish Goel,anjali verma', 'Sultan Malik,ANJALI VERMA'].join('\n');
+    const { win, errs } = boot({ body: trk, clientBody: asClient(trk), teamBody: team }); await settle();
+    check('boots cleanly with the same assistant claimed twice under two different casings',
+          errs.length === 0, errs.join(' | '));
+    check('case folding happens before the conflict check — this is caught as one duplicate claim, not missed',
+          /listed under both/.test(win.eval("POD_GAPS.join(' | ')")), win.eval("POD_GAPS.join(' | ')"));
+    check('she lands on exactly one of the two teams, never both',
+          win.eval("POD_TEAM.get('Kashish Goel').length") === 1 &&
+          win.eval("POD_TEAM.get('Sultan Malik').length") === 0,
+          win.eval("JSON.stringify({k: POD_TEAM.get('Kashish Goel'), s: POD_TEAM.get('Sultan Malik')})"));
+  }
+
   const w = Math.max(...results.map(r => r[1].length));
   for (const [ok, n, d] of results) console.log(`${ok ? ' ok ' : 'FAIL'}  ${n.padEnd(Math.min(w,100))}  ${d}`);
   console.log(`\n${pass} passed, ${fail} failed`);
