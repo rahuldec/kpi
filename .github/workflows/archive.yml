@@ -7,15 +7,20 @@
 # while it is still in the window; the dashboard reads those files back and uses
 # them for any date the live sheet no longer reaches.
 #
-# Daily, not monthly: the window is measured in rows, not in time. A busy fortnight
-# can push a month out well before that month ends, and a run that happens after
-# the rows are gone has nothing left to save.
+# Every 15 minutes, not daily: the window is measured in rows, not in time, and
+# a once-a-day run only ever sees whatever survived the other 23 hours and 59
+# minutes of everyone else's filing in between. That is exactly how four days
+# of one person's early-July entries were gone before this workflow had run on
+# any schedule at all — filed on time, but aged out of the shared 500-row
+# window weeks before the first run ever got a chance to see them. GitHub will
+# not run a schedule more often than every 5 minutes regardless of what the
+# cron here says; 15 gives a safety margin on top of that floor without
+# hammering Google's export endpoint on every tick.
 name: Archive tracker entries
 
 on:
   schedule:
-    # 19:30 UTC = 01:00 IST, after the working day has finished being filed.
-    - cron: '30 19 * * *'
+    - cron: '*/15 * * * *'
   workflow_dispatch:      # and on demand, for the first backfill
 
 # The job's whole purpose is to commit what it found.
@@ -56,5 +61,7 @@ jobs:
           git config user.name  "kpi-archiver"
           git config user.email "actions@github.com"
           git add archive
-          git commit -m "Archive tracker entries ($(date -u +%Y-%m-%d))"
+          # Timestamped to the minute, not just the day — up to 96 runs a day can
+          # now each produce a commit, and a bare date would make them indistinguishable.
+          git commit -m "Archive tracker entries ($(date -u +%Y-%m-%dT%H:%M)Z)"
           git push
