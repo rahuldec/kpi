@@ -97,6 +97,20 @@ const SOURCES = {
                  mismatch: 'It has no "Client Name" and "Total Billing FY" columns — the link ' +
                            'probably points at the wrong tab. Re-publish with the Clients tab ' +
                            'selected and update BOOK_CSV_URL.' },
+  /* Who reports to whom — the "Team" tab, another tab in the same CS Team Plan
+     workbook the book comes from (same publish token, different gid), added 17
+     Aug 2026 to replace a hardcoded object in index.html that needed a code
+     change every time someone moved teams. One row per lead: RM name in the
+     first column, an assistant per column after it. A new RM is a new row; a
+     reshuffle is moving a name between rows — no code change either way. */
+  team:        { url: process.env.TEAM_CSV_URL ||
+                   'https://docs.google.com/spreadsheets/d/e/2PACX-1vRJduuwLQYkHFCDbGo1J-kGu8gN' +
+                   'WH3CX7dD8vVekiztMWxuiJIY1wptsW4eGgO5wg/pub?gid=976946752&single=true&output=csv',
+                 signature: csv => /^rm,/im.test(csv),
+                 envVar: 'TEAM_CSV_URL',
+                 mismatch: 'It has no "RM" column as the first header — the link probably ' +
+                           'points at the wrong tab. Re-publish with the Team tab selected ' +
+                           'and update TEAM_CSV_URL.' },
   /* An Asana portfolio report ("Client Implementation"), exported the same way
      the Asana project itself would be — File -> Export -> CSV, or in this case a
      live "Open Report in Google Sheets" published to the web, so it stays

@@ -1376,7 +1376,7 @@ function buildPods(){
       : `"${raw}" is not on the roster`};
   };
 
-  for (const [lead, members] of Object.entries(PODS)){
+  for (const {lead, members} of TEAM_ROWS){
     const r = resolve(lead);
     if (r.gap){ POD_GAPS.push(`Lead ${r.gap}`); continue; }
     const team = [];
@@ -1400,18 +1400,22 @@ const inr = n => '\u20B9' + (
 
 /* ---------------- pods ------------------------------------------------------
    Each lead runs a team, and the book a lead carries is worked by that team, not
-   by the lead alone. Given directly by the user on 1 Aug 2026 — this supersedes
-   the Team sheet in the workbook, which had drifted.
+   by the lead alone. Read live from the "Team" tab in the CS Team Plan workbook
+   (added 17 Aug 2026) — a hardcoded PODS object briefly stood in for it from 1
+   Aug, when that tab had drifted, but the fix is the tab, not a copy of it: a
+   new RM added there gets a card with no code change, and moving an assistant
+   from one lead's row to another's is a spreadsheet edit, not a deploy.
 
-   Not every team carries a book: Sagar's team owns no clients in the Clients
-   sheet, and it is still listed with a dash. A team that exists but bills nothing
-   is a fact worth showing, not a row to drop.
+   One row per lead — first column the lead's name, every other column an
+   assistant under them, however many the row has filled in. Written as the
+   sheet writes them; matched against the roster below, and anything that fails
+   to match is named in POD_GAPS rather than dropped, so a rename in Asana
+   cannot silently empty a pod.
 
-   Members are written as the Team sheet writes them, first name only. They are
-   matched against the roster below, and anything that fails to match is named on
-   the page rather than dropped, so a rename in Asana cannot silently empty a pod.
-
-   One gap left visible on purpose: Ankush Rana owns clients but has no team. */
+   Not every team carries a book — a team that exists but bills nothing is a
+   fact worth showing, not a row to drop, which is what NO_BOOK_TEAMS is for.
+   A lead can also carry a book with no assistants at all (an empty row after
+   their name); that is a gap left visible on purpose, not a parsing failure. */
 /* ---------------- the target ------------------------------------------------
    A full team is one RM and two assistants, and a full team should be carrying
    ₹50 lakh. That fixes both the shape and the number.
@@ -1444,15 +1448,44 @@ const targetFor = heads => TARGET_SCALED
 const NO_BOOK_TEAMS = ['Sagar Mishra'];
 const noBook = lead => NO_BOOK_TEAMS.some(n => n.toLowerCase() === String(lead).toLowerCase());
 
-const PODS = {
-  'Mansi Rana':    ['Vansh', 'Divya'],
-  'Sukhmeet Singh':['Gobind', 'Sapna', 'Bhavey Saluja'],
-  'Sultan Malik':  ['Lokesh', 'Amar Kumar Pandit'],
-  'Sagar Mishra':  ['Mehak', 'Akshat'],
-  'Kashish Goel':  ['Anjali', 'Tanvi'],
-  'Amit Kumar':    ['Priya'],
-  'Ankush Rana':   []
-};
+/* Baked-in copy of the Team tab, read 16 Aug 2026 — used only if the live sheet
+   cannot be reached, the same fallback pattern as CLIENTS_FALLBACK and the
+   others. Team structure changes rarely, so a few stale minutes on a fetch
+   failure is a fair trade against emptying the meter entirely. */
+const TEAM_FALLBACK_ASOF = '2026-08-16';
+const TEAM_FALLBACK = [
+  {lead: 'Mansi Rana',     members: ['Divya', 'Vansh Saini']},
+  {lead: 'Sultan Malik',   members: ['Lokesh Kumar', 'Aanchal Dhiman']},
+  {lead: 'Sukhmeet Singh', members: ['Gobind Monga', 'Sapna', 'Bhavey Saluja', 'Akshat Wahi']},
+  {lead: 'Kashish Goel',   members: ['Anjali Verma', 'Tanvi Gupta']},
+  {lead: 'Amit Kumar',     members: ['Priya']},
+  {lead: 'Ankush Rana',    members: ['Aadhar Mittal']},
+];
+let TEAM_ROWS = TEAM_FALLBACK, TEAM_ASOF = TEAM_FALLBACK_ASOF,
+    TEAM_LIVE = false, TEAM_ERROR = null;
+
+/* One row per RM: column 0 is the lead's name, every other column an assistant
+   under them — however many columns the sheet has today (ARM, then CR, CR,
+   CR...) or grows to tomorrow, and however many of those cells a given row
+   actually fills in. A header is hunted for by its first cell rather than
+   assumed to be row 0, the same defensive read the book uses, in case a title
+   row ever sits above it. */
+function parseTeam(text){
+  const rows = splitRows(text, ',');
+  let head = -1;
+  for (let i = 0; i < Math.min(rows.length, 10); i++)
+    if ((rows[i][0] || '').trim().toLowerCase() === 'rm'){ head = i; break; }
+  if (head < 0) throw new Error('Could not find a header row whose first column is "RM".');
+
+  const out = [];
+  for (let i = head + 1; i < rows.length; i++){
+    const r = rows[i]; if (!r) continue;
+    const lead = (r[0] || '').trim();
+    if (!lead) continue;
+    out.push({lead, members: r.slice(1).map(x => (x || '').trim()).filter(Boolean)});
+  }
+  return out;
+}
 
 const SOURCES = {
   internal:  {label: 'CS Internal Team Calls Tracker', noun: 'internal calls'},
@@ -1582,9 +1615,9 @@ let ROSTER = new Map();
 
 /* Asana's display-name casing varies row to row, so "whichever spelling arrived
    first" can be the lowercase one — which is how "kashish Goel" reached the
-   boards while the client book said "Kashish Goel". PODS and the book's Team
-   column are both typed by hand and are the spellings people expect, so they
-   win.
+   boards while the client book said "Kashish Goel". The Team tab and the
+   book's Team column are both typed by hand and are the spellings people
+   expect, so they win.
 
    This only chooses BETWEEN spellings of the same name. It does not re-case
    anything it has no canonical form for: names here are not title-case
@@ -1598,7 +1631,7 @@ const cased = n => String(n || '').split(/\s+/).filter(w => /^[A-Z]/.test(w)).le
 function canonicalNames(){
   const m = new Map();
   const add = n => { const s = String(n || '').trim(); if (s) m.set(s.toLowerCase(), s); };
-  for (const [lead, team] of Object.entries(PODS)){ add(lead); (team || []).forEach(add); }
+  for (const {lead, members} of TEAM_ROWS){ add(lead); (members || []).forEach(add); }
   for (const c of CLIENTS) add(c.o);
   return m;
 }
@@ -3576,8 +3609,8 @@ function renderMeter(){
       `<p class="podgaps" style="grid-column:1/-1">` +
       `<b>No teams to show.</b> ` +
       (POD_GAPS.length
-        ? `${POD_GAPS.map(esc).join('. ')}. Edit <code>PODS</code> in index.html.`
-        : `Nobody on the roster is in a team yet — add them to <code>PODS</code> in index.html.`) +
+        ? `${POD_GAPS.map(esc).join('. ')}. Fix the Team tab in the CS Team Plan sheet.`
+        : `Nobody on the roster is in a team yet — add them to the Team tab in the CS Team Plan sheet.`) +
       `</p>`;
     $('meterhint').textContent = '';
     return;
@@ -4342,8 +4375,18 @@ async function load(){
        and then one. Only the parsing has to wait, and that is free. Escalations
        still cannot join them: it matches against the book, so it needs the book
        to have landed first. Errors are captured rather than thrown so this
-       cannot reject while nothing is awaiting it yet. */
-    const bookPending = fetchRaw('book').then(parseBook, e => e instanceof Error ? e : new Error(String(e)));
+       cannot reject while nothing is awaiting it yet — note that means
+       .then(parseBook).catch(...), not .then(parseBook, handler): the second
+       form only catches fetchRaw itself rejecting, not parseBook throwing,
+       which rejects the promise .then() hands back instead, unhandled, since
+       nothing awaits bookPending until well after buildRoster() below — long
+       enough for Node's unhandledRejection kill switch to fire on it first. */
+    const bookPending = fetchRaw('book').then(parseBook)
+      .catch(e => e instanceof Error ? e : new Error(String(e)));
+    /* Same reasoning again: the Team tab depends on neither tracker either, so
+       it goes out on this leg too rather than waiting behind them. */
+    const teamPending = fetchRaw('team').then(parseTeam)
+      .catch(e => e instanceof Error ? e : new Error(String(e)));
     /* Same reasoning as the book: independent of the live trackers, so it goes
        out now rather than after them, and it fails soft — a missing archive
        file is the normal case for most months, not a load failure. */
@@ -4381,6 +4424,28 @@ async function load(){
        then reads the same set of rows, so none of them can disagree. */
     DATA = {internal: internalAll.filter(r => !isHidden(r.name)),
             client:   clientAll.filter(r => !isHidden(r.name))};
+
+    /* Ahead of buildRoster(), not after: canonicalNames() (called from inside
+       it) reads TEAM_ROWS too, to prefer the Team tab's hand-typed casing of a
+       name over whatever case Asana's export happened to arrive in. Fails soft
+       to the compiled snapshot, the same as the book — team structure changes
+       rarely, so a few stale minutes beats an empty meter while the sheet is
+       briefly unreachable. */
+    try {
+      const team = await teamPending;
+      if (team instanceof Error) throw team;
+      if (!team.length) throw new Error(
+        'The published Team tab has a header but no lead rows.');
+      TEAM_ROWS = team;
+      TEAM_ASOF = iso(new Date());
+      TEAM_LIVE = true;
+      TEAM_ERROR = null;
+    } catch (e) {
+      TEAM_ROWS = TEAM_FALLBACK;
+      TEAM_ASOF = TEAM_FALLBACK_ASOF;
+      TEAM_LIVE = false;
+      TEAM_ERROR = (e && e.message) || String(e);
+    }
     buildRoster();
     buildPods();
 

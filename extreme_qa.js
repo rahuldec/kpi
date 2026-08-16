@@ -26,7 +26,7 @@ const MIN_IMPL = 'NAME,URL,TEAM,OWNER,DESCRIPTION,CREATED,START DATE,FIRST TASK 
   'DUE DATE,ALL TASKS,COMPLETE,INCOMPLETE,ASSIGNED,OVERDUE,TASKS ADDED,TASKS COMPLETED\n' +
   'No Matching Client,https://x,,Nobody,,2026-07-01,2026-07-01,,2026-07-01,1,1,0,0,0,0,0';
 
-function boot({ body, clientBody = sheet([]), escBody = sheet([]), bookBody = MIN_BOOK, adoptBody = '', feedBody = MIN_FEED, implBody = MIN_IMPL, archive = {} } = {}) {
+function boot({ body, clientBody = sheet([]), escBody = sheet([]), bookBody = MIN_BOOK, adoptBody = '', feedBody = MIN_FEED, implBody = MIN_IMPL, teamBody = '', archive = {} } = {}) {
   const errs = [], calls = [];
   const dom = new JSDOM(HTML, {
     runScripts: 'dangerously', pretendToBeVisual: true, url: 'https://kpi.test/',
@@ -49,6 +49,7 @@ function boot({ body, clientBody = sheet([]), escBody = sheet([]), bookBody = MI
             src === 'feedback' ? feedBody :
             src === 'implementation' ? implBody :
             src === 'book' ? bookBody :
+            src === 'team' ? teamBody :
             src === 'client' ? clientBody : body)
         });
       };
@@ -763,6 +764,79 @@ const settle = () => new Promise(r => setTimeout(r, 30));
     check('a person who filed every real working day reads 0 missed, not 1 for the holiday',
           a.expected === 6 && a.filed === 6 && a.missed === 0, JSON.stringify(a));
   }
+  // ── O. The Team tab — added 17 Aug 2026, replacing a hardcoded PODS object.
+  //      Two things this exists to prove: a new RM named nowhere but the Team
+  //      tab gets a card with no code change, and moving an assistant between
+  //      two rows in the sheet is all a reshuffle takes. ────────────────────
+  {
+    const { win, errs } = boot({ body: sheet([]) }); await settle();
+    const out = win.eval(`JSON.stringify(parseTeam(
+      'Some title row above the real header\\n' +
+      'RM,ARM,CR,CR,CR\\n' +
+      'Test Lead,Alpha,Beta,,\\n' +
+      'Solo Lead,,,,\\n'
+    ))`);
+    const rows = JSON.parse(out);
+    check('boots cleanly', errs.length === 0, errs.join(' | '));
+    check('the header is hunted for by its first cell, not assumed to be row 0',
+          rows.length === 2, out);
+    check('blank member cells are dropped, not kept as empty names',
+          JSON.stringify(rows[0]) === JSON.stringify({lead: 'Test Lead', members: ['Alpha', 'Beta']}), out);
+    check('a lead with every member column blank is still one lead, zero members — not skipped',
+          JSON.stringify(rows[1]) === JSON.stringify({lead: 'Solo Lead', members: []}), out);
+  }
+  {
+    const book = [
+      'Sr No.,Client Name,Old/New,TYPE1,Category,Type, Total Billing FY , Team ,RM,Retention/Imp,,,',
+      '1,New RM College,Old,College,Large,B," ₹ 1,000,000.00 ",Priya Sharma,,Retention,,,',
+    ].join('\n');
+    const team = ['RM,ARM', 'Priya Sharma,'].join('\n');
+    const trk = sheet(['1,2026-07-01,,,x,S,Priya Sharma,p@x.com,,2026-07-27,,n']);
+    const { doc, errs } = boot({ body: trk, clientBody: asClient(trk), bookBody: book, teamBody: team });
+    await settle();
+    doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
+    check('boots cleanly with a lead who exists only in the book and the Team tab',
+          errs.length === 0, errs.join(' | '));
+    const card = [...doc.querySelectorAll('.mcard')]
+      .find(c => /Priya Sharma/.test(c.querySelector('h4')?.textContent || ''));
+    check('a lead named nowhere but the Team tab gets a KPI meter card automatically',
+          !!card, [...doc.querySelectorAll('.mcard h4')].map(h => h.textContent).join(', '));
+  }
+  {
+    const trk = sheet([
+      '1,2026-07-01,,,x,S,Lead One,a@x.com,,2026-07-01,,n',
+      '2,2026-07-01,,,x,S,Lead Two,b@x.com,,2026-07-01,,n',
+      '3,2026-07-01,,,x,S,Shuffled Person,c@x.com,,2026-07-01,,n',
+    ]);
+    const before = ['RM,ARM', 'Lead One,Shuffled Person', 'Lead Two,'].join('\n');
+    const after  = ['RM,ARM', 'Lead One,', 'Lead Two,Shuffled Person'].join('\n');
+
+    const b1 = boot({ body: trk, clientBody: asClient(trk), teamBody: before }); await settle();
+    check('before the edit: the assistant belongs to the row that names them',
+          b1.win.eval("POD_OF.get('Shuffled Person')") === 'Lead One',
+          b1.win.eval("POD_OF.get('Shuffled Person')"));
+
+    const b2 = boot({ body: trk, clientBody: asClient(trk), teamBody: after }); await settle();
+    check('moving them to the other row in the sheet is the entire reshuffle — no code touched',
+          b2.win.eval("POD_OF.get('Shuffled Person')") === 'Lead Two',
+          b2.win.eval("POD_OF.get('Shuffled Person')"));
+    check('and the row they left now has nobody',
+          b2.win.eval("POD_TEAM.get('Lead One')").length === 0,
+          b2.win.eval("JSON.stringify(POD_TEAM.get('Lead One'))"));
+  }
+  {
+    const trk = sheet(['1,2026-07-01,,,x,S,Kashish Goel,k@x.com,,2026-07-01,,n']);
+    const { doc, win, errs } = boot({ body: trk, clientBody: asClient(trk), teamBody: 'nonsense\n1,2,3' });
+    await settle();
+    doc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
+    check('a broken Team tab does not take the page down', errs.length === 0, errs.join(' | '));
+    check('falls back to the compiled snapshot rather than an empty meter',
+          doc.querySelectorAll('.mcard').length > 0, String(doc.querySelectorAll('.mcard').length));
+    check('and says so internally, rather than silently claiming to be live',
+          win.eval('TEAM_LIVE') === false && win.eval('typeof TEAM_ERROR === "string" && TEAM_ERROR.length > 0'),
+          win.eval('TEAM_ERROR'));
+  }
+
   const w = Math.max(...results.map(r => r[1].length));
   for (const [ok, n, d] of results) console.log(`${ok ? ' ok ' : 'FAIL'}  ${n.padEnd(Math.min(w,100))}  ${d}`);
   console.log(`\n${pass} passed, ${fail} failed`);

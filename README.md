@@ -1656,3 +1656,76 @@ itself. A custom range across the same three days rendered the gap grid with bot
 the 15th and the 16th as gutter columns and the KPI tile correctly reading "3
 working days," not 4. 765 assertions total (658 + 107), passing across
 UTC/IST/PST/UTC+14.
+
+## The Team tab — added 17 Aug 2026
+
+Who runs which team, and who is on it, used to be a hardcoded `PODS` object in
+index.html — a leftover of 1 Aug, when the actual Team tab in the workbook had
+drifted and a direct answer from the user stood in for it. Every new hire, every
+resignation, every reshuffle needed a code change and a deploy. It is a fourth
+`?src=` now, `team`, read the same way the book is: File → Share → Publish to web
+on the Team tab of the same CS Team Plan workbook the book comes from (same
+publish token, different gid — see `api/data.js`). Nothing about who gets a card
+or who is on it lives in code any more.
+
+### The shape
+
+One row per lead: their name in the first column, an assistant in every column
+after it — however many the sheet has (`RM,ARM,CR,CR,CR` today) or grows to, and
+however many of those a given row actually fills in. Blank cells are ordinary,
+not an error — a lead with two assistants next to one with four is just two rows
+of different lengths. `parseTeam()` hunts for the header by its first cell reading
+"RM" (the book's own defensive read, not row 0 assumed), the same tolerance for a
+stray title row above it.
+
+### What this actually buys
+
+A new RM is a new row in the sheet — their card appears on the KPI meter with no
+code change and no deploy, the moment the row exists and they carry at least one
+client in the book. Moving an assistant from one lead to another is deleting a
+name from one row and typing it into another's; `POD_OF`/`POD_TEAM` (built by
+`buildPods()`, unchanged) resolve it exactly as before, first-name-only entries
+included, and anything that fails to resolve is named in `POD_GAPS` rather than
+silently dropped — a typo in the sheet cannot silently empty a team.
+
+Read live, with the same fail-soft posture as the book: `TEAM_FALLBACK` is a
+baked-in copy of the sheet (16 Aug 2026) used only if the live tab cannot be
+reached, so a transient fetch failure degrades to a few stale minutes of team
+structure rather than an empty meter. Team structure changes rarely enough that
+this is a fair trade, unlike the book or compliance figures, which fail loud.
+
+### Verified against the live sheet, not only fixtures
+
+Fetched `?src=team` for real: six leads, matching exactly what rendered on the
+meter. Two names in the sheet — "Bhavey Saluja" and "Aadhar Mittal" — do not
+resolve against the current internal/client roster (no exact match, no unique
+first-name match), so they surface in `POD_GAPS` rather than being guessed at;
+Ankush Rana's card reads "no team recorded" as a result, correctly, rather than
+crediting him with an assistant nobody can confirm. Separately, several roster
+names — Mehak Garg, Palak Singh, Tinku Singh, Sagar Mishra, Amar Kumar Pandit,
+Sumaiya Khan, Aman Sharma — are not in the Team tab under any lead at all, which
+is a fact about the sheet as it stands today, not a parsing gap.
+
+qa.js's default fixtures were rewired the same way — a `teamBody` parameter on
+`boot()`, defaulting to a CSV that reproduces the old hardcoded PODS shape
+exactly, so every existing pods/roster test keeps exercising the same scenarios
+it always did, now through the sheet-reading path instead of a literal object.
+extreme_qa.js adds direct coverage for the two things this feature exists for: a
+lead named nowhere but the Team tab gets a card automatically, and moving an
+assistant between two rows in the sheet is the entire reshuffle. 777 assertions
+total (658 qa.js + 119 extreme_qa.js), passing across UTC/IST/PST/UTC+14.
+
+### A promise chain that looked safe and was not
+
+Building this surfaced a real, separate latent bug in how the book was already
+being fetched. `fetchRaw('book').then(parseBook, errHandler)` looks like it
+catches everything — but the second argument to `.then()` only catches the
+*fetch* rejecting, not `parseBook` throwing. A throw inside the fulfillment
+handler rejects the promise `.then()` hands back instead, and nothing was
+attached to *that* promise until `load()` reached `await bookPending`, several
+other awaits later. In a browser that is a harmless console warning. Under
+plain Node (this project's own test runner), an unhandled rejection sitting that
+long is fatal — and it started actually happening the moment `teamPending` was
+added beside it and shifted the timing enough to trigger it. Both are now
+`.then(parseFn).catch(handler)`, which catches a throw from either stage into
+one resolved outcome, so neither promise can reject at all.

@@ -218,7 +218,7 @@ const IMPL_SHEET = [
 
 function boot({ body = SHEET, clientBody = CLIENT_DEFAULT, escBody = ESC_SHEET,
                 bookBody = BOOK_SHEET, adoptBody = ADOPT_SHEET, feedBody = FEED_SHEET,
-                implBody = IMPL_SHEET,
+                implBody = IMPL_SHEET, teamBody = TEAM_DEFAULT,
                 status = 200, reject = false, store = null } = {}) {
   const errs = [], calls = [];
   // beforeParse installs the mock before the page's own <script> runs, so the
@@ -247,6 +247,7 @@ function boot({ body = SHEET, clientBody = CLIENT_DEFAULT, escBody = ESC_SHEET,
             src === 'feedback' ? feedBody :
             src === 'implementation' ? implBody :
             src === 'book' ? bookBody :
+            src === 'team' ? teamBody :
             src === 'client' ? clientBody : body)
         });
       };
@@ -267,6 +268,19 @@ const TEAM_PEOPLE = [
   'Amit Kumar','Priya',
   'Ankush Rana'
 ];
+/* The Team tab, mirroring the same shape PODS used to hardcode: most members
+   written first-name-only, which is what exercises resolve()'s first-name
+   path rather than an exact match every time. */
+const TEAM_DEFAULT = [
+  'RM,ARM,CR,CR',
+  'Mansi Rana,Vansh,Divya,',
+  'Sukhmeet Singh,Gobind,Sapna,Bhavey Saluja',
+  'Sultan Malik,Lokesh,Amar Kumar Pandit,',
+  'Sagar Mishra,Mehak,Akshat,',
+  'Kashish Goel,Anjali,Tanvi,',
+  'Amit Kumar,Priya,,',
+  'Ankush Rana,,,',
+].join('\n');
 const TEAM_HEAD = 'Task ID,Created At,Completed At,Last Modified,Name,Section/Column,Assignee,Assignee Email,Start Date,Due Date,Tags,Notes';
 const teamSheet = (people = TEAM_PEOPLE, off = 0) =>
   [',,', ',,url', ',,', TEAM_HEAD].concat(people.map((p, i) =>
@@ -469,8 +483,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     check('no duplicate client names',
           new Set(rows.map(r => r.n.toLowerCase())).size === rows.length);
     check('every owner is a known lead', (() => {
-      const leads = (HTML.match(/const PODS = \{(.*?)\};/s)[1].match(/'([^']+)':/g) || [])
-        .map(x => x.slice(1, -2));
+      const leads = [...HTML.matchAll(/lead: '([^']+)'/g)].map(m => m[1]);
       return rows.every(r => !r.o || leads.includes(r.o));
     })());
   }
@@ -1522,7 +1535,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
       pickMonths(doc, '2026-07');
       check('no teams gives a message, not a blank grid',
             /No teams to show/.test(txt(doc, '#meters')), txt(doc, '#meters'));
-      check('and it names the file to edit', /PODS/.test(txt(doc, '#meters')));
+      check('and it names where to fix it', /CS Team Plan/.test(txt(doc, '#meters')));
     }
 
     // lead missing from the roster: the reason must reach this view, not just the book
@@ -2262,9 +2275,9 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     const { doc, errs, calls } = boot(); await settle();
     check('boots with no JS errors', errs.length === 0, errs.join(' | '));
     const apiCalls = calls.filter(u => /^\/api\/data\?src=/.test(u));
-    // Seven since 16 Aug 2026: internal, client, book, adoption, feedback,
-    // escalations, implementation.
-    check('called the data endpoint for all seven sheets', apiCalls.length === 7, calls.join());
+    // Eight since 17 Aug 2026: internal, client, book, team, adoption,
+    // feedback, escalations, implementation.
+    check('called the data endpoint for all eight sheets', apiCalls.length === 8, calls.join());
     /* Order is load-bearing, not incidental: buildEscalations matches escalation
        names against the client book, so the book has to be in place first or the
        matching silently runs against the fallback. Archive requests are excluded
@@ -2415,7 +2428,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     const { doc, calls } = boot(); await settle();
     doc.getElementById('refresh').click(); await settle();
     const apiCalls = calls.filter(u => /^\/api\/data\?src=/.test(u));
-    check('refresh refetches every sheet', apiCalls.length === 14, apiCalls.length + ' calls');
+    check('refresh refetches every sheet', apiCalls.length === 16, apiCalls.length + ' calls');
     const archiveCalls = calls.filter(u => /^\/archive\//.test(u));
     check('and the archive leg too', archiveCalls.length > 0 && archiveCalls.length % 2 === 0,
           archiveCalls.length + ' archive calls');
