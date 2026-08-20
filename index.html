@@ -1269,6 +1269,29 @@ function canonVisitor(raw){
   return hits.length === 1 ? hits[0] : null;
 }
 
+/* One row per meeting from the portal's own API — `fetchRaw('visits')` returns
+   the proxied `{ data: [...] }` JSON body as text; this turns it into the same
+   {d, p} shape the compiled snapshot above already uses, so everything
+   downstream (canonVisitor, buildVisits, visitsForTeam) reads either one the
+   same way. Credit is `employee_name` plus every attendee marked
+   `team: "okie_dokie"` — the client's own attendees earn the client nothing
+   here. Only offline meetings count as a visit: an online one is a call, and
+   calls are already counted by the tracker on the compliance side. */
+function parseVisits(rows){
+  if (!Array.isArray(rows)) throw new Error('The visits feed did not return a list of meetings.');
+  const out = [];
+  for (const m of rows){
+    if (!m || m.meeting_type !== 'offline') continue;
+    const people = new Set();
+    if (m.employee_name) people.add(String(m.employee_name).trim());
+    for (const a of (m.attendees || []))
+      if (a && a.team === 'okie_dokie' && a.name) people.add(String(a.name).trim());
+    const d = String(m.meeting_date || '').slice(0, 10);
+    if (people.size && d) out.push({d, p: [...people]});
+  }
+  return out;
+}
+
 function buildVisits(){
   VISIT_UNPLACED = [];
   const seen = new Set();
@@ -4623,6 +4646,24 @@ async function load(){
       ADOPT_ERROR = (e && e.message) || String(e);
     }
     buildAdoption();
+
+    /* Independent of the book and every tracker — the only thing it needs is
+       POD_OF, already built above. Fails soft to the compiled snapshot, same
+       as adoption; unlike adoption there is no quarter to be dated, so the
+       banner just says which it is reading. */
+    try {
+      const raw = await fetchRaw('visits');
+      const parsed = JSON.parse(raw);
+      VISITS = parseVisits(parsed.data);
+      VISITS_ASOF = iso(new Date());
+      VISITS_LIVE = true;
+      VISITS_ERROR = null;
+    } catch (e) {
+      VISITS = VISITS_FALLBACK;
+      VISITS_ASOF = VISITS_FALLBACK_ASOF;
+      VISITS_LIVE = false;
+      VISITS_ERROR = (e && e.message) || String(e);
+    }
     buildVisits();
 
     /* Feedback joins on client names typed by the respondent, so like escalations

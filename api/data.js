@@ -73,21 +73,31 @@ const SOURCES = {
                  mismatch: 'It has no "Timestamp" and "Institution" columns — the link probably ' +
                            'points at the wrong tab. Re-publish with the form responses tab ' +
                            'selected and update FEEDBACK_CSV_URL.' },
-  /* Not a Google sheet at all. Field visits come from the MOM Portal, which
-     serves its own CSV at /api/kpi-visits behind a shared secret. It is proxied
-     here for one reason only: the secret must never reach the browser, and this
-     page's CSP forbids the browser calling another origin anyway.
+  /* Not a Google sheet at all. Field visits come from the MOM Portal's own API
+     (source: github.com/rahuldec/odmom, src/routes/api/public/moms.ts) — one
+     row per meeting, JSON, behind a shared secret. It is proxied here for one
+     reason only: the secret must never reach the browser, and this page's CSP
+     forbids the browser calling another origin anyway.
 
-     Fails closed. If MOM_FEED_KEY is unset the portal refuses everyone, which is
-     the correct behaviour for an unconfigured secret — an open visits feed would
-     expose which clients were visited by whom and when. */
-  visits:      { direct: process.env.MOM_FEED_URL ||
-                   'https://odmom.lovable.app/api/kpi-visits',
-                 headers: () => ({ 'x-kpi-key': process.env.MOM_FEED_KEY || '' }),
-                 signature: csv => /meeting_date/i.test(csv) && /person/i.test(csv),
-                 envVar: 'MOM_FEED_KEY',
-                 mismatch: 'The portal answered, but not with the visits feed — check ' +
-                           'MOM_FEED_URL points at /api/kpi-visits.' },
+     There is no tab hunt and no signature-matching against sheet text here —
+     the portal's route already validates its own shape (Zod on the way in);
+     this proxy only checks that the body parses as `{ data: [...] }` before
+     handing it to the page.
+
+     Fails closed. If MOM_API_KEY is unset the portal refuses everyone, which
+     is the correct behaviour for an unconfigured secret — an open visits feed
+     would expose which clients were visited by whom and when. */
+  visits:      { direct: process.env.MOM_API_URL ||
+                   'https://odmom.lovable.app/api/public/moms?limit=200',
+                 headers: () => ({ 'x-api-key': process.env.MOM_API_KEY || '' }),
+                 json: true,
+                 signature: body => {
+                   try { return Array.isArray(JSON.parse(body).data); }
+                   catch { return false; }
+                 },
+                 envVar: 'MOM_API_KEY',
+                 mismatch: 'The portal answered, but not with { data: [...] } — check ' +
+                           'MOM_API_URL points at /api/public/moms.' },
   book:        { url: process.env.BOOK_CSV_URL ||
                    'https://docs.google.com/spreadsheets/d/e/2PACX-1vRJduuwLQYkHFCDbGo1J-kGu8gN' +
                    'WH3CX7dD8vVekiztMWxuiJIY1wptsW4eGgO5wg/pub?gid=667331627&single=true&output=csv',
@@ -191,7 +201,7 @@ module.exports = async (req, res) => {
     // Cached at the edge for 5 minutes, served stale for another 10 while it
     // refreshes behind the scenes. Keeps the page fast without going far stale.
     res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600');
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Type', source.json ? 'application/json; charset=utf-8' : 'text/csv; charset=utf-8');
     res.setHeader('X-Sheet-Gid', String(hit.gid ?? 'default'));
     res.setHeader('X-Sheet-Source', SOURCES[src] ? src : 'internal');
     return res.status(200).send(hit.body);
@@ -213,20 +223,21 @@ module.exports = async (req, res) => {
        wrong. */
     if (source.direct) {
       attempted.push(source.direct);
-      if (!process.env.MOM_FEED_KEY)
-        return fail('MOM_FEED_KEY is not set on this deployment.',
-                    'Generate one (openssl rand -hex 32), set it here and as KPI_FEED_KEY ' +
-                    'on the MOM Portal. The portal refuses every request until both match.');
+      if (!process.env[source.envVar])
+        return fail(`${source.envVar} is not set on this deployment.`,
+                    'Generate one (openssl rand -hex 32), set it here and as MOM_API_KEY ' +
+                    'on the MOM Portal (same value, different variable name on each side — ' +
+                    'that is expected). The portal refuses every request until both match.');
       let r;
       try {
         r = await fetch(source.direct, { headers: source.headers() });
       } catch (e) {
         return fail(`Could not reach the MOM Portal: ${e.message}`,
-                    'Check MOM_FEED_URL and that the portal is deployed.');
+                    'Check MOM_API_URL and that the portal is deployed.');
       }
       if (r.status === 401 || r.status === 403)
         return fail('The MOM Portal rejected the key.',
-                    'MOM_FEED_KEY here and KPI_FEED_KEY on the portal must be the same ' +
+                    `${source.envVar} here and MOM_API_KEY on the portal must be the same ` +
                     'value. Rotating one without the other breaks this.');
       if (!r.ok) return fail(`The MOM Portal answered ${r.status}.`, 'Nothing to read.');
       const body = await r.text();

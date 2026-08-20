@@ -216,9 +216,19 @@ const IMPL_SHEET = [
   'Nonexistent Institute XYZ,https://x,,Rahul Sharma,,2026-07-01,2026-07-01,,2026-07-20,5,1,4,0,1,0,0'
 ].join('\n');
 
+/* Unconfigured by default, same as production today: MOM_API_KEY is not yet
+   set on either side, so the real proxy fails closed with a JSON error body
+   and a 200-vs-502 distinction the shared `status` knob below cannot express
+   per source anyway. This shape is enough to exercise that: valid JSON, no
+   `data` array, so parseVisits() throws its own "did not return a list of
+   meetings" error and the page falls back to VISITS_FALLBACK — matching every
+   existing assertion below that was written against the fallback back when
+   nothing fetched visits at all. */
+const VISITS_UNCONFIGURED = '{"error":"MOM_API_KEY is not set on this deployment."}';
 function boot({ body = SHEET, clientBody = CLIENT_DEFAULT, escBody = ESC_SHEET,
                 bookBody = BOOK_SHEET, adoptBody = ADOPT_SHEET, feedBody = FEED_SHEET,
                 implBody = IMPL_SHEET, teamBody = TEAM_DEFAULT,
+                visitsBody = VISITS_UNCONFIGURED,
                 status = 200, reject = false, store = null } = {}) {
   const errs = [], calls = [];
   // beforeParse installs the mock before the page's own <script> runs, so the
@@ -248,6 +258,7 @@ function boot({ body = SHEET, clientBody = CLIENT_DEFAULT, escBody = ESC_SHEET,
             src === 'implementation' ? implBody :
             src === 'book' ? bookBody :
             src === 'team' ? teamBody :
+            src === 'visits' ? visitsBody :
             src === 'client' ? clientBody : body)
         });
       };
@@ -2318,9 +2329,9 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     const { doc, errs, calls } = boot(); await settle();
     check('boots with no JS errors', errs.length === 0, errs.join(' | '));
     const apiCalls = calls.filter(u => /^\/api\/data\?src=/.test(u));
-    // Eight since 17 Aug 2026: internal, client, book, team, adoption,
+    // Nine since 20 Aug 2026: internal, client, book, team, adoption, visits,
     // feedback, escalations, implementation.
-    check('called the data endpoint for all eight sheets', apiCalls.length === 8, calls.join());
+    check('called the data endpoint for all nine sheets', apiCalls.length === 9, calls.join());
     /* Order is load-bearing, not incidental: buildEscalations matches escalation
        names against the client book, so the book has to be in place first or the
        matching silently runs against the fallback. Archive requests are excluded
@@ -2471,7 +2482,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     const { doc, calls } = boot(); await settle();
     doc.getElementById('refresh').click(); await settle();
     const apiCalls = calls.filter(u => /^\/api\/data\?src=/.test(u));
-    check('refresh refetches every sheet', apiCalls.length === 16, apiCalls.length + ' calls');
+    check('refresh refetches every sheet', apiCalls.length === 18, apiCalls.length + ' calls');
     const archiveCalls = calls.filter(u => /^\/archive\//.test(u));
     check('and the archive leg too', archiveCalls.length > 0 && archiveCalls.length % 2 === 0,
           archiveCalls.length + ' archive calls');
@@ -3161,6 +3172,74 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
           String(win.eval('canonVisitor("Kumar")')));
     check('people who cannot be placed are reported, not dropped',
           JSON.parse(win.eval('JSON.stringify(VISIT_UNPLACED)')).length > 0);
+
+    /* ── the live feed itself (added 20 Aug 2026) ─────────────────
+       Everything above this point exercises canonVisitor/visitsForTeam against
+       VISITS_FALLBACK, because with no visitsBody override boot() serves the
+       proxy's own "not configured" shape and parseVisits() throws, same as
+       production does today with MOM_API_KEY unset. These exercise the fetch
+       and transform that switches it on, separately from the roster logic
+       already covered above. */
+    {
+      // parseVisits() itself: the portal's shape in, the page's {d,p} shape out.
+      const rows = JSON.stringify([
+        // offline, credited: employee_name plus the one okie_dokie attendee —
+        // the client-team attendee earns the client nothing.
+        {meeting_date: '2026-08-15', meeting_type: 'offline', employee_name: 'Sultan Malik',
+         attendees: [{name: 'Anjali Verma', team: 'okie_dokie'},
+                     {name: 'Some Client Contact', team: 'client'}]},
+        // online — a call, not a visit, must be dropped entirely.
+        {meeting_date: '2026-08-14', meeting_type: 'online', employee_name: 'Sultan Malik', attendees: []},
+        // offline but nobody credited (blank employee_name, no okie_dokie
+        // attendee) — must be dropped, not kept as a visit with zero people.
+        {meeting_date: '2026-08-13', meeting_type: 'offline', employee_name: '',
+         attendees: [{name: 'Client Only', team: 'client'}]},
+      ]);
+      const got = JSON.parse(win.eval(`JSON.stringify(parseVisits(${rows}))`));
+      check('an offline meeting credits the filer', got.some(v => v.d === '2026-08-15' && v.p.includes('Sultan Malik')),
+            JSON.stringify(got));
+      check('and every okie_dokie attendee alongside them',
+            got.some(v => v.d === '2026-08-15' && v.p.includes('Anjali Verma')), JSON.stringify(got));
+      check('a client-team attendee is never credited',
+            !got.some(v => v.p.includes('Some Client Contact')), JSON.stringify(got));
+      check('an online meeting is dropped entirely, not kept with nobody on it',
+            !got.some(v => v.d === '2026-08-14'), JSON.stringify(got));
+      check('an offline meeting with nobody credited is dropped, not kept empty',
+            !got.some(v => v.d === '2026-08-13'), JSON.stringify(got));
+      check('a non-array feed is refused rather than silently emptied', (() => {
+        try { win.eval('parseVisits({not: "an array"})'); return false; }
+        catch (e) { return /list of meetings/.test(e.message); }
+      })());
+    }
+    {
+      // The fetch/wiring in load(): a working feed switches VISITS_LIVE on and
+      // replaces VISITS with the transformed data, not just the parser in isolation.
+      const liveRows = JSON.stringify({data: [
+        {meeting_date: '2026-08-18', meeting_type: 'offline', employee_name: 'Ankush Rana', attendees: []},
+      ]});
+      const { win: lwin, doc: ldoc } = boot({ visitsBody: liveRows,
+        body: teamSheet(), clientBody: teamSheet(TEAM_PEOPLE, 500) });
+      await settle();
+      // #visithint is only populated once renderVisits() runs, on opening the tab.
+      ldoc.querySelector('#sources6 button[data-src="visits"]').click(); await settle();
+      check('a working feed is read live, not from the snapshot', lwin.eval('VISITS_LIVE') === true);
+      check('and VISITS is replaced by the transformed feed, not merged with the snapshot',
+            JSON.parse(lwin.eval('JSON.stringify(VISITS)')).length === 1);
+      check('the hint says so', /Read live/.test(txt(ldoc, '#visithint')), txt(ldoc, '#visithint'));
+      check('no stale "not switched on" wording survives a working feed',
+            !/not switched on/.test(txt(ldoc, '#visithint')), txt(ldoc, '#visithint'));
+    }
+    {
+      // The unconfigured/failure path: falls back to the compiled snapshot and
+      // says why, rather than rendering an empty visits tab.
+      const { win: fwin, doc: fdoc } = boot({ visitsBody: 'not json at all',
+        body: teamSheet(), clientBody: teamSheet(TEAM_PEOPLE, 500) });
+      await settle();
+      fdoc.querySelector('#sources6 button[data-src="visits"]').click(); await settle();
+      check('an unparseable feed falls back to the compiled snapshot, not an empty page',
+            fwin.eval('VISITS_LIVE') === false && fwin.eval('VISITS.length') === win.eval('VISITS_FALLBACK.length'));
+      check('and the reason is stated in the hint', txt(fdoc, '#visithint').length > 0, txt(fdoc, '#visithint'));
+    }
 
     /* A forty-eight-name client list buried every section under it. Capped, with
        the rest behind a disclosure — and the disclosure has to be real markup,
