@@ -1093,6 +1093,101 @@ const settle = () => new Promise(r => setTimeout(r, 30));
           win.eval("JSON.stringify({k: POD_TEAM.get('Kashish Goel'), s: POD_TEAM.get('Sultan Malik')})"));
   }
 
+  // ── R. Approved leave — added 17 Aug 2026: a per-person exemption, unlike a
+  //      holiday's company-wide one. Real people, real dates from the Zoho
+  //      import (LEAVE_RAW), not synthetic fixtures — this is baked-in data,
+  //      the same way HOLIDAYS is, so there is nothing a boot() fixture could
+  //      override even if it tried. ─────────────────────────────────────────
+  {
+    const { win, errs } = boot({ body: sheet([]) }); await settle();
+    check('boots cleanly', errs.length === 0, errs.join(' | '));
+    check('onLeave() is true for a real approved date',
+          win.eval("onLeave('Mansi Rana', '2026-07-08')") === true);
+    check('and false for the very next day, which she did not take off',
+          win.eval("onLeave('Mansi Rana', '2026-07-09')") === false);
+    check('matching is case-insensitive, like every other name lookup in this file',
+          win.eval("onLeave('MANSI RANA', '2026-07-08')") === true);
+    check('a cancelled application never made it into LEAVE_DAYS at all — ' +
+          'Amar Kumar Pandit’s 6 Jul request was withdrawn, not approved',
+          win.eval("onLeave('Amar Kumar Pandit', '2026-07-06')") === false);
+  }
+  {
+    // Mansi Rana files every real working day in this window except her one
+    // approved leave day (8 Jul) — expected must drop by exactly one, not
+    // read as a missed entry. A second person with a genuine, unexcused gap
+    // on the very same date proves the exemption is per-person, not blanket.
+    const rows = [
+      ['2026-07-06', 'Mansi Rana'], ['2026-07-07', 'Mansi Rana'],
+      ['2026-07-09', 'Mansi Rana'], ['2026-07-10', 'Mansi Rana'],
+      ['2026-07-06', 'Gap Person'], ['2026-07-07', 'Gap Person'],
+      ['2026-07-09', 'Gap Person'], ['2026-07-10', 'Gap Person'],
+    ].map(([due, who], i) => `${i + 1},2026-07-01,,,x,S,${who},${who.split(' ')[0].toLowerCase()}@x.com,,${due},,n`);
+    const { win, errs } = boot({ body: sheet(rows) }); await settle();
+    const a = JSON.parse(win.eval(`(() => {
+      const parsed = parseExport(${JSON.stringify(sheet(rows))});
+      const a = analyse(parsed, '2026-07-06', '2026-07-10', true);
+      const mansi = a.stats.find(s => s.name === 'Mansi Rana');
+      const gap = a.stats.find(s => s.name === 'Gap Person');
+      return JSON.stringify({mansi: {expected: mansi.expected, filed: mansi.filed, missed: mansi.missed},
+                              gap: {expected: gap.expected, filed: gap.filed, missed: gap.missed}});
+    })()`));
+    check('boots cleanly with a leave day inside the analysed range', errs.length === 0, errs.join(' | '));
+    check('her leave day is dropped from what she was expected to file — 4, not 5',
+          a.mansi.expected === 4 && a.mansi.filed === 4 && a.mansi.missed === 0,
+          JSON.stringify(a.mansi));
+    check('someone else with a real, unexcused gap on that same date still reads as missed — ' +
+          'the exemption is per person, not a blackout day for the whole team',
+          a.gap.expected === 5 && a.gap.filed === 4 && a.gap.missed === 1,
+          JSON.stringify(a.gap));
+  }
+  {
+    // The gap grid marks only the leave-taker's own cell — everyone else's
+    // column for that date renders normally.
+    const rows = [
+      ['2026-07-06', 'Mansi Rana'], ['2026-07-07', 'Mansi Rana'],
+      ['2026-07-09', 'Mansi Rana'], ['2026-07-10', 'Mansi Rana'],
+      ['2026-07-06', 'Gap Person'], ['2026-07-07', 'Gap Person'],
+      ['2026-07-08', 'Gap Person'], ['2026-07-09', 'Gap Person'], ['2026-07-10', 'Gap Person'],
+    ].map(([due, who], i) => `${i + 1},2026-07-01,,,x,S,${who},${who.split(' ')[0].toLowerCase()}@x.com,,${due},,n`);
+    const { doc, win, errs } = boot({ body: sheet(rows), clientBody: asClient(sheet(rows)) }); await settle();
+    doc.querySelector('#presets button[data-mode="custom"]').click();
+    doc.getElementById('from').value = '2026-07-06';
+    doc.getElementById('to').value = '2026-07-10';
+    doc.getElementById('to').dispatchEvent(new win.Event('change'));
+    await settle();
+    check('boots cleanly rendering the grid across a leave day', errs.length === 0, errs.join(' | '));
+    const cellFor = (name, colIndex) => {
+      const row = [...doc.querySelectorAll('#grid tbody tr')]
+        .find(r => r.querySelector('.who').textContent === name);
+      return row?.children[colIndex]?.querySelector('i')?.className;
+    };
+    // Columns: who, 6, 7, 8, 9, 10, Missed — 8 Jul is column index 3.
+    check('Mansi Rana’s cell on her own leave day is marked "lv", not "m"',
+          cellFor('Mansi Rana', 3) === 'cell lv', cellFor('Mansi Rana', 3));
+    check('Gap Person’s cell on that same date, with no leave on file, is untouched',
+          cellFor('Gap Person', 3) === 'cell f', cellFor('Gap Person', 3));
+  }
+  {
+    // scoreRows() (Scorecard + KPI meter) must agree with analyse() — same
+    // exemption, independently implemented, so it is worth proving separately
+    // rather than assuming the two computations stay in step.
+    const rows = [
+      ['2026-07-06', 'Mansi Rana'], ['2026-07-07', 'Mansi Rana'],
+      ['2026-07-09', 'Mansi Rana'], ['2026-07-10', 'Mansi Rana'],
+    ].map(([due, who], i) => `${i + 1},2026-07-01,,,x,S,${who},m@x.com,,${due},,n`);
+    const { doc, win, errs } = boot({ body: sheet(rows), clientBody: asClient(sheet(rows)) }); await settle();
+    doc.querySelector('#sources button[data-src="scorecard"]').click(); await settle();
+    const boxes = [...doc.querySelectorAll('#monthlist input[type=checkbox]')];
+    for (const b of boxes) b.checked = b.value === '2026-07';
+    if (boxes.length) boxes[0].dispatchEvent(new win.Event('change', {bubbles:true}));
+    await settle();
+    check('boots cleanly on the scorecard with a leave day in the month', errs.length === 0, errs.join(' | '));
+    const row = win.eval(`JSON.stringify(scoreRows().rows.find(r => r.name === 'Mansi Rana').per.internal)`);
+    const per = JSON.parse(row);
+    check('scoreRows() drops the same leave day analyse() does, independently',
+          !per.gaps.includes('2026-07-08'), row);
+  }
+
   const w = Math.max(...results.map(r => r[1].length));
   for (const [ok, n, d] of results) console.log(`${ok ? ' ok ' : 'FAIL'}  ${n.padEnd(Math.min(w,100))}  ${d}`);
   console.log(`\n${pass} passed, ${fail} failed`);

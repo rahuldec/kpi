@@ -642,6 +642,9 @@ table.grid td.tot.zero{color:var(--faint);font-weight:400}
 .f{background:var(--hair)}
 .m{background:var(--miss)}
 .na{background:none;box-shadow:inset 0 0 0 1px var(--line);opacity:.45}
+/* On approved leave — not a gap, so not red; not ordinary, so not the same
+   quiet grey as a filed day either. Gold reads as "excused", not "wrong". */
+.lv{background:var(--gold)}
 .gutter{width:10px}
 .gutter .rule{width:1px;height:24px;margin:2px auto;
   background:repeating-linear-gradient(to bottom,var(--line) 0 3px,transparent 3px 7px)}
@@ -841,7 +844,7 @@ table.board td.tot.zero{font-weight:400;color:var(--faint)}
 <div class="wrap">
   <p class="eyebrow" id="eyebrow"></p>
   <h2 class="hero" id="h1">Who <em>hasn't</em> filed.</h2>
-  <p class="lede" id="lede">One entry per person per working day. Everything here counts what's absent — a person-day with no submission at all. Sundays and company holidays are excluded.</p>
+  <p class="lede" id="lede">One entry per person per working day. Everything here counts what's absent — a person-day with no submission at all. Sundays, company holidays, and approved leave are excluded.</p>
 
   <div class="controls">
     <span class="presets" id="presets">
@@ -1000,12 +1003,13 @@ table.board td.tot.zero{font-weight:400;color:var(--faint)}
 
   <section id="gridsec">
     <h3>The gaps</h3>
-    <p class="hint">One square per person per working day. Filed days are deliberately quiet grey — the solid red is what you're looking for. Hollow squares are days before that person's first entry. Sundays and company holidays are the dotted gutters.</p>
+    <p class="hint">One square per person per working day. Filed days are deliberately quiet grey — the solid red is what you're looking for. Hollow squares are days before that person's first entry, gold squares are approved leave. Sundays and company holidays are the dotted gutters.</p>
     <div class="gridscroll"><table class="grid" id="grid"></table></div>
     <div class="legend">
       <span><i class="cell m"></i> No entry filed</span>
       <span><i class="cell f"></i> Entry filed</span>
       <span><i class="cell na"></i> Before they started</span>
+      <span><i class="cell lv"></i> On approved leave</span>
     </div>
   </section>
 
@@ -1712,6 +1716,25 @@ const HOLIDAYS=new Set([
   '2026-12-25', // Christmas
 ]);
 const isWorkingDay=d=>d.getDay()!==0&&!HOLIDAYS.has(iso(d));
+
+/* Approved leave, per person — unlike a holiday, this excuses one person from
+   one day, not everyone. Imported from a Zoho People export (Leave View,
+   pulled 17 Aug 2026): every "Approved" application's own date breakdown,
+   which already resolves a multi-day request to the individual dates it
+   actually covers (a comp-off spanning a weekend lists the weekend days too,
+   harmlessly — they were never expected days to begin with). Applications
+   left "Cancelled" are excluded outright: a cancelled leave is not a day off,
+   it is a day the person is expected to file like any other.
+
+   This is a snapshot, not a live feed — Zoho has no publish-to-web the way
+   the Sheets sources here do, so refreshing this means importing a new
+   export by hand, the same way CLIENTS_FALLBACK or ADOPTION_FALLBACK get
+   refreshed. Only July 2026 is covered by the export this was built from. */
+const LEAVE_RAW = {"Amar Kumar Pandit":["2026-07-08","2026-07-24","2026-07-25"],"Anjali Verma":["2026-07-20","2026-07-30"],"Ankush Rana":["2026-07-01","2026-07-24","2026-07-25"],"Ashish Kumar":["2026-07-03","2026-07-06","2026-07-17"],"Ayush Garg":["2026-07-03","2026-07-04","2026-07-05","2026-07-06","2026-07-20"],"Divya Gupta":["2026-07-06","2026-07-31"],"Gobind Monga":["2026-07-02"],"Kashish Goel":["2026-07-13","2026-07-27"],"Lokesh Kumar":["2026-07-10","2026-07-27"],"Mansi Rana":["2026-07-08"],"Mehak Garg":["2026-07-23","2026-07-24"],"Mithilesh Kumar":["2026-07-06","2026-07-07","2026-07-16"],"Priya Sharma":["2026-07-17"],"Rahul Sharma":["2026-07-31"],"Sagar Mishra":["2026-07-14"],"Shobhit Sehra":["2026-07-09","2026-07-16","2026-07-29"],"Sukhmeet Singh":["2026-07-17"],"Sumaiya Khan":["2026-07-07","2026-07-10","2026-07-17"]};
+const LEAVE_DAYS = new Map(
+  Object.entries(LEAVE_RAW).map(([name, days]) => [name.toLowerCase(), new Set(days)]));
+const onLeave = (name, day) => LEAVE_DAYS.get(String(name).toLowerCase())?.has(day) === true;
+
 function range(from,to,skipSun){
   const out=[],c=D(from),e=D(to);
   while(c<=e){ if(!skipSun||isWorkingDay(c)) out.push(iso(c)); c.setDate(c.getDate()+1); }
@@ -2515,7 +2538,10 @@ function analyse(rows,from,to,joined){
   const stats=[];
   for(const p of P.values()){
     const start = joined && p.first>from ? p.first : from;
-    const due = days.filter(d=>d>=start);
+    /* Approved leave excuses this one person from this one day, the same way
+       a holiday excuses everyone — it must fall out of "expected" entirely,
+       not read as a missed entry nor break their streak. */
+    const due = days.filter(d=>d>=start && !onLeave(p.name, d));
     if(!due.length) continue;
     const missed = due.filter(d=>!p.filed.has(d));
     let streak=0;
@@ -2558,13 +2584,14 @@ function renderChase(){
     if (r.due < p.first) p.first = r.due;
     p.filed.add(r.due);
   }
-  // Only count people who had started filing by this day.
-  const expected = [...people.values()].filter(p => p.first <= day);
+  // Only count people who had started filing by this day — and not people on
+  // approved leave today, the same exemption analyse() and scoreRows() give them.
+  const expected = [...people.values()].filter(p => p.first <= day && !onLeave(p.name, day));
   const out = expected.filter(p => !p.filed.has(day)).map(p => {
     // consecutive working days missed, counting back from the anchor day
     let streak = 0; const d = D(day);
     while (true){
-      if (isWorkingDay(d)){
+      if (isWorkingDay(d) && !onLeave(p.name, iso(d))){
         if (p.filed.has(iso(d))) break;
         streak++;
       }
@@ -2670,7 +2697,9 @@ function scoreRows(){
     const row = {name, expected:0, filed:0, missed:0, per:{}};
     for (const t of TRACKERS){
       if (isExempt(name, t)){ row.per[t] = null; continue; }
-      const mine = live.filter(d => !joined || d >= first);
+      // Same rule as analyse(): an approved leave day is not expected, so it
+      // is dropped before anything downstream can read it as missed.
+      const mine = live.filter(d => (!joined || d >= first) && !onLeave(name, d));
       const filed = filedBy[t].get(key) || new Set();
       const gaps = mine.filter(d => !filed.has(d));
       const hit = mine.length - gaps.length;
@@ -2754,8 +2783,9 @@ function howHtml(r){
     ]) +
     `<p class="sum">` +
     `Every working day counts as one expected entry per tracker — two a day, ` +
-    `Sundays and company holidays excluded, other Saturdays counted, and ` +
-    `nothing counted for days that have not happened yet. ` +
+    `Sundays and company holidays excluded, other Saturdays counted, approved ` +
+    `leave excused for whoever took it, and nothing counted for days that have ` +
+    `not happened yet. ` +
     (skipping ? `Days before a person's first ever entry are skipped. ` : '') +
     `For this team that is <b>${r.expected} expected</b>, <b>${r.filed} filed</b>, ` +
     `<b>${r.expected - r.filed} missed</b> — ` +
@@ -4059,6 +4089,7 @@ function render(){
     h+=`<tr><td class="who">${esc(p.name)}</td>`;
     for(const d of cols){
       if(!isWorkingDay(D(d))){h+='<td class="gutter"><i class="rule"></i></td>';continue;}
+      if(onLeave(p.name, d)){h+=`<td><i class="cell lv" title="${esc(p.name)} — ${pretty(d)}: on approved leave"></i></td>`;continue;}
       if(d<p.startsAt){h+=`<td><i class="cell na" title="${esc(p.name)} — before first entry"></i></td>`;continue;}
       const ok=p.filedSet.has(d);
       h+=`<td><i class="cell ${ok?'f':'m'}" title="${esc(p.name)} — ${pretty(d)}: ${ok?'filed':'no entry'}"></i></td>`;

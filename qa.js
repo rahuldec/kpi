@@ -370,10 +370,27 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     // allowed to be embedded on the condition that it says when it was taken —
     // which the next block enforces.
     check('no SAMPLE dataset constant', !/const SAMPLE/.test(HTML));
-    check('timesheet rows are not embedded', !/Divya Gupta/.test(HTML),
+    /* LEAVE_RAW (added 17 Aug 2026) is a second sanctioned exception, same
+       shape as the client book below: a snapshot with no live feed to fetch
+       instead (Zoho has no publish-to-web), dated, and asserted as dated by
+       the next check. It is the one place a name belonging to a tracker row
+       is expected to appear, so it is carved out before the tripwire runs —
+       what the tripwire actually guards against is a raw CSV export of
+       tracker rows standing in for a live fetch, which LEAVE_RAW is not. */
+    const withoutLeaveSnapshot = HTML.replace(/const LEAVE_RAW = \{.*?\};/s, '');
+    check('LEAVE_RAW is present exactly once, so the carve-out above is not silently matching nothing',
+          (HTML.match(/const LEAVE_RAW = \{/g) || []).length === 1);
+    check('timesheet rows are not embedded', !/Divya Gupta/.test(withoutLeaveSnapshot),
           'found hardcoded tracker names');
     check('fetches from /api/data with a source', /fetch\(`\/api\/data\?src=/.test(HTML));
     check('both sheet sources declared', /internal:/.test(HTML) && /client:/.test(HTML));
+  }
+
+  // ── 1a1. the leave snapshot says where it came from ────────────
+  {
+    check('the leave snapshot is dated in a comment, the same way the book is',
+          /Zoho People export \(Leave View,\s*pulled \d{1,2} \w+ \d{4}\)/.test(HTML),
+          'no dated provenance comment found ahead of LEAVE_RAW');
   }
 
   // ── 1a2. the client book says where it came from ───────────────
