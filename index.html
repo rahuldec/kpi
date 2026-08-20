@@ -687,6 +687,16 @@ table.board td.dim{color:var(--faint)}
 #clientlist th:not(.num),
 #clientlist td:not(.num){text-align:left}
 #clientlist th:not(.num) button{justify-content:flex-start}
+/* Every other .board table is right-aligned end to end, so a column's own
+   content is what keeps it clear of its neighbour — no gutter needed. Once
+   Owner, Handled by and Type read left instead, their content starts flush
+   against the cell edge and can butt straight into whatever precedes it,
+   e.g. a short "—" leaving almost nothing before the next label starts. A
+   fixed gutter is what the right-aligned columns got for free. */
+#clientlist th{padding-right:28px}
+#clientlist td{padding-right:28px}
+#clientlist th:last-child,
+#clientlist td:last-child{padding-right:0}
 /* 148 rows with nothing to break them up is a wall of text past the fold.
    A hairline tint every other row gives the eye a rail to track a line across
    six columns without the vertical rules a denser table would need. */
