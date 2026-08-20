@@ -677,6 +677,24 @@ table.board td{
 table.board td:first-child{text-align:left;font-weight:500}
 table.board tr:last-child td{border-bottom:0}
 table.board td.dim{color:var(--faint)}
+/* The client book mixes names (Client, Owner, Handled by, Type) with figures
+   (Billing FY, Escalations). table.board defaults every column right for the
+   mostly-numeric boards elsewhere, which reads fine for a rank or a rupee
+   figure and badly for a person's name — six columns of right-ragged text.
+   Only the columns actually marked .num (money, the escalation badge) keep
+   that alignment here; everything else in this one list reads left, the way
+   a name is read. */
+#clientlist th:not(.num),
+#clientlist td:not(.num){text-align:left}
+#clientlist th:not(.num) button{justify-content:flex-start}
+/* 148 rows with nothing to break them up is a wall of text past the fold.
+   A hairline tint every other row gives the eye a rail to track a line across
+   six columns without the vertical rules a denser table would need. */
+#clientlist tbody tr:nth-child(even) td{background:var(--page)}
+/* An open escalation is a stronger signal than the stripe and must read the
+   same on every row it touches, not only the even ones the stripe would
+   otherwise tint. */
+#clientlist tbody tr.flagged td{background:var(--miss-soft)}
 /* A row-scale version of the dial track, so a long table reads at a glance
    without asking anyone to compare percentages down a column. */
 .minibar{display:block;width:100%;max-width:120px;height:6px;border-radius:3px;
@@ -3910,7 +3928,8 @@ function renderClientList(){
           `${all.length} resolved</span>`
         : '<span class="dim">—</span>';
     t += `<tr${open.length ? ' class="flagged"' : ''}>` +
-         `<td>${esc(c.n)}</td><td>${esc(c.o || '—')}</td><td>${esc(c.h || '—')}</td>` +
+         `<td>${esc(c.n)}</td><td>${esc(c.o || '—')}</td>` +
+         `<td class="dim">${esc(c.h || '—')}</td>` +
          `<td>${esc(c.t || '—')}</td><td>${esc(c.c || '—')}</td>` +
          `<td class="num">${c.r == null ? '—' : esc(inr(c.r))}</td>` +
          `<td class="num">${badge}</td></tr>`;
