@@ -479,6 +479,32 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
       try { win.eval(`parseBook("Client Name, Total Billing FY \\nFoo, 1")`); return false; }
       catch (e) { return /Sr No\./.test(e.message); }
     })());
+
+    /* Added 20 Aug 2026: a second "RM" column, further right, naming who
+       actually handles the client day to day. Sheets allow duplicate headers,
+       so name alone can't tell the two apart — only position can, and only
+       once there are two of them. A book with just the one "RM" (every fixture
+       above, and every book before this column existed) must keep reading it
+       as unused scratch, not as a handler. */
+    const csvOneRm = [
+      'Sr No.,Client Name,Old/New,TYPE1,Category,Type, Total Billing FY , Team ,RM',
+      '1,Solo RM,Old,School,Large,B," ₹ 1,000.00 ",Mansi Rana,Exam'
+    ].join('\n');
+    check('a single "RM" column is not read as a handler',
+          win.eval(`parseBook(${JSON.stringify(csvOneRm)})`)[0].h === undefined);
+
+    const csvTwoRm = [
+      'Sr No.,Client Name,Old/New,TYPE1,Category,Type, Total Billing FY , Team ,RM,Retention/Imp,RM',
+      '1,Handled,Old,School,Large,B," ₹ 1,000.00 ",Mansi Rana,Exam,Retention,Gobind Monga',
+      '2,Unhandled,Old,School,Large,B," ₹ 1,000.00 ",Mansi Rana,Exam,Retention,-'
+    ].join('\n');
+    const gotTwoRm = win.eval(`parseBook(${JSON.stringify(csvTwoRm)})`);
+    check('the second "RM" column becomes the handler',
+          gotTwoRm.find(c => c.n === 'Handled').h === 'Gobind Monga');
+    check('the first "RM" column still plays no part in ownership or handling',
+          gotTwoRm.find(c => c.n === 'Handled').o === 'Mansi Rana');
+    check('a dash in the handler column is unhandled, not the literal dash',
+          gotTwoRm.find(c => c.n === 'Unhandled').h === undefined);
   }
 
   // ── 1a4. the snapshot holds clients, not scratch ───────────────
@@ -2149,7 +2175,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     const num = s => Number(String(s).replace(/[^0-9.]/g, ''));
 
     check('every client column has a sort button',
-          doc.querySelectorAll('#clientlist th button[data-ccol]').length === 6,
+          doc.querySelectorAll('#clientlist th button[data-ccol]').length === 7,
           String(doc.querySelectorAll('#clientlist th button[data-ccol]').length));
     // Compare the underlying figures, not the abbreviated display — "₹70,000"
     // and "₹13.7L" do not compare as written.
@@ -2157,7 +2183,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     check('default is billing, largest first', (() => {
       const v = col(0).map(n => byName.get(n)).filter(x => x != null);
       return v.every((x, i) => i === 0 || v[i-1] >= x);
-    })(), col(4).slice(0, 4).join());
+    })(), col(5).slice(0, 4).join());
     check('one column marked sorted by default',
           doc.querySelectorAll('#clientlist th[aria-sort]').length === 1);
 
@@ -2173,23 +2199,23 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
 
     // Size is a band, not a word: Large > Medium > Small, never alphabetical
     hit('c');
-    const sizes = col(3).filter(x => x !== '—');
+    const sizes = col(4).filter(x => x !== '—');
     check('size sorts by band, largest first', sizes[0] === 'Large', sizes.slice(0, 3).join());
     check('and does not sort alphabetically',
           sizes.join('|') !== [...sizes].sort().reverse().join('|'), sizes.slice(0, 3).join());
     hit('c');
     check('reversed, smallest first',
-          col(3).filter(x => x !== '—')[0] === 'Small',
-          col(3).slice(0, 3).join());
+          col(4).filter(x => x !== '—')[0] === 'Small',
+          col(4).slice(0, 3).join());
     check('unsized clients sink either way', (() => {
-      const v = col(3);
+      const v = col(4);
       const firstDash = v.indexOf('—');
       return firstDash === -1 || v.slice(firstDash).every(x => x === '—');
-    })(), col(3).slice(-3).join());
+    })(), col(4).slice(-3).join());
 
     // escalations: open outrank resolved, and no escalation is not a zero
     hit('e');
-    const esc = col(5);
+    const esc = col(6);
     check('open escalations sort to the top', /open/.test(esc[0]), esc.slice(0, 3).join(' | '));
     check('resolved rank below open', (() => {
       const lastOpen = esc.map(x => /open/.test(x)).lastIndexOf(true);
@@ -2207,7 +2233,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     const sel = doc.getElementById('cowner');
     sel.value = [...sel.options].map(o => o.value).filter(Boolean)[0];
     sel.dispatchEvent(new win.Event('change'));
-    check('the sort survives a filter change', /open|resolved|—/.test(col(5)[0]));
+    check('the sort survives a filter change', /open|resolved|—/.test(col(6)[0]));
     check('the filter still narrows the list', rows().length < 148, rows().length + ' rows');
     check('and the total follows', new RegExp(`^${rows().length} clients`).test(txt(doc, '#ctot')),
           txt(doc, '#ctot'));

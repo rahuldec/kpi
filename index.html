@@ -1078,7 +1078,9 @@ table.board td.tot.zero{font-weight:400;color:var(--faint)}
 
    Keys are short because there are 149 of them: n name, o owning RM,
    r revenue for the financial year (rupees, null where the sheet is blank),
-   t institution type, c size band, a old or new. Sorted by revenue.
+   t institution type, c size band, a old or new. Sorted by revenue. This
+   snapshot predates the day-to-day handler column (see parseBook), so no row
+   here carries an `h` — the live book fills it in once fetched.
 
    "Dalmia Group" (Ankush Rana, ₹2.75L) was added 16 Aug 2026 — present in the
    live book but missing from the original 3 Aug snapshot, which only surfaced
@@ -1779,9 +1781,17 @@ const tc=s=>s.split(/\s+/).map(w=>w?w[0].toUpperCase()+w.slice(1).toLowerCase():
    source URL above it — so scan the first rows for the real header instead of
    assuming row 1. */
 /* The published Clients tab, CSV. Columns: Sr No., Client Name, Old/New, TYPE1,
-   Category, Type, Total Billing FY, Team, RM, and some scratch beyond that.
-   `Team` is the owning RM — the `RM` column is nearly empty and mostly reads
-   "Exam". Ownership lives in Team, so that is what becomes `o`.
+   Category, Type, Total Billing FY, Team, RM, Retention/Imp, and some scratch
+   beyond that. `Team` is the owning RM — the first `RM` column is nearly empty
+   and mostly reads "Exam". Ownership lives in Team, so that is what becomes `o`.
+
+   Added 20 Aug 2026: a second column also headed "RM", further right, naming
+   who actually handles the client day to day — an assistant, not necessarily
+   the owning RM in Team. Google Sheets allows duplicate headers, so the two
+   can't be told apart by name; only the last "RM" column is ever taken as the
+   handler, and only when there are two or more, so a book from before this
+   column existed still parses byte-identical to before rather than reading its
+   one lonely "RM"/"Exam" column as a handler.
 
    A row counts only if it carries a Sr No. and a name. Everything below the
    numbered block — the "Daily work track" rows, prospect notes in the wrong
@@ -1811,19 +1821,27 @@ function parseBook(text){
   const rows = splitRows(text, dl);
   let head = -1, ix = {};
   const find = (h, ...names) => h.findIndex(x => names.some(n => x === n));
+  /* Last match rather than first — see the note above on the duplicate "RM"
+     header. Only meaningful when it finds a second one. */
+  const findLast = (h, ...names) => {
+    for (let i = h.length - 1; i >= 0; i--) if (names.some(n => h[i] === n)) return i;
+    return -1;
+  };
   for (let i = 0; i < Math.min(rows.length, 40); i++){
     const h = rows[i].map(x => x.trim().toLowerCase());
     const name = find(h, 'client name');
     const bill = h.findIndex(x => x.includes('total billing'));
     if (name > -1 && bill > -1){
       head = i;
+      const rmFirst = find(h, 'rm'), rmLast = findLast(h, 'rm');
       ix = {sr: find(h, 'sr no.', 'sr no', 'sr. no.'), name, bill,
             oldnew: find(h, 'old/new'), type: find(h, 'type1'),
             cat: find(h, 'category'), team: find(h, 'team'),
             /* "Retention/Imp" — whether the team is holding an account or
                standing one up. Matched loosely because the header has been
                spelled both ways; a book without the column parses as before. */
-            kind: h.findIndex(x => x.includes('retention'))};
+            kind: h.findIndex(x => x.includes('retention')),
+            handler: rmLast > rmFirst ? rmLast : -1};
       break;
     }
   }
@@ -1852,6 +1870,8 @@ function parseBook(text){
        than growing an empty field that reads as a real answer of "neither". */
     const k = bookKind(cell(r, ix.kind));
     if (k) row.k = k;
+    const handler = dash(cell(r, ix.handler));
+    if (handler) row.h = handler;
     out.push(row);
   }
   // Highest billing first; the unfilled ones sink rather than reading as zero.
@@ -3760,6 +3780,7 @@ const SIZE_RANK = {large: 3, medium: 2, small: 1};
 const CSORT_COLS = {
   n: {label: 'Client',     get: c => c.n.toLowerCase(),                 dir: 'asc'},
   o: {label: 'Owner',      get: c => c.o ? c.o.toLowerCase() : null,    dir: 'asc'},
+  h: {label: 'Handled by', get: c => c.h ? c.h.toLowerCase() : null,    dir: 'asc'},
   t: {label: 'Type',       get: c => c.t ? c.t.toLowerCase() : null,    dir: 'asc'},
   /* Size is a band, not a word. Alphabetical would put Large above Small above
      Medium, which is neither order anyone means. */
@@ -3874,7 +3895,7 @@ function renderClientList(){
            `title="Sort by ${esc(CSORT_COLS[col].label.toLowerCase())}">` +
            `${esc(CSORT_COLS[col].label)}<i aria-hidden="true">${arrow}</i></button></th>`;
   };
-  let t = '<thead><tr>' + cth('n') + cth('o') + cth('t') + cth('c') +
+  let t = '<thead><tr>' + cth('n') + cth('o') + cth('h') + cth('t') + cth('c') +
           cth('r', 'num') + cth('e', 'num') + '</tr></thead><tbody>';
   for (const c of shown){
     const all = escFor(c.n), open = all.filter(e => !e.closed);
@@ -3889,12 +3910,12 @@ function renderClientList(){
           `${all.length} resolved</span>`
         : '<span class="dim">—</span>';
     t += `<tr${open.length ? ' class="flagged"' : ''}>` +
-         `<td>${esc(c.n)}</td><td>${esc(c.o || '—')}</td>` +
+         `<td>${esc(c.n)}</td><td>${esc(c.o || '—')}</td><td>${esc(c.h || '—')}</td>` +
          `<td>${esc(c.t || '—')}</td><td>${esc(c.c || '—')}</td>` +
          `<td class="num">${c.r == null ? '—' : esc(inr(c.r))}</td>` +
          `<td class="num">${badge}</td></tr>`;
   }
-  if (!shown.length) t += `<tr><td colspan="6">No clients match that filter.</td></tr>`;
+  if (!shown.length) t += `<tr><td colspan="7">No clients match that filter.</td></tr>`;
   $('clientlist').innerHTML = t + '</tbody>';
 }
 
