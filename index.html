@@ -425,8 +425,15 @@ html.modalopen{overflow:hidden}
 }
 .podgaps b{font-weight:600}
 ─────────────────────────────────────────────────────────── */
+/* A plain flex row sitting 18px above the table read as a second header, not
+   a toolbar — "Owner" and "Type" here, "OWNER" and "TYPE" as column labels
+   one line down, both left-weighted, nothing to tell a skimming eye they are
+   two different things. A tinted, bounded bar reads as one control clearly
+   apart from the list it filters, the way the search field above a table
+   does anywhere else. */
 .clientfilter{
-  display:flex;gap:22px;align-items:center;flex-wrap:wrap;margin:0 0 18px;
+  display:flex;gap:22px;align-items:center;flex-wrap:wrap;margin:0 0 26px;
+  padding:12px 16px;background:var(--page);border-radius:12px;
   font-size:14px;color:var(--faint);
 }
 .clientfilter label{display:inline-flex;align-items:center;gap:7px}
