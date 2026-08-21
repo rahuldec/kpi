@@ -228,7 +228,7 @@ const VISITS_UNCONFIGURED = '{"error":"MOM_API_KEY is not set on this deployment
 function boot({ body = SHEET, clientBody = CLIENT_DEFAULT, escBody = ESC_SHEET,
                 bookBody = BOOK_SHEET, adoptBody = ADOPT_SHEET, feedBody = FEED_SHEET,
                 implBody = IMPL_SHEET, teamBody = TEAM_DEFAULT,
-                visitsBody = VISITS_UNCONFIGURED,
+                visitsBody = VISITS_UNCONFIGURED, pexBody = PEX_SHEET,
                 status = 200, reject = false, store = null } = {}) {
   const errs = [], calls = [];
   // beforeParse installs the mock before the page's own <script> runs, so the
@@ -259,6 +259,7 @@ function boot({ body = SHEET, clientBody = CLIENT_DEFAULT, escBody = ESC_SHEET,
             src === 'book' ? bookBody :
             src === 'team' ? teamBody :
             src === 'visits' ? visitsBody :
+            src === 'pex' ? pexBody :
             src === 'client' ? clientBody : body)
         });
       };
@@ -296,6 +297,24 @@ const TEAM_HEAD = 'Task ID,Created At,Completed At,Last Modified,Name,Section/Co
 const teamSheet = (people = TEAM_PEOPLE, off = 0) =>
   [',,', ',,url', ',,', TEAM_HEAD].concat(people.map((p, i) =>
     `${off + i + 1},2026-07-01,,,x,S,${p},x@x.com,,2026-07-01,,n`)).join('\n');
+
+/* "PEX Team - Daily Problems", same header shape (Assignee, Due Date) as the
+   trackers plus the column that tells it apart: PEX Category. Sukhmeet Singh
+   and Gobind Monga (his team, per TEAM_DEFAULT) each raise one in July and
+   one in August, so tests below can tell the month filter apart from an
+   all-time read; "Unknown Person" never resolves, exercising PEX_UNPLACED;
+   the last row has no Name and must be dropped as scratch, the same rule
+   parseBook and parseImplementation already enforce on their own sheets. */
+const PEX_HEAD = 'Task ID,Created At,Completed At,Last Modified,Name,Section/Column,Assignee,' +
+  'Assignee Email,Start Date,Due Date,Tags,Notes,Projects,PEX Category';
+const PEX_SHEET = [
+  PEX_HEAD,
+  '1,2026-07-01,,2026-07-01,Issue A,1 Jul,Sukhmeet Singh,s@x.com,,2026-07-05,,,Client X,Knowledge Gap',
+  '2,2026-08-05,2026-08-06,2026-08-06,Issue B,5 Aug,Gobind Monga,g@x.com,,2026-08-10,,,Client Y,Production Bugs',
+  '3,2026-08-06,,2026-08-06,Issue C,6 Aug,Unknown Person,u@x.com,,2026-08-11,,,Client Z,Knowledge Gap',
+  '4,2026-08-07,,2026-08-07,Issue D,7 Aug,Sukhmeet Singh,s@x.com,,2026-08-12,,,Client X,Data Correction',
+  ',2026-08-08,,2026-08-08,,8 Aug,Sukhmeet Singh,s@x.com,,2026-08-13,,,,Knowledge Gap'
+].join('\n');
 
 /* Pick months the way the UI does — tick the boxes in the popover — rather than
    poking a value onto a control that no longer exists. Accepts one month or many. */
@@ -1108,12 +1127,12 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     check('the book tab lives in its own group',
           tab().closest('.group')?.querySelector('.grouplabel')?.textContent === 'Business',
           tab().closest('.group')?.querySelector('.grouplabel')?.textContent);
-    check('there are six groups and no more',
-          doc.querySelectorAll('.groups > .group').length === 6,
+    check('there are seven groups and no more',
+          doc.querySelectorAll('.groups > .group').length === 7,
           String(doc.querySelectorAll('.groups > .group').length));
     check('and each one is labelled', (() => {
       const l = [...doc.querySelectorAll('.groups > .group .grouplabel')].map(x => x.textContent);
-      return JSON.stringify(l) === JSON.stringify(['Compliance','Business','Product','Voice','Field','Overall']);
+      return JSON.stringify(l) === JSON.stringify(['Compliance','Business','Product','PEX','Voice','Field','Overall']);
     })(), [...doc.querySelectorAll('.groups > .group .grouplabel')].map(x => x.textContent).join());
 
     tab().click(); await settle();
@@ -2329,9 +2348,9 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     const { doc, errs, calls } = boot(); await settle();
     check('boots with no JS errors', errs.length === 0, errs.join(' | '));
     const apiCalls = calls.filter(u => /^\/api\/data\?src=/.test(u));
-    // Nine since 20 Aug 2026: internal, client, book, team, adoption, visits,
-    // feedback, escalations, implementation.
-    check('called the data endpoint for all nine sheets', apiCalls.length === 9, calls.join());
+    // Ten since 20 Aug 2026: internal, client, book, team, adoption, visits,
+    // pex, feedback, escalations, implementation.
+    check('called the data endpoint for all ten sheets', apiCalls.length === 10, calls.join());
     /* Order is load-bearing, not incidental: buildEscalations matches escalation
        names against the client book, so the book has to be in place first or the
        matching silently runs against the fallback. Archive requests are excluded
@@ -2482,7 +2501,7 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
     const { doc, calls } = boot(); await settle();
     doc.getElementById('refresh').click(); await settle();
     const apiCalls = calls.filter(u => /^\/api\/data\?src=/.test(u));
-    check('refresh refetches every sheet', apiCalls.length === 18, apiCalls.length + ' calls');
+    check('refresh refetches every sheet', apiCalls.length === 20, apiCalls.length + ' calls');
     const archiveCalls = calls.filter(u => /^\/archive\//.test(u));
     check('and the archive leg too', archiveCalls.length > 0 && archiveCalls.length % 2 === 0,
           archiveCalls.length + ' archive calls');
@@ -3239,6 +3258,118 @@ const isoLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
       check('an unparseable feed falls back to the compiled snapshot, not an empty page',
             fwin.eval('VISITS_LIVE') === false && fwin.eval('VISITS.length') === win.eval('VISITS_FALLBACK.length'));
       check('and the reason is stated in the hint', txt(fdoc, '#visithint').length > 0, txt(fdoc, '#visithint'));
+    }
+
+    /* ── PEX (added 20 Aug 2026) ───────────────────────────────────
+       "PEX Team - Daily Problems" — a second tracker-shaped Asana export, this
+       one logging product issues the CS team raises. Nav tab, parser, roster
+       resolution, per-team totals and the meter's own Knowledge Gap line all
+       get the same scrutiny visits just got, for the same reasons. */
+    {
+      const rows = JSON.parse(win.eval(`JSON.stringify(parsePex(${JSON.stringify(PEX_SHEET)}))`));
+      check('every real row survives parsing', rows.length === 4, rows.length);
+      check('a row with no Name is dropped as scratch',
+            !rows.some(r => r.assignee === 'Sukhmeet Singh' && r.cat === 'Knowledge Gap' && r.created === '2026-08-08'));
+      check('the category is read from PEX Category',
+            rows.find(r => r.name === 'Issue A').cat === 'Knowledge Gap');
+      check('Completed At present means completed',
+            rows.find(r => r.name === 'Issue B').completed === true);
+      check('Completed At blank means not completed',
+            rows.find(r => r.name === 'Issue A').completed === false);
+      check('a header search that finds no PEX Category is refused rather than misread', (() => {
+        try { win.eval(`parsePex(${JSON.stringify(SHEET)})`); return false; }
+        catch (e) { return /PEX Category/.test(e.message); }
+      })());
+    }
+    {
+      const { win: pwin, doc: pdoc } = boot({ body: teamSheet(), clientBody: teamSheet(TEAM_PEOPLE, 500) });
+      await settle();
+      check('an unresolved assignee is reported, not dropped',
+            JSON.parse(pwin.eval('JSON.stringify(PEX_UNPLACED)')).includes('Unknown Person'));
+
+      const july = JSON.parse(pwin.eval("JSON.stringify(pexForTeam('Sukhmeet Singh', ['2026-07']))"));
+      const aug = JSON.parse(pwin.eval("JSON.stringify(pexForTeam('Sukhmeet Singh', ['2026-08']))"));
+      const all = JSON.parse(pwin.eval("JSON.stringify(pexForTeam('Sukhmeet Singh', null))"));
+      check('July has Sukhmeet Singh\'s one knowledge-gap issue', july.total === 1 && july.knowledgeGap === 1);
+      check('August has his and Gobind Monga\'s (his team) two issues, no knowledge gap',
+            aug.total === 2 && aug.knowledgeGap === 0, JSON.stringify(aug));
+      check('an unfiltered read (null) sums every month, unlike passing an empty array',
+            all.total === 3 && all.knowledgeGap === 1, JSON.stringify(all));
+
+      // The nav tab
+      const pexBtn = pdoc.querySelector('#sources7 button[data-src="pex"]');
+      check('the PEX tab lives in its own group',
+            pexBtn.closest('.group')?.querySelector('.grouplabel')?.textContent === 'PEX');
+      pexBtn.click(); await settle();
+      check('the PEX panel is shown', pdoc.getElementById('pex').hidden === false);
+      check('the meter panel is hidden', pdoc.getElementById('meter').hidden === true);
+      check('month picker and joined toggle are off screen, same as adoption and feedback',
+            !shown(pdoc, '#monthwrap') && !shown(pdoc, '#joinedwrap'));
+
+      // The by-team table: all-time, so July's issue and August's both count.
+      const teamRows = [...pdoc.querySelectorAll('#pexteams tbody tr')]
+        .map(tr => [...tr.children].map(td => td.textContent.trim()));
+      const sk = teamRows.find(r => r[0] === 'Sukhmeet Singh');
+      check('the by-team table carries the all-time total', sk && sk[1] === '3', JSON.stringify(sk));
+      check('and the all-time knowledge-gap count', sk && sk[2] === '1', JSON.stringify(sk));
+
+      // The by-person table
+      const peopleRows = [...pdoc.querySelectorAll('#pexpeople tbody tr')]
+        .map(tr => [...tr.children].map(td => td.textContent.trim()));
+      check('Sukhmeet Singh appears with his own two issues, one of them knowledge gap',
+            peopleRows.some(r => r[0] === 'Sukhmeet Singh' && r[2] === '2' && r[3] === '1'),
+            JSON.stringify(peopleRows));
+      check('an unresolved assignee never appears as a person row',
+            !peopleRows.some(r => r[0] === 'Unknown Person'));
+
+      // The by-category table
+      const catRows = [...pdoc.querySelectorAll('#pexcats tbody tr')]
+        .map(tr => [...tr.children].map(td => td.textContent.trim()));
+      check('Knowledge Gap is counted across the whole sheet, not per team',
+            catRows.some(r => r[0] === 'Knowledge Gap' && r[1] === '2'), JSON.stringify(catRows));
+    }
+    {
+      // The meter's own Knowledge Gap line — same fixture, read through the card.
+      const { doc: mdoc, win: mwin } = boot({ body: teamSheet(), clientBody: teamSheet(TEAM_PEOPLE, 500) });
+      await settle();
+      mdoc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
+      const skCard = [...mdoc.querySelectorAll('.mcard')]
+        .find(c => /Sukhmeet Singh/.test(c.querySelector('h4').textContent));
+      check('the card carries a Knowledge Gap line', !!skCard.querySelector('.pexline'));
+      check('its label reads plainly',
+            skCard.querySelector('.pexline .lbl').textContent === 'Knowledge gap');
+      /* Default month selection is the current month (August, in this fixture's
+         world) — one issue, Gobind Monga's, and it is not Knowledge Gap, so the
+         line should read "none" rather than a stale July figure. */
+      check('it reads the currently selected month, not all time',
+            /none/.test(skCard.querySelector('.pexline .n').textContent),
+            skCard.querySelector('.pexline .n').textContent);
+      check('the figure is never styled as a red/hot alarm — a knowledge gap is not a fire',
+            mwin.getComputedStyle(skCard.querySelector('.pexline .n')).color ===
+            mwin.getComputedStyle(skCard.querySelector('.visitline .n')).color);
+      check('the row has its own (i), and it opens a matching section',
+            !!skCard.querySelector('.pexline button.mi'));
+      skCard.querySelector('.pexline button.mi').click(); await settle();
+      check('the panel opened on the knowledge gap section',
+            mdoc.getElementById(`how${[...mdoc.querySelectorAll('.mcard')].indexOf(skCard)}`)
+              .querySelector('[data-sec="pex"]').textContent.includes('Knowledge gap'));
+    }
+    {
+      // Failure path: the same fallback shape every other independent source uses.
+      const { doc: edoc, win: ewin } = boot({ pexBody: 'not json, not csv, nothing usable',
+        body: teamSheet(), clientBody: teamSheet(TEAM_PEOPLE, 500) });
+      await settle();
+      check('an unparseable PEX sheet leaves PEX empty rather than half-read',
+            ewin.eval('PEX.length') === 0 && ewin.eval('PEX_LIVE') === false);
+      edoc.querySelector('#sources3 button[data-src="meter"]').click(); await settle();
+      const anyCard = edoc.querySelector('.mcard');
+      check('the meter still renders — a failed PEX fetch does not take the page down',
+            !!anyCard);
+      check('a card still carries the line on a failed fetch, same as visits: it says not loaded rather than vanishing',
+            /not loaded/.test(anyCard.querySelector('.pexline')?.textContent), anyCard.querySelector('.pexline')?.textContent);
+      edoc.querySelector('#sources7 button[data-src="pex"]').click(); await settle();
+      check('the PEX tab states the failure rather than showing an empty table silently',
+            /did not load/.test(txt(edoc, '#pexhint')), txt(edoc, '#pexhint'));
     }
 
     /* A forty-eight-name client list buried every section under it. Capped, with

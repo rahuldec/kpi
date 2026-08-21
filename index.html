@@ -324,7 +324,7 @@ html.modalopen{overflow:hidden}
    but kept as its own class rather than sharing .escline outright, so a
    card-scoped querySelector('.escline') elsewhere in the suite can never
    silently pick up implementation's row instead of escalations'. */
-.visitline,.escline,.implline,.mixline{
+.visitline,.escline,.implline,.mixline,.pexline{
   display:flex;align-items:baseline;gap:2px 9px;margin:2px 0 0;flex-wrap:wrap;
   padding-top:12px;border-top:1px solid var(--hair);
 }
@@ -342,7 +342,7 @@ html.modalopen{overflow:hidden}
    roster moved into the (i) panel on 17 Aug 2026, so the card prints only the
    headline div with nothing after it. */
 .covwho + .dial,.mixbar + .dial,.implwho + .dial,.implline + .dial{padding-top:14px;border-top:1px solid var(--hair)}
-.visitline .lbl,.escline .lbl,.implline .lbl,.mixline .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.07em;
+.visitline .lbl,.escline .lbl,.implline .lbl,.mixline .lbl,.pexline .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.07em;
   color:var(--faint);width:88px;flex:none}
 /* "Implementation" is one unbreakable word, wider than the 88px column every
    other one-line label here fits inside — at 88px it overflows straight
@@ -354,13 +354,13 @@ html.modalopen{overflow:hidden}
    lines the way it did when other text beside it was allowed to squeeze it.
    Below about 300px of card the row wraps instead; the value stays beside its
    label at every width, which is the thing being read. */
-.visitline .n,.escline .n,.implline .n,.mixline .n{font-size:15px;font-weight:600;letter-spacing:-.012em;
+.visitline .n,.escline .n,.implline .n,.mixline .n,.pexline .n{font-size:15px;font-weight:600;letter-spacing:-.012em;
   white-space:nowrap}
 /* Two phrases joined by a separator rather than one indivisible figure, so this
    is the one value on a card that may break — between them, never inside them. */
 .mixline .n{white-space:normal;font-size:14px}
 .escline.hot .n,.implline.hot .n{color:var(--miss)}
-.escline.cool .n,.implline.cool .n,.visitline .n,.mixline.cool .n{color:var(--faint);font-weight:500}
+.escline.cool .n,.implline.cool .n,.visitline .n,.mixline.cool .n,.pexline .n{color:var(--faint);font-weight:500}
 .how .gaps{font-size:12.5px;line-height:1.7;color:var(--ink);margin:6px 0 0}
 .how .gaps.none{color:var(--faint);font-size:12px;margin-top:8px}
 /* A figure attached to a name, not a column of its own. */
@@ -384,7 +384,7 @@ html.modalopen{overflow:hidden}
    rows of a card line up down the same edge. The mix line has no .sub of its
    own — its figures moved into the bar below, where the whole point is that
    each sits inside the thing it measures rather than off to one side. */
-.visitline .sub,.escline .sub{font-size:12.5px;color:var(--faint);margin-left:auto;
+.visitline .sub,.escline .sub,.pexline .sub{font-size:12.5px;color:var(--faint);margin-left:auto;
   text-align:right;white-space:nowrap}
 
 /* Two segments, sized by rupees rather than by percentage so there is nothing
@@ -853,6 +853,13 @@ table.board td.tot.zero{font-weight:400;color:var(--faint)}
     </div>
 
     <div class="group">
+      <span class="grouplabel">PEX</span>
+      <div class="sources" id="sources7">
+        <button type="button" data-src="pex">Daily problems</button>
+      </div>
+    </div>
+
+    <div class="group">
       <span class="grouplabel">Voice</span>
       <div class="sources" id="sources5">
         <button type="button" data-src="feedback">Client feedback</button>
@@ -1006,6 +1013,29 @@ table.board td.tot.zero{font-weight:400;color:var(--faint)}
       <h3>No visit filed</h3>
       <p class="targetnote" id="visitgapnote"></p>
       <table class="board" id="visitgaps"></table>
+    </div>
+  </section>
+
+  <section id="pex" hidden>
+    <div class="card">
+      <h3>Where it stands</h3>
+      <div class="hint" id="pexhint"></div>
+      <div class="meters" id="pextotals"></div>
+    </div>
+    <div class="card">
+      <h3>By team</h3>
+      <p class="targetnote" id="pexteamnote"></p>
+      <table class="board" id="pexteams"></table>
+    </div>
+    <div class="card">
+      <h3>By person</h3>
+      <p class="targetnote" id="pexpeoplenote"></p>
+      <table class="board" id="pexpeople"></table>
+    </div>
+    <div class="card">
+      <h3>By category</h3>
+      <p class="targetnote" id="pexcatnote"></p>
+      <table class="board" id="pexcats"></table>
     </div>
   </section>
 
@@ -1302,6 +1332,84 @@ function buildVisits(){
     }
 }
 
+/* ---------------- PEX (product issues the CS team raises) ----------------
+
+   "PEX Team - Daily Problems", an Asana export identical in shape to the two
+   trackers (Due Date, Assignee) but a different tracker entirely: one row per
+   product issue — a bug, a knowledge gap, a new requirement, a data correction
+   — that a CS team member raised against the product team. No compiled
+   snapshot here, same reasoning as feedback: this changes daily and there is
+   nothing true to fall back to once it goes stale, so a failed fetch shows an
+   empty tab and says why rather than a dated guess. */
+let PEX = [], PEX_ASOF = null, PEX_LIVE = false, PEX_ERROR = null, PEX_UNPLACED = [];
+
+function parsePex(text){
+  const rows = splitRows(text, ',');
+  let head = -1, ix = {};
+  for (let i = 0; i < Math.min(rows.length, 10); i++){
+    const h = rows[i].map(x => String(x).trim().toLowerCase());
+    const assignee = h.indexOf('assignee'), due = h.indexOf('due date'), cat = h.indexOf('pex category');
+    if (assignee > -1 && due > -1 && cat > -1){
+      head = i;
+      ix = {name: h.indexOf('name'), assignee, cat,
+            created: h.indexOf('created at'), completed: h.indexOf('completed at'),
+            projects: h.indexOf('projects')};
+      break;
+    }
+  }
+  if (head < 0) throw new Error(
+    'Could not find a header row with "Assignee", "Due Date" and "PEX Category" in the sheet.');
+
+  const out = [];
+  for (let i = head + 1; i < rows.length; i++){
+    const r = rows[i]; if (!r) continue;
+    const name = String(r[ix.name] || '').trim();
+    if (!name) continue;
+    out.push({
+      name,
+      assignee: String(r[ix.assignee] || '').trim(),
+      cat: String(r[ix.cat] || '').trim(),
+      created: normDate(r[ix.created]),
+      completed: !!String(r[ix.completed] || '').trim(),
+      projects: String(r[ix.projects] || '').split(',').map(x => x.trim()).filter(Boolean)
+    });
+  }
+  return out;
+}
+
+/* Same roster resolution as visits, and the same reason to reuse it rather
+   than write a second copy: an Assignee is free text exactly the way the
+   portal's employee field is, so the same "exact match, else a first name
+   that answers to exactly one person, else unplaced" rule applies unchanged. */
+function buildPex(){
+  PEX_UNPLACED = [];
+  const seen = new Set();
+  for (const p of PEX){
+    if (!p.assignee) continue;   // nobody claimed it — not the same as an unresolved name
+    const who = canonVisitor(p.assignee);
+    if (!who && !seen.has(p.assignee)){ seen.add(p.assignee); PEX_UNPLACED.push(p.assignee); }
+  }
+}
+
+/* Same shape as visitsForTeam: a person belongs to a team, an issue to whoever
+   raised it. `months`, when given, filters on Created At the same way visits
+   filters on the meeting date; passing null (the standalone PEX tab's own
+   view) reads all time instead, the same convention visitsForTeam already
+   uses. */
+function pexForTeam(lead, months){
+  const team = new Set([lead, ...(POD_TEAM.get(lead) || [])]);
+  let total = 0;
+  const byCategory = new Map();
+  for (const p of PEX){
+    if (months && !months.includes((p.created || '').slice(0, 7))) continue;
+    const who = canonVisitor(p.assignee);
+    if (!who || !team.has(who)) continue;
+    total++;
+    if (p.cat) byCategory.set(p.cat, (byCategory.get(p.cat) || 0) + 1);
+  }
+  return {total, knowledgeGap: byCategory.get('Knowledge Gap') || 0, byCategory};
+}
+
 
 let ADOPTION = ADOPTION_FALLBACK;
 let ADOPTION_NOTES = [];
@@ -1587,7 +1695,8 @@ const SOURCES = {
   meter:     {label: 'CS team KPI meter',              noun: 'calls'},
   adoption:  {label: 'ERP module adoption',            noun: 'calls'},
   feedback:  {label: 'Client feedback',                noun: 'calls'},
-  visits:    {label: 'Client visits',                  noun: 'calls'}
+  visits:    {label: 'Client visits',                  noun: 'calls'},
+  pex:       {label: 'PEX Team — Daily Problems',       noun: 'calls'}
 };
 const TRACKERS = ['internal','client'];
 const MONTH_KEY = 'kpi.months';
@@ -2827,8 +2936,9 @@ function meterRows(){
     const feed = feedForTeam(e.lead);
     const visits = visitsForTeam(e.lead, MONTHS);
     const impl = implForTeam(e.lead);
+    const pex = pexForTeam(e.lead, MONTHS);
     return {
-      ...e, revenue, target, esc, adopt, feed, visits, impl,
+      ...e, revenue, target, esc, adopt, feed, visits, impl, pex,
       escOpen: esc.filter(x => x.open.length),
       compliance: e.expected ? e.filed / e.expected : null,
       business: target ? revenue / target : 0
@@ -2874,6 +2984,7 @@ function howHtml(r){
   h += feedDetail(r);
   h += visitDetail(r);
   h += escDetail(r);
+  h += pexDetail(r);
 
   if (!r.members.length) return h + `<p class="none">Nobody on this team has any expected days.</p>`;
 
@@ -3260,6 +3371,38 @@ function visitDetail(r){
   return h + `</div>`;
 }
 
+/* Informational, not a target — like visits, this counts something rather
+   than scoring it, so the figure always reads neutral (see .pexline .n in the
+   stylesheet) instead of the hot/cool red-when-there's-a-problem treatment
+   escalations and implementation use. A knowledge gap logged is not a fire. */
+function pexLine(r, info){
+  if (PEX_ERROR)
+    return `<div class="pexline"><span class="lbl">Knowledge gap</span>${info || ''}` +
+           `<span class="n">&mdash;</span><span class="sub">not loaded</span></div>`;
+  if (!PEX.length) return '';   // feed not fetched yet, or genuinely nothing on file
+
+  const n = r.pex.knowledgeGap;
+  if (!n)
+    return `<div class="pexline"><span class="lbl">Knowledge gap</span>${info || ''}` +
+           `<span class="n">none</span><span class="sub">${esc(monthsLabel())}</span></div>`;
+  return `<div class="pexline"><span class="lbl">Knowledge gap</span>${info || ''}` +
+         `<span class="n">${n}</span>` +
+         `<span class="sub">${n === 1 ? 'issue' : 'issues'} · ${esc(monthsLabel())}</span></div>`;
+}
+
+function pexDetail(r){
+  let h = `<h5 data-sec="pex">Knowledge gap</h5>`;
+  if (PEX_ERROR) return h + `<p class="sum">The PEX tracker did not load: ${esc(PEX_ERROR)}</p>`;
+  if (!PEX.length) return h + `<p class="none">The PEX tracker has not loaded yet.</p>`;
+  if (!r.pex.total) return h + `<p class="none">Nobody on this team raised a PEX issue in ${esc(monthsLabel())}.</p>`;
+  if (!r.pex.knowledgeGap)
+    return h + `<p class="sum">${r.pex.total} PEX ${r.pex.total === 1 ? 'issue' : 'issues'} raised in ` +
+      `${esc(monthsLabel())}, none of them Knowledge Gap.</p>`;
+  return h + `<p class="sum"><b>${r.pex.knowledgeGap} knowledge-gap ` +
+    `${r.pex.knowledgeGap === 1 ? 'issue' : 'issues'}</b> logged in ${esc(monthsLabel())}, out of ` +
+    `${r.pex.total} PEX ${r.pex.total === 1 ? 'issue' : 'issues'} this team raised in all.</p>`;
+}
+
 function escLine(r, info){
   if (ESC_ERROR)
     return `<div class="escline cool"><span class="lbl">Escalations</span>${info || ''}` +
@@ -3572,6 +3715,78 @@ function renderVisits(){
     `</tbody>`;
 }
 
+/* All time, not per-month — same reasoning as adoption and feedback: nothing
+   here is asked "how did this change this month", so there is no month picker
+   to respect. pexForTeam(lead, null) is the same function the meter calls
+   with MONTHS; null just means "don't filter". */
+function renderPex(){
+  const leads = [...POD_TEAM.keys()].filter(l => !noBook(l));
+  const rows = leads.map(lead => ({lead, ...pexForTeam(lead, null)}))
+    .sort((a, b) => b.total - a.total || a.lead.localeCompare(b.lead));
+
+  const completed = PEX.filter(p => p.completed).length;
+  const catCounts = new Map();
+  for (const p of PEX) if (p.cat) catCounts.set(p.cat, (catCounts.get(p.cat) || 0) + 1);
+  const kgTotal = catCounts.get('Knowledge Gap') || 0;
+
+  $('pextotals').innerHTML =
+    `<div class="kpi"><div class="fig">${PEX.length}</div><div class="lab">Total logged</div>` +
+      `<div class="sub">all time</div></div>` +
+    `<div class="kpi"><div class="fig">${completed}<span class="unit">/${PEX.length}</span></div>` +
+      `<div class="lab">Completed</div>` +
+      `<div class="sub">${PEX.length ? Math.round(completed / PEX.length * 100) : 0}%</div></div>` +
+    `<div class="kpi"><div class="fig">${kgTotal}</div><div class="lab">Knowledge gap</div>` +
+      `<div class="sub">also shown on the KPI meter</div></div>`;
+
+  $('pexhint').innerHTML =
+    `PEX Team — Daily Problems, one row per issue the CS team raised against the product team` +
+    (PEX_ASOF ? `, read ${esc(pretty(PEX_ASOF))}` : '') + `. ` +
+    (PEX_ERROR
+      ? `<b>The sheet did not load, so nothing here is current:</b> ${esc(PEX_ERROR)}`
+      : PEX_LIVE ? `Read live.` : '') +
+    (PEX_UNPLACED.length
+      ? ` <b>${PEX_UNPLACED.length} ${PEX_UNPLACED.length === 1 ? 'assignee' : 'assignees'} ` +
+        `could not be matched to anyone on the roster</b> and count towards no team: ` +
+        `${PEX_UNPLACED.map(esc).join(', ')}.` : '');
+
+  $('pexteamnote').textContent = 'All time · teams with no client book are not shown here';
+  let t = `<thead><tr><th>Team</th><th class="num">Total</th>` +
+          `<th class="num">Knowledge gap</th></tr></thead><tbody>`;
+  for (const r of rows)
+    t += `<tr${r.total ? '' : ' class="flat"'}><td>${esc(r.lead)}</td>` +
+         `<td class="num">${r.total || '—'}</td>` +
+         `<td class="num">${r.knowledgeGap || '—'}</td></tr>`;
+  $('pexteams').innerHTML = t + `</tbody>`;
+
+  const people = new Map();
+  for (const p of PEX){
+    const who = canonVisitor(p.assignee);
+    if (!who) continue;
+    const e = people.get(who) || {n: 0, kg: 0, lead: POD_OF.get(who) || '—'};
+    e.n++;
+    if (p.cat === 'Knowledge Gap') e.kg++;
+    people.set(who, e);
+  }
+  const ranked = [...people.entries()].sort((a, b) => b[1].n - a[1].n || a[0].localeCompare(b[0]));
+  $('pexpeoplenote').textContent =
+    `${ranked.length} ${ranked.length === 1 ? 'person has' : 'people have'} logged at least one · all time`;
+  let p2 = `<thead><tr><th>Person</th><th>Team</th><th class="num">Total</th>` +
+           `<th class="num">Knowledge gap</th></tr></thead><tbody>`;
+  for (const [who, x] of ranked)
+    p2 += `<tr><td>${esc(who)}</td><td>${esc(x.lead)}</td>` +
+          `<td class="num">${x.n}</td><td class="num">${x.kg || '—'}</td></tr>`;
+  $('pexpeople').innerHTML = p2 + `</tbody>`;
+
+  const cats = [...catCounts.entries()].sort((a, b) => b[1] - a[1]);
+  $('pexcatnote').textContent = `${cats.length} ${cats.length === 1 ? 'category' : 'categories'} · all time`;
+  let c2 = `<thead><tr><th>Category</th><th class="num">Count</th>` +
+           `<th class="num">Share</th></tr></thead><tbody>`;
+  for (const [cat, n] of cats)
+    c2 += `<tr><td>${esc(cat)}</td><td class="num">${n}</td>` +
+          `<td class="num">${PEX.length ? Math.round(n / PEX.length * 100) : 0}%</td></tr>`;
+  $('pexcats').innerHTML = c2 + `</tbody>`;
+}
+
 function renderFeedback(){
   const owned = CLIENTS.filter(c => c.o);
   const latest = owned.map(c => latestFeedback(c.n)).filter(Boolean);
@@ -3801,6 +4016,7 @@ function renderMeter(){
            mi('feedback', 'client feedback')) +
       visitLine(r, mi('visits', 'client visits')) +
       escLine(r, mi('escalations', 'escalations')) +
+      pexLine(r, mi('pex', 'the PEX knowledge gap')) +
       `<div class="how" id="how${i}" hidden>${panel}</div>` +
       `</div>`;
   }).join('');
@@ -4261,6 +4477,7 @@ const modeOf = src => src === 'scorecard' ? 'scorecard'
                     : src === 'adoption'  ? 'adoption'
                     : src === 'feedback'  ? 'feedback'
                     : src === 'visits'    ? 'visits'
+                    : src === 'pex'       ? 'pex'
                     : 'daily';
 
 /* Slides the selection pill onto the current tab.
@@ -4293,7 +4510,7 @@ function moveNavPill(animate){
 }
 
 function markSource(){
-  for (const g of ['sources','sources2','sources3','sources4','sources5','sources6'])
+  for (const g of ['sources','sources2','sources3','sources4','sources5','sources6','sources7'])
     for (const b of $(g).children)
       b.setAttribute('aria-pressed', String(b.dataset.src === SOURCE));
   const mode = modeOf(SOURCE);
@@ -4304,12 +4521,14 @@ function markSource(){
      : mode === 'adoption' ? 'module adoption'
      : mode === 'feedback' ? 'client feedback'
      : mode === 'visits'   ? 'client visits'
+     : mode === 'pex'      ? 'PEX daily problems'
      : SOURCES[SOURCE].label);
   $('h1').innerHTML = mode === 'scorecard' ? 'Missed days, <em>counted</em>.'
                     : mode === 'clients'   ? 'Who owns <em>what</em>.'
                     : mode === 'adoption'  ? 'What they actually <em>use</em>.'
                     : mode === 'feedback'  ? 'What the clients <em>say</em>.'
                     : mode === 'visits'    ? 'Who went <em>out</em>.'
+                    : mode === 'pex'       ? 'What they <em>raised</em>.'
                     : 'Who <em>hasn\'t</em> filed.';
   const daily = mode === 'daily';
   $('lede').hidden = !daily;
@@ -4319,6 +4538,7 @@ function markSource(){
   $('adoption').hidden  = mode !== 'adoption';
   $('feedback').hidden  = mode !== 'feedback';
   $('visits').hidden    = mode !== 'visits';
+  $('pex').hidden       = mode !== 'pex';
   for (const id of DAILY_PANELS){ const el = $(id); if (el) el.hidden = !daily; }
   $('presets').hidden   = !daily;
   $('monthwrap').hidden = mode !== 'scorecard' && mode !== 'meter' && mode !== 'visits';
@@ -4327,7 +4547,7 @@ function markSource(){
   /* Quarterly, and not per-person: neither the month picker nor the joined
      toggle changes a single figure on this tab, so neither is shown. */
   $('joinedwrap').hidden = mode === 'clients' || mode === 'adoption' ||
-                           mode === 'feedback' || mode === 'visits';
+                           mode === 'feedback' || mode === 'visits' || mode === 'pex';
   $('h1').innerHTML = mode === 'meter' ? 'Compliance and <em>business</em>.' : $('h1').innerHTML;
   if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => moveNavPill());
   else moveNavPill();
@@ -4411,6 +4631,15 @@ function showActive(){
       : `${VISITS.length} ${VISITS.length === 1 ? 'meeting' : 'meetings'} · ` +
         `${n} person-visits on file`;
     renderVisits();
+    return;
+  }
+  /* All time, like adoption and feedback: nothing here is per-month, so
+     neither the month picker nor the joined toggle applies. */
+  if (SOURCE === 'pex'){
+    showContent();
+    $('fresh').textContent = PEX_ERROR ? 'PEX tracker not loaded'
+      : `${PEX.length} ${PEX.length === 1 ? 'issue' : 'issues'} on file`;
+    renderPex();
     return;
   }
   if (SOURCE === 'clients'){
@@ -4666,6 +4895,22 @@ async function load(){
     }
     buildVisits();
 
+    /* Independent of the book and every tracker too — only needs POD_OF/
+       POD_TEAM. Fails soft and, like feedback, to nothing: this sheet changes
+       daily and there is no snapshot of it worth freezing into the page. */
+    try {
+      PEX = parsePex(await fetchRaw('pex'));
+      PEX_ASOF = iso(new Date());
+      PEX_LIVE = true;
+      PEX_ERROR = null;
+    } catch (e) {
+      PEX = [];
+      PEX_ASOF = null;
+      PEX_LIVE = false;
+      PEX_ERROR = (e && e.message) || String(e);
+    }
+    buildPex();
+
     /* Feedback joins on client names typed by the respondent, so like escalations
        and adoption it waits for the book. It fails soft and, unlike adoption,
        fails to nothing: there is no compiled snapshot of what clients think, and
@@ -4782,7 +5027,7 @@ $('score').addEventListener('click', e => {
 });
 /* Every group's tabs share one handler — a new group needs its id here and
    nothing else. Binding per group is how a tab ends up silently inert. */
-for (const g of ['sources','sources2','sources3','sources4','sources5','sources6'])
+for (const g of ['sources','sources2','sources3','sources4','sources5','sources6','sources7'])
   $(g).addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b || b.dataset.src === SOURCE) return;
     SOURCE = b.dataset.src;

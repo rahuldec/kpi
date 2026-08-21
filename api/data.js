@@ -137,7 +137,21 @@ const SOURCES = {
                  mismatch: 'It has no "Owner", "Overdue" and "Due Date" columns — the link ' +
                            'probably points at the wrong tab, or the Asana portfolio export ' +
                            'changed shape. Re-export the "Client Implementation" portfolio to ' +
-                           'Google Sheets and update IMPLEMENTATION_CSV_URL.' }
+                           'Google Sheets and update IMPLEMENTATION_CSV_URL.' },
+  /* "PEX Team - Daily Problems" — an Asana project where the CS team logs
+     product issues against the product (PEX) team: bugs, knowledge gaps, new
+     requirements, data corrections. Same export shape as the two trackers
+     (Due Date, Assignee), which is exactly why the signature also checks for
+     "PEX Category" — that column is what tells this apart from a tracker
+     export if the link is ever accidentally repointed. */
+  pex:         { url: process.env.PEX_CSV_URL ||
+                   'https://docs.google.com/spreadsheets/d/e/2PACX-1vSi6h6btrL0zaXyKBJLj9-UoAfCPSeQo5fmBeCfdudl2hikyl18RYnCuYyKQ85S1mw0B4bqmOAb2ghv' +
+                   '/pub?gid=2097907010&single=true&output=csv',
+                 signature: csv => /due date/i.test(csv) && /assignee/i.test(csv) && /pex category/i.test(csv),
+                 envVar: 'PEX_CSV_URL',
+                 mismatch: 'It has no "PEX Category" column — the link probably points at the ' +
+                           'wrong tab, or the export changed shape. Re-publish the "PEX Team - ' +
+                           'Daily Problems" tab and update PEX_CSV_URL.' }
 };
 
 const trackerSignature = csv => /due date/i.test(csv) && /assignee/i.test(csv);
