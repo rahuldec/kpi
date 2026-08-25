@@ -54,6 +54,7 @@ body{
   display:flex;flex-direction:column;
   padding:0 18px 18px;background:var(--card);
   border-right:1px solid rgba(0,0,0,.08);
+  overflow-x:clip;
 }
 
 /* ── masthead ─────────────────────────────────────────────────────────────── */
@@ -66,9 +67,60 @@ body{
   max-width:none;margin:0;padding:14px 0;
   display:flex;align-items:center;gap:11px;
 }
-.masthead img{width:30px;height:30px;display:block}
-.masthead .name{font-size:15px;font-weight:600;letter-spacing:-.014em;color:var(--ink)}
-.masthead .name span{color:var(--faint);font-weight:400;white-space:nowrap}
+.masthead img{width:30px;height:30px;display:block;flex-shrink:0}
+.masthead .name{
+  font-size:15px;font-weight:600;letter-spacing:-.014em;color:var(--ink);
+  min-width:0;flex:1;line-height:1.25;
+}
+.masthead .name span{
+  display:block;color:var(--faint);font-weight:400;font-size:11px;
+  line-height:1.25;margin-top:1px;
+}
+
+/* Signed-in user — top of main panel, not the 264px rail (would bleed over content). */
+.wrap > .auth{
+  display:flex;align-items:center;justify-content:flex-end;gap:10px;
+  margin:-8px 0 18px;min-width:0;
+}
+.wrap > .auth .who{
+  font-size:13px;color:var(--faint);overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;max-width:min(240px,40vw);
+}
+.wrap > .auth button{
+  font:inherit;font-size:13px;color:var(--body);background:var(--page);
+  border:0;border-radius:8px;padding:6px 10px;cursor:pointer;flex-shrink:0;
+}
+.wrap > .auth button:hover{color:var(--brand)}
+.viewscope{
+  font-size:13px;color:var(--body);background:var(--brand-soft);
+  border-radius:8px;padding:8px 12px;margin:0 0 16px;text-align:right;
+}
+
+/* ── sign-in gate ─────────────────────────────────────────────────────────── */
+.login-gate{
+  min-height:100vh;display:flex;align-items:center;justify-content:center;
+  padding:32px 20px;background:var(--page);
+}
+.login-card{
+  width:100%;max-width:380px;background:var(--card);border:1px solid var(--line);
+  border-radius:16px;padding:32px 28px 28px;text-align:center;
+  box-shadow:0 1px 3px rgba(0,0,0,.04),0 12px 40px rgba(0,0,0,.06);
+}
+.login-card img{width:44px;height:44px;margin:0 auto 16px;display:block}
+.login-card h2{
+  font-size:22px;font-weight:700;letter-spacing:-.018em;color:var(--ink);
+  margin:0 0 8px;
+}
+.login-card p{font-size:15px;color:var(--body);margin:0 0 22px;line-height:1.5}
+.login-card .login-btn{
+  font:inherit;font-size:15px;font-weight:600;color:#fff;background:var(--brand);
+  border:0;border-radius:10px;padding:11px 22px;cursor:pointer;width:100%;
+}
+.login-card .login-btn:hover{background:var(--brand-dark)}
+.login-card .login-btn:disabled{opacity:.55;cursor:wait}
+.login-card .login-err{
+  font-size:13px;color:var(--miss);margin:14px 0 0;line-height:1.45;
+}
 
 .wrap{flex:1 1 auto;min-width:0;max-width:1120px;margin:0;padding:34px 32px 96px}
 
@@ -815,7 +867,17 @@ table.board td.tot.zero{font-weight:400;color:var(--faint)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 
-<div class="shell">
+<div class="login-gate" id="loginGate" hidden>
+  <div class="login-card">
+    <img src="data:image/png;base64,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" alt="Okie Dokie Campus Automation Partner" width="44" height="44">
+    <h2>CS Team KPI</h2>
+    <p>Sign in with your Okie Dokie Zoho account to view the dashboard.</p>
+    <button class="login-btn" id="loginBtn" type="button">Sign in with Zoho</button>
+    <p class="login-err" id="loginErr" hidden></p>
+  </div>
+</div>
+
+<div class="shell" id="appShell" hidden>
 
 <aside class="rail">
 <header class="masthead">
@@ -876,6 +938,11 @@ table.board td.tot.zero{font-weight:400;color:var(--faint)}
 </aside>
 
 <div class="wrap">
+  <div class="auth" id="authUser" hidden>
+    <span class="who" id="authName"></span>
+    <button type="button" id="logoutBtn">Sign out</button>
+  </div>
+  <p class="viewscope" id="viewScope" hidden></p>
   <p class="eyebrow" id="eyebrow"></p>
   <h2 class="hero" id="h1">Who <em>hasn't</em> filed.</h2>
   <p class="lede" id="lede">One entry per person per working day. Everything here counts what's absent — a person-day with no submission at all. Sundays, company holidays, and approved leave are excluded.</p>
@@ -1085,6 +1152,7 @@ table.board td.tot.zero{font-weight:400;color:var(--faint)}
 
 </div><!-- /.shell -->
 
+<script src="/lib/zoho-auth.js"></script>
 <script>
 /* ---------------- data source ----------------
    /api/data is a function on this same Vercel project. It fetches the tracker
@@ -1665,6 +1733,150 @@ const isExempt = (name, src) => EXEMPT[src].includes(name.toLowerCase());
    Match is on the full display name, lowercased, as Asana writes it. */
 const HIDDEN = ['rahul sharma'];
 const isHidden = name => HIDDEN.includes(name.trim().toLowerCase());
+
+/* Zoho accounts permitted to sign in. Only these emails may use the portal
+   (test mode bypasses). Everyone else stays on the login screen. */
+const ALLOWED_EMAILS = [
+  'bhavay.singla@okiedokiepay.com'
+  /* 'someone@okiedokiepay.com', */
+];
+
+/* Signed-in viewers who see the full dashboard. Everyone else is scoped to their
+   pod — the RM they report to (or their own team if they are the lead). Match is
+   on the Zoho account email, lowercased. */
+const VIEW_ALL_EMAILS = [
+  /* 'leadership@okiedokiepay.com', */
+];
+/* When a Zoho display name does not match the Team tab spelling, pin the roster
+   name here by email. VIEW_ALL_EMAILS overrides scoping; this only fixes matching. */
+const VIEWER_EMAIL_TO_NAME = {
+  /* 'someone@okiedokiepay.com': 'Exact Name From Team Tab', */
+};
+let VIEWER = { seeAll: true };
+
+const normEmail = e => String(e || '').trim().toLowerCase();
+
+function isEmailAllowed(user){
+  if (!user || ZohoAuth.isTestMode()) return true;
+  const email = normEmail(user.email);
+  if (!email) return false;
+  return ALLOWED_EMAILS.map(normEmail).includes(email);
+}
+
+function denyPortalAccess(msg){
+  ZohoAuth.clearSession();
+  $('loginGate').hidden = false;
+  $('appShell').hidden = true;
+  $('authUser').hidden = true;
+  const loginErr = $('loginErr');
+  const loginBtn = $('loginBtn');
+  if (loginErr){
+    loginErr.textContent = msg;
+    loginErr.hidden = false;
+  }
+  if (loginBtn) loginBtn.disabled = false;
+}
+
+function initViewer(user){
+  if (!user || ZohoAuth.isTestMode()){
+    VIEWER = { seeAll: true };
+    return;
+  }
+  const email = normEmail(user.email);
+  if (VIEW_ALL_EMAILS.map(normEmail).includes(email)){
+    VIEWER = { seeAll: true, email, name: user.name };
+    return;
+  }
+  VIEWER = { seeAll: false, email, name: user.name,
+             rosterName: null, lead: null, team: null, unmatched: true };
+}
+
+function resolveViewerRosterName(displayName, email){
+  const roster = [...ROSTER.values()].map(p => p.name);
+  const canon = canonicalNames();
+  const want = String(displayName || '').trim().toLowerCase();
+  if (want){
+    const exact = roster.find(n => n.toLowerCase() === want);
+    if (exact) return exact;
+    if (canon.has(want)) return canon.get(want);
+    const first = want.split(/\s+/)[0];
+    const hits = roster.filter(n => n.toLowerCase().split(/\s+/)[0] === first);
+    if (hits.length === 1) return hits[0];
+  }
+  const local = normEmail(email).split('@')[0].replace(/[._-]+/g, ' ').trim();
+  if (local){
+    const tcLocal = tc(local).toLowerCase();
+    const exact2 = roster.find(n => n.toLowerCase() === tcLocal);
+    if (exact2) return exact2;
+    const hits2 = roster.filter(n => n.toLowerCase().split(/\s+/)[0] === local.split(/\s+/)[0]);
+    if (hits2.length === 1) return hits2[0];
+  }
+  return null;
+}
+
+function finalizeViewer(){
+  if (VIEWER.seeAll) return;
+  const mapped = VIEWER_EMAIL_TO_NAME[normEmail(VIEWER.email)];
+  const matched = mapped || resolveViewerRosterName(VIEWER.name, VIEWER.email);
+  if (!matched || !personOnRoster(matched)){
+    VIEWER.unmatched = true;
+    return;
+  }
+  VIEWER.rosterName = matched;
+  VIEWER.unmatched = false;
+  VIEWER.lead = POD_OF.get(matched) || matched;
+  const assistants = POD_TEAM.get(VIEWER.lead) || [];
+  VIEWER.team = new Set([VIEWER.lead, ...assistants]);
+}
+
+function personOnRoster(name){
+  const want = String(name || '').trim().toLowerCase();
+  return [...ROSTER.values()].some(p => p.name.toLowerCase() === want);
+}
+
+function viewerSeesAll(){ return VIEWER.seeAll; }
+function viewerLead(){ return viewerSeesAll() ? null : VIEWER.lead; }
+function viewerTeam(){ return viewerSeesAll() ? null : VIEWER.team; }
+
+function personInViewerScope(name){
+  const team = viewerTeam();
+  if (!team) return true;
+  const want = String(name || '').trim().toLowerCase();
+  if (!want) return false;
+  for (const n of team) if (n.toLowerCase() === want) return true;
+  return false;
+}
+
+function leadInViewerScope(lead){
+  if (viewerSeesAll()) return true;
+  const mine = viewerLead();
+  return mine && String(lead || '').trim().toLowerCase() === mine.toLowerCase();
+}
+
+function clientInViewerScope(client){
+  if (viewerSeesAll()) return true;
+  const owner = client && (client.o || client.owner);
+  return owner && leadInViewerScope(owner);
+}
+
+function scopedClients(){
+  return viewerSeesAll() ? CLIENTS : CLIENTS.filter(clientInViewerScope);
+}
+
+function filterRowsByViewer(rows){
+  return viewerSeesAll() ? rows : rows.filter(r => personInViewerScope(r.name));
+}
+
+function updateViewScopeBanner(){
+  const el = $('viewScope');
+  if (!el) return;
+  if (viewerSeesAll() || VIEWER.unmatched){ el.hidden = true; return; }
+  const you = VIEWER.rosterName || VIEWER.name;
+  el.textContent = VIEWER.lead === VIEWER.rosterName
+    ? `Showing your team's data (${you}).`
+    : `Showing ${VIEWER.lead}'s team — signed in as ${you}.`;
+  el.hidden = false;
+}
 
 const SOURCE_KEY = 'kpi.source';
 let SOURCE = 'internal';
@@ -2604,7 +2816,7 @@ function analyse(rows,from,to,joined){
      sheet — minus anyone exempt from this tracker. An exempt person who files
      anyway is still picked up by the loop below, so their work is never hidden. */
   for(const [key,{name,first}] of ROSTER)
-    if(!isExempt(name, SOURCE)) P.set(key,{name,filed:new Set(),first});
+    if(!isExempt(name, SOURCE) && personInViewerScope(name)) P.set(key,{name,filed:new Set(),first});
   for(const r of rows){
     const key=r.name.toLowerCase();
     if(!P.has(key)) P.set(key,{name:r.name,filed:new Set(),first:r.due});
@@ -2653,7 +2865,7 @@ function renderChase(){
   const label = CHASE_LABEL[MODE] || 'Latest working day';
   const people = new Map();
   for (const [key, {name, first}] of ROSTER)
-    if (!isExempt(name, SOURCE)) people.set(key, {name, filed:new Set(), first});
+    if (!isExempt(name, SOURCE) && personInViewerScope(name)) people.set(key, {name, filed:new Set(), first});
   for (const r of ROWS){
     const key = r.name.toLowerCase();
     if (!people.has(key)) people.set(key, {name:r.name, filed:new Set(), first:r.due});
@@ -2771,6 +2983,7 @@ function scoreRows(){
 
   const out = [];
   for (const [key, {name, first}] of ROSTER){
+    if (!personInViewerScope(name)) continue;
     const row = {name, expected:0, filed:0, missed:0, per:{}};
     for (const t of TRACKERS){
       if (isExempt(name, t)){ row.per[t] = null; continue; }
@@ -2802,7 +3015,7 @@ function meterRows(){
   const {ym, rows} = scoreRows();
   const byLead = new Map();
   for (const lead of POD_TEAM.keys())
-    if (!noBook(lead))
+    if (!noBook(lead) && leadInViewerScope(lead))
       byLead.set(lead, {lead, team: POD_TEAM.get(lead) || [],
                         expected: 0, filed: 0, people: 0, members: []});
 
@@ -3354,17 +3567,17 @@ function setMonths(list){
    the same conversation with every RM at once — whereas the team cut mostly
    reflects which clients each RM happens to have. */
 function renderAdoption(){
-  const scored = [...ADOPT_BY_CLIENT.values()];
+  const scored = [...ADOPT_BY_CLIENT.values()].filter(r => clientInViewerScope(r.client));
   const pooled = scored.reduce((n, r) => n + r.s, 0);
   const applic = scored.reduce((n, r) => n + r.a, 0);
-  const owners = [...new Set(CLIENTS.map(c => c.o).filter(Boolean))];
+  const owners = [...new Set(scopedClients().map(c => c.o).filter(Boolean))];
   const teams = owners.map(o => ({lead: o, ...adoptForTeam(o)}))
                       .filter(t => t.total)
                       .sort((a, b) => (b.adoption ?? -1) - (a.adoption ?? -1));
 
-  const bookTotal = CLIENTS.reduce((n, c) => n + (c.r || 0), 0);
+  const bookTotal = scopedClients().reduce((n, c) => n + (c.r || 0), 0);
   const covered = scored.reduce((n, r) => n + (r.client.r || 0), 0);
-  const unscored = CLIENTS.filter(c => c.o && !ADOPT_BY_CLIENT.has(c.n));
+  const unscored = scopedClients().filter(c => c.o && !ADOPT_BY_CLIENT.has(c.n));
 
   $('adopthint').innerHTML =
     `${esc(ADOPTION_QUARTER)} as at ${esc(pretty(ADOPTION_ASOF))}. ` +
@@ -3397,7 +3610,7 @@ function renderAdoption(){
     dial('Revenue scored', bookTotal ? covered / bookTotal : null,
          `${esc(inr(covered))} of ${esc(inr(bookTotal))}`, unscored.length === 0) +
     `<p class="covwho${unscored.length ? '' : ' cool'}">${scored.length} of ` +
-    `${CLIENTS.filter(c => c.o).length} clients in the book have been scored` +
+    `${scopedClients().filter(c => c.o).length} clients in the book have been scored` +
     (unscored.length ? `. The rest are listed at the foot of this page.` : `.`) + `</p></div>`;
 
   const pct = (s, a) => a ? Math.round(s / a * 100) : null;
@@ -3495,7 +3708,7 @@ function renderAdoption(){
    questions wearing the same word. */
 function renderVisits(){
   const months = MONTHS;
-  const leads = [...POD_TEAM.keys()].filter(l => !noBook(l));
+  const leads = [...POD_TEAM.keys()].filter(l => !noBook(l) && leadInViewerScope(l));
   const rows = leads.map(lead => ({lead, ...visitsForTeam(lead, months)}))
     .sort((a, b) => b.person - a.person || a.lead.localeCompare(b.lead));
 
@@ -3573,7 +3786,7 @@ function renderVisits(){
 }
 
 function renderFeedback(){
-  const owned = CLIENTS.filter(c => c.o);
+  const owned = scopedClients().filter(c => c.o);
   const latest = owned.map(c => latestFeedback(c.n)).filter(Boolean);
   const silent = owned.filter(c => !latestFeedback(c.n));
   const total = [...FEED_BY_CLIENT.values()].reduce((n, l) => n + l.length, 0);
@@ -3869,7 +4082,7 @@ function renderByRm(){
      still exists and still files timesheets, so it gets a row with a dash rather
      than being absent. Leads are matched to the roster the same way members are,
      so an unresolvable lead is reported instead of silently vanishing. */
-  const rows = [...POD_TEAM.keys()].filter(lead => !noBook(lead)).map(lead => {
+  const rows = [...POD_TEAM.keys()].filter(lead => !noBook(lead) && leadInViewerScope(lead)).map(lead => {
     const b = bookOf(lead);
     return {name: lead, clients: b ? b.clients : 0, revenue: b ? b.revenue : 0,
             heads: (POD_TEAM.get(lead) || []).length + 1};
@@ -3901,7 +4114,7 @@ function renderByRm(){
          `${gap >= 0 ? '+' : '\u2212'}${esc(inr(Math.abs(Math.round(gap))))}</td>` +
          `</tr>`;
   }
-  const un = CLIENTS.filter(c => !c.o);
+  const un = viewerSeesAll() ? CLIENTS.filter(c => !c.o) : [];
   if (un.length)
     t += `<tr><td>Unassigned</td><td class="num">—</td><td class="num">${un.length}</td>` +
          `<td class="num">${esc(inr(un.reduce((n,c) => n + (c.r||0), 0)))}</td>` +
@@ -3937,7 +4150,7 @@ function renderByRm(){
 }
 
 function renderClientList(){
-  const shown = sortClients(CLIENTS.filter(c =>
+  const shown = sortClients(scopedClients().filter(c =>
     (!CFILTER.owner || c.o === CFILTER.owner) &&
     (!CFILTER.type  || c.t === CFILTER.type)));
   const sum = shown.reduce((n,c) => n + (c.r||0), 0);
@@ -3982,8 +4195,8 @@ function fillClientFilters(){
     el.innerHTML = `<option value="">All ${label}</option>` +
       vals.map(v => `<option>${esc(v)}</option>`).join('');
   };
-  opts($('cowner'), [...new Set(CLIENTS.map(c => c.o).filter(Boolean))].sort(), 'owners');
-  opts($('ctype'),  [...new Set(CLIENTS.map(c => c.t).filter(Boolean))].sort(), 'types');
+  opts($('cowner'), [...new Set(scopedClients().map(c => c.o).filter(Boolean))].sort(), 'owners');
+  opts($('ctype'),  [...new Set(scopedClients().map(c => c.t).filter(Boolean))].sort(), 'types');
 }
 
 /* Implementation shares this note rather than getting its own: both are "some
@@ -4419,7 +4632,7 @@ function showActive(){
        no date on it is the kind that quietly ages into a wrong answer. */
     showContent();
     $('fresh').textContent =
-      `${CLIENTS.length} clients · ${inr(CLIENTS.reduce((n,c) => n + (c.r||0), 0))}`;
+      `${scopedClients().length} clients · ${inr(scopedClients().reduce((n,c) => n + (c.r||0), 0))}`;
     renderClients();
     return;
   }
@@ -4430,7 +4643,7 @@ function showActive(){
     renderScorecard();
     return;
   }
-  ROWS = DATA[SOURCE];
+  ROWS = filterRowsByViewer(DATA[SOURCE]);
   renderExempt();
   const total = DATA.internal.length + DATA.client.length;
   $('fresh').textContent = `${ROWS.length} of ${total} entries · ${ROSTER.size} people · ` +
@@ -4504,7 +4717,19 @@ function mergeArchive(live, archived){
 }
 
 async function load(){
-  loading();
+  const gate = $('loginGate');
+  const shell = $('appShell');
+  const loginErr = $('loginErr');
+  const booting = shell.hidden;
+  if (booting){
+    gate.hidden = false;
+    if (loginErr){
+      loginErr.textContent = 'Loading dashboard…';
+      loginErr.hidden = false;
+    }
+  } else {
+    loading();
+  }
   $('refresh').disabled = true;
   try{
     // Both sheets, in parallel — the roster needs both regardless of which tab is open.
@@ -4587,6 +4812,20 @@ async function load(){
     }
     buildRoster();
     buildPods();
+    finalizeViewer();
+    if (!viewerSeesAll() && VIEWER.unmatched){
+      denyPortalAccess(
+        'Your account is not set up on the CS team roster. Contact an admin to grant access.');
+      return;
+    }
+    if (booting){
+      gate.hidden = true;
+      shell.hidden = false;
+      if (VIEWER.name && !ZohoAuth.isTestMode()) $('authUser').hidden = false;
+      if (loginErr) loginErr.hidden = true;
+      loading();
+    }
+    updateViewScopeBanner();
 
     /* The book before the escalations, because buildEscalations matches against
        client names and would otherwise resolve them against the fallback.
@@ -4953,6 +5192,56 @@ if (typeof requestAnimationFrame === 'function'){
   if (g) g.addEventListener('scroll', () => moveNavPill(false), {passive: true});
 }
 setDefaultRange();
-load();
+
+/* Sign-in gate: client-based Zoho OAuth (implicit flow) via lib/zoho-auth.js.
+   Auth is skipped when clientId is empty, hostname is kpi.test, or ?noauth. */
+async function bootApp(){
+  const gate = $('loginGate');
+  const shell = $('appShell');
+  const loginBtn = $('loginBtn');
+  const loginErr = $('loginErr');
+
+  function showLogin(msg){
+    gate.hidden = false;
+    shell.hidden = true;
+    if (msg){
+      loginErr.textContent = msg;
+      loginErr.hidden = false;
+    }
+  }
+
+  function showApp(user){
+    initViewer(user);
+    if (user && user.name && !ZohoAuth.isTestMode()){
+      $('authName').textContent = user.name;
+    }
+    load();
+  }
+
+  loginBtn.addEventListener('click', () => {
+    loginErr.hidden = true;
+    loginBtn.disabled = true;
+    ZohoAuth.startLogin().catch(e => {
+      loginBtn.disabled = false;
+      loginErr.textContent = e.message || 'Could not start sign-in.';
+      loginErr.hidden = false;
+    });
+  });
+  $('logoutBtn').addEventListener('click', () => ZohoAuth.logout());
+
+  try {
+    const auth = await ZohoAuth.ensureAuth();
+    if (auth.ok){
+      if (!isEmailAllowed(auth.user)){
+        denyPortalAccess('Your account is not authorised to use this dashboard.');
+        return;
+      }
+      showApp(auth.user);
+    } else showLogin();
+  } catch (e) {
+    showLogin(e.message || 'Sign-in failed.');
+  }
+}
+bootApp();
 
 </script>

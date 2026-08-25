@@ -241,6 +241,16 @@ function boot({ body = SHEET, clientBody = CLIENT_DEFAULT, escBody = ESC_SHEET,
     // Each JSDOM gets its own storage, so the cases below stay independent.
     url: 'https://kpi.test/',
     beforeParse(window) {
+      // Client-based OAuth is loaded from /lib/zoho-auth.js in the browser.
+      // JSDOM does not fetch it, so stub the gate — qa.js is the auth bypass.
+      window.ZohoAuth = {
+        ZOHO: { clientId: '' },
+        ensureAuth: () => Promise.resolve({ ok: true, user: { name: 'QA' }, test: true }),
+        startLogin: () => Promise.resolve(),
+        logout: () => {},
+        clearSession: () => {},
+        isTestMode: () => true
+      };
       // Seed localStorage before the page script runs, so the restore path is
       // exercised rather than simulated.
       if (store) for (const [k, v] of Object.entries(store)) window.localStorage.setItem(k, v);

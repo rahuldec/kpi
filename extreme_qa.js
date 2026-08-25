@@ -26,11 +26,23 @@ const MIN_IMPL = 'NAME,URL,TEAM,OWNER,DESCRIPTION,CREATED,START DATE,FIRST TASK 
   'DUE DATE,ALL TASKS,COMPLETE,INCOMPLETE,ASSIGNED,OVERDUE,TASKS ADDED,TASKS COMPLETED\n' +
   'No Matching Client,https://x,,Nobody,,2026-07-01,2026-07-01,,2026-07-01,1,1,0,0,0,0,0';
 
+function stubZohoAuth(window) {
+  window.ZohoAuth = {
+    ZOHO: { clientId: '' },
+    ensureAuth: () => Promise.resolve({ ok: true, user: { name: 'QA' }, test: true }),
+    startLogin: () => Promise.resolve(),
+    logout: () => {},
+    clearSession: () => {},
+    isTestMode: () => true
+  };
+}
+
 function boot({ body, clientBody = sheet([]), escBody = sheet([]), bookBody = MIN_BOOK, adoptBody = '', feedBody = MIN_FEED, implBody = MIN_IMPL, teamBody = '', archive = {} } = {}) {
   const errs = [], calls = [];
   const dom = new JSDOM(HTML, {
     runScripts: 'dangerously', pretendToBeVisual: true, url: 'https://kpi.test/',
     beforeParse(window) {
+      stubZohoAuth(window);
       window.fetch = (url) => {
         calls.push(url);
         const arch = url.match(/^\/archive\/(\w+)\/([\d-]+)\.json/);
@@ -941,6 +953,7 @@ const settle = () => new Promise(r => setTimeout(r, 30));
     const dom = new (require('jsdom').JSDOM)(HTML, {
       runScripts: 'dangerously', pretendToBeVisual: true, url: 'https://kpi.test/',
       beforeParse(window) {
+        stubZohoAuth(window);
         window.fetch = (url) => {
           const src = (url.match(/src=(\w+)/) || [])[1];
           if (src === 'team') return Promise.resolve({ ok: false, status: 503, text: () => Promise.resolve('') });
