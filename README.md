@@ -25,9 +25,18 @@ Testing is used to verify both normal workflows and edge cases before changes re
 
 ## Tech Stack
 
-- **Frontend:** React, TypeScript
-- **Data:** Google Sheets / external business data
-- **Tooling:** Vite, Git, GitHub
+- **Frontend:** Plain HTML / JavaScript (no build step)
+- **Auth:** Zoho client-based OAuth (implicit flow, browser-only)
+- **Data:** Google Sheets / external business data via Vercel serverless proxy
+- **Tooling:** Git, GitHub, jsdom QA suite
+
+## Setup
+
+See **[SETUP.md](./SETUP.md)** for full instructions:
+
+1. **Zoho Setup** — API Console, Client ID, redirect URIs
+2. **Email Setup** — `ALLOWED_EMAILS`, `VIEW_ALL_EMAILS`, pod scoping
+3. **Prod Setup** — Vercel deploy, env vars, verification for [odcskpi.vercel.app](https://odcskpi.vercel.app/)
 
 ## Project status
 
