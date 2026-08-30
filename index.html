@@ -1941,6 +1941,16 @@ function scopedClients(){
   return viewerSeesAll() ? CLIENTS : CLIENTS.filter(clientInViewerScope);
 }
 
+/* Same scope test as clientInViewerScope, but for the places that only have a
+   client's book name (ESC_BY_CLIENT and ADOPT_UNMATCHED keys), not the row
+   object itself — an escalation or adoption entry that never matched a book
+   client has no owner to check, so it can never be placed in anyone's scope. */
+function clientNameInViewerScope(name){
+  if (viewerSeesAll()) return true;
+  const c = CLIENTS.find(c => c.n === name);
+  return !!c && clientInViewerScope(c);
+}
+
 function filterRowsByViewer(rows){
   return viewerSeesAll() ? rows : rows.filter(r => personInViewerScope(r.name));
 }
@@ -3663,13 +3673,16 @@ function renderAdoption(){
                 : `Read from the copy built into this page` +
                   (ADOPT_ERROR ? `, because the live sheet failed: ${esc(ADOPT_ERROR)}` : '') + `.`) +
     /* Anything the parser had to skip or could not reconcile is named here. A
-       row quietly dropped is a client nobody is counting. */
-    (ADOPTION_NOTES.length
+       row quietly dropped is a client nobody is counting. Admin-only: both
+       lists can name clients or sheet rows outside a pod-scoped viewer's own
+       team, with no owner to check against (same reasoning as the escalations
+       tab's ESC_UNMATCHED). */
+    (viewerSeesAll() && ADOPTION_NOTES.length
       ? ` <b>${ADOPTION_NOTES.length} ${ADOPTION_NOTES.length === 1 ? 'row needs' : 'rows need'} ` +
         `attention in the sheet:</b> ${ADOPTION_NOTES.slice(0, 12).map(esc).join('; ')}` +
         (ADOPTION_NOTES.length > 12 ? ` (and ${ADOPTION_NOTES.length - 12} more).` : `.`)
       : ``) +
-    (ADOPT_UNMATCHED.length
+    (viewerSeesAll() && ADOPT_UNMATCHED.length
       ? ` <b>${ADOPT_UNMATCHED.length} scored ${ADOPT_UNMATCHED.length === 1 ? 'client is' : 'clients are'} ` +
         `not in the client book</b> and count towards nobody: ${ADOPT_UNMATCHED.map(esc).join(', ')}.`
       : ``);
@@ -3791,10 +3804,21 @@ function renderVisits(){
     .sort((a, b) => b.person - a.person || a.lead.localeCompare(b.lead));
 
   const totalPeople = rows.reduce((n, r) => n + r.person, 0);
+  /* null for a full-access viewer (any resolvable attendee counts, exactly as
+     before pod scoping existed here); for a pod-scoped viewer, restricted to
+     their own team(s) — leads is already scoped above, so this set is just
+     "everyone on a team this viewer can see". Without it, this tile counted
+     every meeting company-wide regardless of who was looking, disagreeing
+     with the Person-visits tile beside it. */
+  const meetingScope = viewerSeesAll() ? null
+    : new Set(leads.flatMap(l => [l, ...(POD_TEAM.get(l) || [])]));
   const allMeetings = new Set();
   VISITS.forEach((v, i) => {
     if (months.length && !months.includes(v.d.slice(0, 7))) return;
-    if (v.p.some(x => canonVisitor(x))) allMeetings.add(i);
+    if (v.p.some(x => {
+      const who = canonVisitor(x);
+      return who && (!meetingScope || meetingScope.has(who));
+    })) allMeetings.add(i);
   });
 
   /* Counted, not scored. There is no target here, so these are figures rather
@@ -3814,7 +3838,10 @@ function renderVisits(){
       : (VISITS_LIVE ? `Read live.`
                      : `Read from the snapshot built into this page, taken ` +
                        `${esc(pretty(VISITS_ASOF))}; the live feed is not switched on yet.`)) +
-    (VISIT_UNPLACED.length
+    /* Admin-only, same reasoning as the escalations and adoption unmatched
+       notes: an attendee not on the roster at all cannot be checked against
+       any pod-scoped viewer's team. */
+    (viewerSeesAll() && VISIT_UNPLACED.length
       ? ` <b>${VISIT_UNPLACED.length} name${VISIT_UNPLACED.length === 1 ? '' : 's'} ` +
         `on the visits could not be matched to anyone on the roster</b> and ` +
         `count towards nobody: ${VISIT_UNPLACED.map(esc).join(', ')}.` : '');
@@ -3867,7 +3894,12 @@ function renderFeedback(){
   const owned = scopedClients().filter(c => c.o);
   const latest = owned.map(c => latestFeedback(c.n)).filter(Boolean);
   const silent = owned.filter(c => !latestFeedback(c.n));
-  const total = [...FEED_BY_CLIENT.values()].reduce((n, l) => n + l.length, 0);
+  /* Scoped to the viewer's own clients, not every client company-wide — the
+     unscoped version used to leak a company-wide submission count next to an
+     otherwise correctly scoped "X of Y clients" figure. */
+  const total = viewerSeesAll()
+    ? [...FEED_BY_CLIENT.values()].reduce((n, l) => n + l.length, 0)
+    : owned.reduce((n, c) => n + ((FEED_BY_CLIENT.get(c.n) || []).length), 0);
 
   const mean = key => {
     const v = latest.map(r => r[key]).filter(x => x !== null && x !== undefined);
@@ -3883,11 +3915,14 @@ function renderFeedback(){
     (FEED_ERROR
       ? `<b>The sheet did not load, so nothing here describes your clients:</b> ${esc(FEED_ERROR)}`
       : FEED_LIVE ? `Read live from the published responses tab.` : '') +
-    (FEEDBACK_NOTES.length
+    /* Admin-only, same reasoning as the escalations/adoption/visits unmatched
+       notes: neither list can be checked against a pod-scoped viewer's own
+       clients. */
+    (viewerSeesAll() && FEEDBACK_NOTES.length
       ? ` <b>${FEEDBACK_NOTES.length} ${FEEDBACK_NOTES.length === 1 ? 'response needs' : 'responses need'} ` +
         `attention:</b> ${FEEDBACK_NOTES.slice(0, 12).map(esc).join('; ')}` +
         (FEEDBACK_NOTES.length > 12 ? ` (and ${FEEDBACK_NOTES.length - 12} more).` : `.`) : '') +
-    (FEED_UNMATCHED.length
+    (viewerSeesAll() && FEED_UNMATCHED.length
       ? ` <b>${FEED_UNMATCHED.length} ${FEED_UNMATCHED.length === 1 ? 'institution is' : 'institutions are'} ` +
         `not in the client book</b> and count towards nobody: ${FEED_UNMATCHED.map(esc).join(', ')}. ` +
         `The form takes the institution name as free text, so a client can answer under a ` +
@@ -4295,7 +4330,11 @@ function implUnmatchedHtml(){
 
 function renderEscNote(){
   const el = $('escnote');
-  const implNote = implUnmatchedHtml();
+  /* Both diagnostic notes below name clients or projects that failed to match
+     the book at all — there is no owner to check, so no way to tell whether
+     one belongs to a pod-scoped viewer's own team. Admin-only, same as
+     ADOPT_UNMATCHED on the adoption tab. */
+  const implNote = viewerSeesAll() ? implUnmatchedHtml() : '';
   if (ESC_ERROR){
     el.hidden = false; el.className = 'escnote warn';
     el.innerHTML = `Escalations could not be loaded, so no client is flagged below. ` +
@@ -4303,9 +4342,15 @@ function renderEscNote(){
       (implNote ? ` ${implNote}` : '');
     return;
   }
-  const open = ESCALATIONS.filter(e => !e.closed).length;
-  const flagged = [...ESC_BY_CLIENT.keys()].filter(n => openEsc(n).length);
-  if (!ESCALATIONS.length){
+  /* Scoped to the viewer's own clients — an escalation that never matched a
+     book client (ESC_UNMATCHED) has no owner and so cannot appear here for a
+     pod-scoped viewer, the same reasoning as clientNameInViewerScope. */
+  const escInScope = viewerSeesAll()
+    ? ESCALATIONS
+    : [...ESC_BY_CLIENT.entries()].filter(([n]) => clientNameInViewerScope(n)).flatMap(([, l]) => l);
+  const open = escInScope.filter(e => !e.closed).length;
+  const flagged = [...ESC_BY_CLIENT.keys()].filter(n => clientNameInViewerScope(n) && openEsc(n).length);
+  if (!escInScope.length){
     if (!implNote){ el.hidden = true; return; }
     el.hidden = false; el.className = 'escnote warn';
     el.innerHTML = implNote;
@@ -4315,9 +4360,9 @@ function renderEscNote(){
   el.hidden = false; el.className = 'escnote';
   el.innerHTML =
     `<b>${flagged.length} client${flagged.length === 1 ? '' : 's'} flagged</b> — ` +
-    `${open} open escalation${open === 1 ? '' : 's'} out of ${ESCALATIONS.length} raised. ` +
+    `${open} open escalation${open === 1 ? '' : 's'} out of ${escInScope.length} raised. ` +
     `Flagged rows carry a red rule; resolved ones are marked but not flagged.` +
-    (ESC_UNMATCHED.length
+    (viewerSeesAll() && ESC_UNMATCHED.length
       ? ` <b>${ESC_UNMATCHED.length} escalation${ESC_UNMATCHED.length === 1 ? '' : 's'} ` +
         `could not be matched to a client:</b> ${esc(ESC_UNMATCHED.join(', '))}. ` +
         `Those are not flagged anywhere. Add them to <code>ESC_ALIAS</code> in ` +
@@ -4668,10 +4713,16 @@ function setDefaultRange(){
   applyMode(saved === 'yesterday' || saved === 'custom' ? saved : 'today', false);
 }
 
+/* Every branch below feeds $('fresh') from the same global arrays the tab
+   body reads — CLIENTS, ROSTER, DATA, POD_TEAM, FEED_BY_CLIENT, VISITS — so
+   each one needs the same scoping its render*() does, or the header banner
+   quietly names a company-wide number a pod-scoped viewer's own tab content
+   right below it does not. */
 function showActive(){
   if (SOURCE === 'meter'){
     showContent();
-    $('fresh').textContent = `${POD_TEAM.size - NO_BOOK_TEAMS.length} teams`;
+    const teamCount = [...POD_TEAM.keys()].filter(l => !noBook(l) && leadInViewerScope(l)).length;
+    $('fresh').textContent = `${teamCount} team${teamCount === 1 ? '' : 's'}`;
     renderMeter();
     return;
   }
@@ -4679,7 +4730,8 @@ function showActive(){
      picker or the date range, so it renders straight from the joined data. */
   if (SOURCE === 'adoption'){
     showContent();
-    $('fresh').textContent = `${ADOPT_BY_CLIENT.size} clients scored`;
+    const scoredCount = [...ADOPT_BY_CLIENT.values()].filter(r => clientInViewerScope(r.client)).length;
+    $('fresh').textContent = `${scoredCount} clients scored`;
     renderAdoption();
     return;
   }
@@ -4687,9 +4739,11 @@ function showActive(){
      change nothing here, so like the adoption tab neither is offered. */
   if (SOURCE === 'feedback'){
     showContent();
-    const n = [...FEED_BY_CLIENT.values()].reduce((a, l) => a + l.length, 0);
+    const feedEntries = viewerSeesAll() ? [...FEED_BY_CLIENT.entries()]
+      : [...FEED_BY_CLIENT.entries()].filter(([c]) => clientNameInViewerScope(c));
+    const n = feedEntries.reduce((a, [, l]) => a + l.length, 0);
     $('fresh').textContent = FEED_ERROR ? 'feedback sheet not loaded'
-      : `${n} ${n === 1 ? 'response' : 'responses'} · ${FEED_BY_CLIENT.size} clients`;
+      : `${n} ${n === 1 ? 'response' : 'responses'} · ${feedEntries.length} clients`;
     renderFeedback();
     return;
   }
@@ -4697,9 +4751,24 @@ function showActive(){
      not per-person against an expectation, so the joined toggle does not. */
   if (SOURCE === 'visits'){
     showContent();
-    const n = VISITS.reduce((a, v) => a + v.p.length, 0);
+    let n, meetingsCount;
+    if (viewerSeesAll()){
+      n = VISITS.reduce((a, v) => a + v.p.length, 0);
+      meetingsCount = VISITS.length;
+    } else {
+      const lead = viewerLead();
+      const teamSet = new Set([lead, ...(POD_TEAM.get(lead) || [])]);
+      let pv = 0; const mset = new Set();
+      VISITS.forEach((v, i) => {
+        for (const raw of v.p){
+          const who = canonVisitor(raw);
+          if (who && teamSet.has(who)){ pv++; mset.add(i); }
+        }
+      });
+      n = pv; meetingsCount = mset.size;
+    }
     $('fresh').textContent = VISITS_ERROR ? 'visit feed not loaded'
-      : `${VISITS.length} ${VISITS.length === 1 ? 'meeting' : 'meetings'} · ` +
+      : `${meetingsCount} ${meetingsCount === 1 ? 'meeting' : 'meetings'} · ` +
         `${n} person-visits on file`;
     renderVisits();
     return;
@@ -4716,15 +4785,23 @@ function showActive(){
   }
   if (SOURCE === 'scorecard'){
     showContent();
-    $('fresh').textContent =
-      `${DATA.internal.length + DATA.client.length} entries · ${ROSTER.size} people`;
+    const scopedEntryCount = viewerSeesAll() ? DATA.internal.length + DATA.client.length
+      : DATA.internal.filter(r => personInViewerScope(r.name)).length +
+        DATA.client.filter(r => personInViewerScope(r.name)).length;
+    const scopedPeopleCount = viewerSeesAll() ? ROSTER.size
+      : [...ROSTER.values()].filter(p => personInViewerScope(p.name)).length;
+    $('fresh').textContent = `${scopedEntryCount} entries · ${scopedPeopleCount} people`;
     renderScorecard();
     return;
   }
   ROWS = filterRowsByViewer(DATA[SOURCE]);
   renderExempt();
-  const total = DATA.internal.length + DATA.client.length;
-  $('fresh').textContent = `${ROWS.length} of ${total} entries · ${ROSTER.size} people · ` +
+  const total = viewerSeesAll() ? DATA.internal.length + DATA.client.length
+    : DATA.internal.filter(r => personInViewerScope(r.name)).length +
+      DATA.client.filter(r => personInViewerScope(r.name)).length;
+  const peopleCount = viewerSeesAll() ? ROSTER.size
+    : [...ROSTER.values()].filter(p => personInViewerScope(p.name)).length;
+  $('fresh').textContent = `${ROWS.length} of ${total} entries · ${peopleCount} people · ` +
     new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
   showContent();
   render();
