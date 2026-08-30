@@ -1542,7 +1542,15 @@ function buildPods(){
 
   for (const {lead, members, leadEmail, memberEmails} of TEAM_ROWS){
     const r = resolve(lead);
-    if (r.gap){ POD_GAPS.push(`Lead ${r.gap}`); continue; }
+    if (r.gap){
+      POD_GAPS.push(`Lead ${r.gap}`);
+      /* Still worth an email entry keyed to the raw, un-resolved name: it lets
+         this person past the login gate (isEmailAllowed) into the far more
+         useful "not set up on the CS team roster" denial in finalizeViewer,
+         instead of a flat "not authorised" that reads like a wrong email. */
+      if (leadEmail) rememberEmail(leadEmail, lead.trim());
+      continue;
+    }
     if (leadEmail) rememberEmail(leadEmail, r.name);
     /* Reused, not reset — a second row for the same lead adds to their team
        rather than replacing it. */
@@ -1551,7 +1559,11 @@ function buildPods(){
     for (let i = 0; i < members.length; i++){
       const m = members[i];
       const x = resolve(m);
-      if (x.gap){ POD_GAPS.push(`${r.name}'s team: ${x.gap}`); continue; }
+      if (x.gap){
+        POD_GAPS.push(`${r.name}'s team: ${x.gap}`);
+        if (mEmails[i]) rememberEmail(mEmails[i], m.trim());
+        continue;
+      }
       if (team.includes(x.name)) continue;   // named twice in the same row
       if (leadNames.has(x.name) && x.name !== r.name){
         POD_GAPS.push(`"${x.name}" is listed under ${r.name} but also runs their own team — kept as a lead, not moved`);
