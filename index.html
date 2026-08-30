@@ -1771,10 +1771,21 @@ const TARGET_KEY = 'kpi.scaleTarget';
 /* On the team, but not expected to file to a given tracker. They keep their row;
    that tracker's cell shows a dash and is left out of its counts. */
 const EXEMPT = {
-  internal: [],
-  client:   ['sagar mishra', 'sumaiya khan']
+  internal: ['bhavey saluja'],
+  client:   ['sagar mishra', 'sumaiya khan', 'bhavey saluja']
 };
 const isExempt = (name, src) => EXEMPT[src].includes(name.toLowerCase());
+
+/* On Sukhmeet Singh's row in the Team tab, but has never filed a single
+   internal or client tracker entry — the roster below is built purely from
+   tracker activity, so with nothing to go on it had no row to place on a
+   pod, which silently dropped his visit entries too (visit-matching goes
+   through the same roster). Added here by hand as a compliance exception —
+   exempted from both trackers above, so this does not start flagging him
+   for days he was never filing in the first place. If he starts filing for
+   real, buildRoster() below picks that up on its own and this becomes
+   redundant (harmless to leave, but worth removing). */
+const MANUAL_ROSTER = ['Bhavey Saluja'];
 
 /* Not part of the CS team being measured at all — a name that turns up in a sheet
    because they were tagged on a task, not because they owe daily entries. Dropped
@@ -2047,6 +2058,15 @@ function buildRoster(){
       }
       else if (r.due < prev.first) prev.first = r.due;
     }
+  /* Anyone with no tracker rows at all never reaches the loop above, so they
+     get no chance to land on the roster on their own — MANUAL_ROSTER is
+     exactly that case. first is set to today rather than guessed at: it is
+     unused while EXEMPT keeps both trackers null for these names, and today
+     is the least wrong placeholder if that ever changes. */
+  for (const name of MANUAL_ROSTER){
+    const key = name.toLowerCase();
+    if (!ROSTER.has(key)) ROSTER.set(key, {name, first: iso(new Date())});
+  }
 }
 
 /* ---------------- helpers ---------------- */
