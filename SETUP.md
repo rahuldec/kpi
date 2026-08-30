@@ -95,57 +95,70 @@ const ZOHO = {
 
 ## 2. Email Setup
 
-Access control is configured in `index.html` near the top of the main script block. All matching is **case-insensitive** on email.
+Most CS team members’ login access is configured directly in the **Team tab** of the CS Team Plan sheet — no code change or deploy needed. A small handful of people outside that roster (leadership/admins) are still configured in `index.html`. All matching is **case-insensitive** on email.
 
-### 2.1 Three lists — what each does
+### 2.1 Team tab: Email columns (pod-scoped members)
+
+The Team tab is one row per RM, with a name column per role (`RM,ARM,CR,CR,CR`). Add a matching **Email** column for each name column, in the same order, right after them:
+
+```
+RM,ARM,CR,CR,CR,RM Email,ARM Email,CR Email,CR Email,CR Email
+Mansi Rana,Divya,Vansh Saini,,,mansi.rana@okiedokiepay.com,divya@okiedokiepay.com,vansh.saini@okiedokiepay.com,,
+```
+
+Column *N* of the email half is that name’s login — column 0 pairs with the first “…Email” column, column 1 with the second, and so on. The split point is detected by the first header cell (after column 0) containing “email”, so the exact header text doesn’t matter as long as each one has “Email” in it.
+
+Anyone whose email appears here can sign in immediately (next sheet read — no deploy) and sees their **own pod only** (their RM’s team, or their own team if they’re the RM). A row can have a name with no email yet — that person just can’t sign in until one is added; nothing else about the sheet or dashboard breaks.
+
+### 2.2 index.html: hardcoded lists (leadership / admins only)
 
 ```javascript
 const ALLOWED_EMAILS = [
-  'user@okiedokiepay.com',
+  ‘user@okiedokiepay.com’,
 ];
 
 const VIEW_ALL_EMAILS = [
-  'leadership@okiedokiepay.com',
+  ‘leadership@okiedokiepay.com’,
 ];
 
 const VIEWER_EMAIL_TO_NAME = {
-  'user@okiedokiepay.com': 'Exact Name From Team Tab',
+  ‘user@okiedokiepay.com’: ‘Exact Name From Team Tab’,
 };
 ```
 
 | List | Purpose |
 |---|---|
-| `ALLOWED_EMAILS` | **Login gate.** Only these Zoho emails can sign in. Everyone else stays on the login screen with *“Your account is not authorised to use this dashboard.”* |
-| `VIEW_ALL_EMAILS` | **Full dashboard.** These users see all data — no pod scoping. |
-| `VIEWER_EMAIL_TO_NAME` | **Roster name fix.** Maps a Zoho email to the exact spelling on the Team tab when the display name does not match. Used for pod-scoped users. |
+| `ALLOWED_EMAILS` | **Login gate for people not on the Team tab.** Combined at runtime with every email found in the Team tab’s Email columns. Anyone in neither set stays on the login screen with *“Your account is not authorised to use this dashboard.”* |
+| `VIEW_ALL_EMAILS` | **Full dashboard.** These users see all data — no pod scoping. Must also be in `ALLOWED_EMAILS`. |
+| `VIEWER_EMAIL_TO_NAME` | **Fallback roster-name fix**, only for someone whose email isn’t in the Team tab’s Email columns yet, or whose Zoho display name doesn’t match the Team tab spelling. Prefer adding their email to the sheet instead. |
 
-### 2.2 User types
+### 2.3 User types
 
 | Who | Config needed | What they see |
 |---|---|---|
-| Leadership / admins | `ALLOWED_EMAILS` + `VIEW_ALL_EMAILS` | Full dashboard |
-| CS team member (pod-scoped) | `ALLOWED_EMAILS` + name on Team tab (or `VIEWER_EMAIL_TO_NAME`) | Only their RM’s pod |
-| Not on any list | — | Blocked at login — dashboard never opens |
+| Leadership / admins | `ALLOWED_EMAILS` + `VIEW_ALL_EMAILS` in `index.html` | Full dashboard |
+| CS team member (pod-scoped) | Email added to their row on the Team tab | Only their RM’s pod |
+| Not on either | — | Blocked at login — dashboard never opens |
 
-### 2.3 Adding a new user
+### 2.4 Adding a new user
 
+**Pod-scoped CS team member:** add their name (if not already there) and their Zoho email to their RM’s row on the Team tab — Email columns as shown in §2.1. Takes effect on their next sign-in attempt, no deploy.
+
+**Leadership / admin (full dashboard, not on the Team tab):**
 1. Get their **exact Zoho account email** (after a test login, check DevTools → Application → Local Storage → `kpi.zoho.session` → `user.email`).
-2. Add the email to `ALLOWED_EMAILS`.
-3. Choose access level:
-   - **Full access** → also add to `VIEW_ALL_EMAILS`.
-   - **Pod-scoped** → ensure their name appears on the Team tab in the CS Team Plan sheet, or map them in `VIEWER_EMAIL_TO_NAME`.
-4. Commit and deploy (production picks up changes on next Vercel deploy).
+2. Add the email to `ALLOWED_EMAILS` **and** `VIEW_ALL_EMAILS` in `index.html`.
+3. Commit and deploy (production picks up changes on next Vercel deploy).
 
-### 2.4 Login flow (what the user experiences)
+### 2.5 Login flow (what the user experiences)
 
 1. User opens the portal → **Sign in with Zoho**.
-2. Zoho OAuth completes → email checked against `ALLOWED_EMAILS`.
-   - Not listed → returned to login screen (session cleared).
-3. Listed → login screen shows *“Loading dashboard…”* while data loads.
-4. Roster is built from the Team tab:
+2. Zoho OAuth completes → login screen shows *“Loading dashboard…”* while data (including the Team tab) loads. The login gate isn’t decided yet at this point, since it may depend on that sheet.
+3. Once loaded, email is checked against `ALLOWED_EMAILS` **or** the Team tab’s Email columns.
+   - Neither → returned to login screen with *”Your account is not authorised to use this dashboard.”* (session cleared).
+4. Allowed → viewer is resolved:
    - In `VIEW_ALL_EMAILS` → full dashboard opens.
-   - On Team tab (or mapped in `VIEWER_EMAIL_TO_NAME`) → pod-scoped dashboard opens.
-   - Not matched → returned to login with *“Your account is not set up on the CS team roster…”*
+   - Matched by Team tab email (or `VIEWER_EMAIL_TO_NAME`, or display-name matching) → pod-scoped dashboard opens.
+   - Allowed via `ALLOWED_EMAILS` but not matched to any roster name → returned to login with *“Your account is not set up on the CS team roster…”*
 
 ### 2.5 Test mode (bypasses all email checks)
 
@@ -168,8 +181,8 @@ Production is hosted on **Vercel** at [https://odcskpi.vercel.app/](https://odcs
 - [ ] Zoho client has production URLs (see §1.2)
 - [ ] `clientId` set in `lib/zoho-auth.js` (not empty)
 - [ ] `accountsUrl` matches org data centre (`https://accounts.zoho.in`)
-- [ ] `ALLOWED_EMAILS` populated in `index.html`
-- [ ] `VIEW_ALL_EMAILS` / `VIEWER_EMAIL_TO_NAME` configured as needed
+- [ ] `ALLOWED_EMAILS` / `VIEW_ALL_EMAILS` configured in `index.html` for leadership/admins
+- [ ] Team tab has an Email column for each CS team member who needs to sign in (see §2.1)
 - [ ] Vercel environment variables set for sheet data (see §3.3)
 - [ ] Google sheets shared: **Anyone with the link → Viewer**
 
@@ -225,8 +238,8 @@ node scripts/dev-server.js
 
 1. Open [https://odcskpi.vercel.app/](https://odcskpi.vercel.app/) in a **private/incognito** window.
 2. Confirm the **Sign in with Zoho** screen appears (dashboard should not load without auth).
-3. Sign in with an email in `ALLOWED_EMAILS` → dashboard loads after *“Loading dashboard…”*.
-4. Sign in with an email **not** in `ALLOWED_EMAILS` → login error, no dashboard.
+3. Sign in with an email in `ALLOWED_EMAILS`, or one in the Team tab's Email columns → dashboard loads after *“Loading dashboard…”*.
+4. Sign in with an email in neither → login error, no dashboard.
 5. Spot-check API endpoints:
    - [https://odcskpi.vercel.app/api/data?src=internal](https://odcskpi.vercel.app/api/data?src=internal) → CSV response
    - [https://odcskpi.vercel.app/lib/zoho-auth.js](https://odcskpi.vercel.app/lib/zoho-auth.js) → contains your `clientId`
@@ -248,8 +261,8 @@ node scripts/dev-server.js
 |---|---|---|
 | Dashboard loads without login | `clientId` empty in deployed `lib/zoho-auth.js` | Set Client ID and redeploy |
 | Redirect URI mismatch | Zoho prod URL not registered | Add `https://odcskpi.vercel.app/` in Zoho |
-| Not authorised (login) | Email missing from `ALLOWED_EMAILS` | Add email in `index.html`, redeploy |
-| Not on CS roster (login) | Name not on Team tab | Add to Team tab or `VIEWER_EMAIL_TO_NAME` |
+| Not authorised (login) | Email in neither `ALLOWED_EMAILS` nor the Team tab's Email columns | Add their email to their row on the Team tab (no deploy), or to `ALLOWED_EMAILS` for leadership |
+| Not on CS roster (login) | Email allowed, but name doesn't resolve to a roster row | Add/fix their name and email together on the Team tab, or map in `VIEWER_EMAIL_TO_NAME` |
 | Could not load the sheet | Sheet sharing or wrong env vars | Check Google sharing + Vercel env vars |
 | Visits tab empty | `MOM_FEED_KEY` unset | Set in Vercel env vars |
 
@@ -264,11 +277,15 @@ Client ID                                →  ZOHO.clientId
 Data centre (India)                      →  ZOHO.accountsUrl
 Redirect URI                             →  (automatic from browser URL)
 
-Zoho user emails                         →  index.html
+CS team member logins                    →  Team tab Email columns (§2.1)
 ─────────────────────────────────────────────────────────────
-Who can log in                           →  ALLOWED_EMAILS
+Who can log in + which pod they see      →  one email per name column
+
+Leadership / admin emails                →  index.html
+─────────────────────────────────────────────────────────────
+Who can log in (non-roster people)       →  ALLOWED_EMAILS
 Who sees full dashboard                  →  VIEW_ALL_EMAILS
-Email → roster name                      →  VIEWER_EMAIL_TO_NAME
+Fallback email → roster name             →  VIEWER_EMAIL_TO_NAME
 
 Sheet / data sources                     →  Vercel env vars (api/data.js)
 ─────────────────────────────────────────────────────────────

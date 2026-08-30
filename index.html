@@ -1483,11 +1483,27 @@ const bookOf = name => BOOK.get(String(name).trim().toLowerCase()) || null;
    outputs:
    POD_OF   roster name -> lead they report to (a lead maps to themselves)
    POD_TEAM lead -> resolved roster names under them
-   POD_GAPS anything that did not line up, shown on the page rather than swallowed */
-let POD_OF = new Map(), POD_TEAM = new Map(), POD_GAPS = [];
+   POD_GAPS anything that did not line up, shown on the page rather than swallowed
+   EMAIL_OF normalised login email -> resolved roster name, from the Team
+            tab's optional Email columns (see parseTeam) */
+let POD_OF = new Map(), POD_TEAM = new Map(), POD_GAPS = [], EMAIL_OF = new Map();
+
+/* Records one Team-tab email against the roster name it resolved to. A second,
+   different name claiming the same email is a sheet typo, not a real dual
+   assignment — surfaced as a gap rather than silently overwritten, same as a
+   name claimed by two leads above. */
+function rememberEmail(raw, name){
+  const email = normEmail(raw);
+  if (!email) return;
+  if (EMAIL_OF.has(email) && EMAIL_OF.get(email) !== name){
+    POD_GAPS.push(`"${email}" is listed for both ${EMAIL_OF.get(email)} and ${name} — kept for ${EMAIL_OF.get(email)}`);
+    return;
+  }
+  EMAIL_OF.set(email, name);
+}
 
 function buildPods(){
-  POD_OF = new Map(); POD_TEAM = new Map(); POD_GAPS = [];
+  POD_OF = new Map(); POD_TEAM = new Map(); POD_GAPS = []; EMAIL_OF = new Map();
   const roster = [...ROSTER.values()].map(p => p.name);
   const byFirst = new Map();
   for (const n of roster){
@@ -1524,13 +1540,16 @@ function buildPods(){
     if (!r.gap) leadNames.add(r.name);
   }
 
-  for (const {lead, members} of TEAM_ROWS){
+  for (const {lead, members, leadEmail, memberEmails} of TEAM_ROWS){
     const r = resolve(lead);
     if (r.gap){ POD_GAPS.push(`Lead ${r.gap}`); continue; }
+    if (leadEmail) rememberEmail(leadEmail, r.name);
     /* Reused, not reset — a second row for the same lead adds to their team
        rather than replacing it. */
     const team = POD_TEAM.get(r.name) || [];
-    for (const m of members){
+    const mEmails = memberEmails || [];
+    for (let i = 0; i < members.length; i++){
+      const m = members[i];
       const x = resolve(m);
       if (x.gap){ POD_GAPS.push(`${r.name}'s team: ${x.gap}`); continue; }
       if (team.includes(x.name)) continue;   // named twice in the same row
@@ -1544,6 +1563,7 @@ function buildPods(){
       }
       team.push(x.name);
       POD_OF.set(x.name, r.name);
+      if (mEmails[i]) rememberEmail(mEmails[i], x.name);
     }
     POD_OF.set(r.name, r.name);
     POD_TEAM.set(r.name, team);
@@ -1637,12 +1657,30 @@ function parseTeam(text){
     if ((rows[i][0] || '').trim().toLowerCase() === 'rm'){ head = i; break; }
   if (head < 0) throw new Error('Could not find a header row whose first column is "RM".');
 
+  /* An optional second half of columns — headed e.g. "RM Email,ARM Email,CR
+     Email,CR Email,CR Email" — gives each name column a matching email column,
+     same order, so column N of the email half is that name's login. The split
+     point is the first header cell (after column 0) containing "email"; a
+     sheet with none behaves exactly as before this existed — nobody gets a
+     sheet-driven login and the name columns are read the same as always. */
+  const header = rows[head];
+  const emailStart = header.findIndex((c, i) => i > 0 && /email/i.test(c || ''));
+  const nameCols = emailStart < 0 ? header.length : emailStart;
+
   const out = [];
   for (let i = head + 1; i < rows.length; i++){
     const r = rows[i]; if (!r) continue;
     const lead = (r[0] || '').trim();
     if (!lead) continue;
-    out.push({lead, members: r.slice(1).map(x => (x || '').trim()).filter(Boolean)});
+    const members = [], memberEmails = [];
+    for (let c = 1; c < nameCols; c++){
+      const name = (r[c] || '').trim();
+      if (!name) continue;
+      members.push(name);
+      memberEmails.push(emailStart < 0 ? '' : (r[emailStart + c] || '').trim());
+    }
+    const leadEmail = emailStart < 0 ? '' : (r[emailStart] || '').trim();
+    out.push({lead, members, leadEmail, memberEmails});
   }
   return out;
 }
@@ -1734,8 +1772,12 @@ const isExempt = (name, src) => EXEMPT[src].includes(name.toLowerCase());
 const HIDDEN = ['rahul sharma'];
 const isHidden = name => HIDDEN.includes(name.trim().toLowerCase());
 
-/* Zoho accounts permitted to sign in. Only these emails may use the portal
-   (test mode bypasses). Everyone else stays on the login screen. */
+/* Zoho accounts permitted to sign in who are NOT on the Team tab — leadership
+   and admins, essentially. Everyone actually on the CS team roster instead
+   gets their login from the Team tab's Email columns (see parseTeam/EMAIL_OF
+   above): add them there and they can sign in with no code change or deploy.
+   This list only exists for the handful of people outside that roster
+   (test mode bypasses both routes). */
 const ALLOWED_EMAILS = [
   'bhavay.singla@okiedokiepay.com',
   'rahul.sharma@okiedokiepay.com'
@@ -1750,8 +1792,11 @@ const VIEW_ALL_EMAILS = [
    'rahul.sharma@okiedokiepay.com'
   /* 'leadership@okiedokiepay.com', */
 ];
-/* When a Zoho display name does not match the Team tab spelling, pin the roster
-   name here by email. VIEW_ALL_EMAILS overrides scoping; this only fixes matching. */
+/* Fallback only for someone whose email isn't in the Team tab's Email columns
+   yet (or a display name that doesn't match the Team tab spelling): pin the
+   roster name here by email. VIEW_ALL_EMAILS overrides scoping; this only
+   fixes matching. Prefer adding their email to the sheet instead — this list
+   still means a deploy every time. */
 const VIEWER_EMAIL_TO_NAME = {
   /* 'someone@okiedokiepay.com': 'Exact Name From Team Tab', */
 };
@@ -1759,11 +1804,16 @@ let VIEWER = { seeAll: true };
 
 const normEmail = e => String(e || '').trim().toLowerCase();
 
+/* Allowed via the hardcoded leadership list above, or because the Team tab's
+   Email columns resolved this address to a roster name (EMAIL_OF, built in
+   buildPods from the live sheet — see parseTeam). The latter is why this can
+   only be checked once the Team tab has loaded, not at the moment Zoho
+   sign-in completes; see the gate in load(). */
 function isEmailAllowed(user){
   if (!user || ZohoAuth.isTestMode()) return true;
   const email = normEmail(user.email);
   if (!email) return false;
-  return ALLOWED_EMAILS.map(normEmail).includes(email);
+  return ALLOWED_EMAILS.map(normEmail).includes(email) || EMAIL_OF.has(email);
 }
 
 function denyPortalAccess(msg){
@@ -1819,7 +1869,8 @@ function resolveViewerRosterName(displayName, email){
 
 function finalizeViewer(){
   if (VIEWER.seeAll) return;
-  const mapped = VIEWER_EMAIL_TO_NAME[normEmail(VIEWER.email)];
+  const byEmail = EMAIL_OF.get(normEmail(VIEWER.email));
+  const mapped = byEmail || VIEWER_EMAIL_TO_NAME[normEmail(VIEWER.email)];
   const matched = mapped || resolveViewerRosterName(VIEWER.name, VIEWER.email);
   if (!matched || !personOnRoster(matched)){
     VIEWER.unmatched = true;
@@ -4815,6 +4866,16 @@ async function load(){
     }
     buildRoster();
     buildPods();
+    /* The login gate itself now depends on the Team tab (EMAIL_OF, built just
+       above by buildPods), so it can only be checked here — after that fetch
+       lands — rather than the instant Zoho sign-in completes, back in
+       bootApp(). Anyone rejected here still went through a full data fetch
+       first; that's the cost of the allowlist living in the sheet instead of
+       a hardcoded array. */
+    if (!isEmailAllowed({email: VIEWER.email})){
+      denyPortalAccess('Your account is not authorised to use this dashboard.');
+      return;
+    }
     finalizeViewer();
     if (!viewerSeesAll() && VIEWER.unmatched){
       denyPortalAccess(
@@ -5234,13 +5295,12 @@ async function bootApp(){
 
   try {
     const auth = await ZohoAuth.ensureAuth();
-    if (auth.ok){
-      if (!isEmailAllowed(auth.user)){
-        denyPortalAccess('Your account is not authorised to use this dashboard.');
-        return;
-      }
-      showApp(auth.user);
-    } else showLogin();
+    /* isEmailAllowed() is no longer checked here: since it can now be
+       satisfied by the Team tab's Email columns (EMAIL_OF), it isn't decidable
+       until that sheet has loaded. showApp() -> load() checks it once
+       EMAIL_OF is built, and denies access there if it fails. */
+    if (auth.ok) showApp(auth.user);
+    else showLogin();
   } catch (e) {
     showLogin(e.message || 'Sign-in failed.');
   }
