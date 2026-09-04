@@ -835,10 +835,27 @@ table.board th button:hover i{opacity:.45}
   border-radius:12px;padding:14px 16px;margin:0 0 22px}
 .coverwarn:empty{display:none}
 .coverwarn strong{font-weight:600}
+.scoresearch{display:block;width:100%;max-width:280px;margin:0 0 14px;padding:9px 12px;
+  font:inherit;font-size:14px;color:var(--ink);background:var(--card);
+  border:1px solid var(--line);border-radius:9px}
+.scoresearch:focus-visible{outline:3px solid rgba(236,103,36,.5);outline-offset:1px}
 .scoreact{display:flex;align-items:center;gap:16px;margin-top:26px;padding-top:22px;
   border-top:1px solid var(--hair)}
 table.board td.tot{font-weight:700;color:var(--miss)}
 table.board td.tot.zero{font-weight:400;color:var(--faint)}
+/* One expanded row per searched person, showing the exact dates a count would
+   otherwise stand in for — "how many" answered on sight always raises "which
+   ones", and a search that already narrowed the table to one name is exactly
+   where a reader is looking for that answer. Mirrors .how .dates/.tk rather
+   than reusing them directly: that class carries a card's own negative
+   margins, which read as a layout bug inside a table cell. */
+tr.scoredetail td{text-align:left;padding:12px 14px;background:var(--page);
+  font-size:13px;color:var(--body)}
+tr.scoredetail .dates{display:flex;gap:6px 14px;align-items:baseline;
+  margin:0;padding:5px 0;color:var(--miss);font-variant-numeric:tabular-nums}
+tr.scoredetail .dates.none{color:var(--faint)}
+tr.scoredetail .dates + .dates{border-top:1px solid var(--hair)}
+tr.scoredetail .tk{flex:0 0 96px;color:var(--faint);font-weight:500}
 .exempt{font-size:13px;color:var(--faint);margin:-8px 0 0;padding:0 4px;letter-spacing:-.006em}
 .exempt:empty{display:none}
 
@@ -996,6 +1013,7 @@ table.board td.tot.zero{font-weight:400;color:var(--faint)}
   <section id="scorecard" hidden>
     <h3>Missed days by person</h3>
     <p class="coverwarn" id="coverwarn"></p>
+    <input class="scoresearch" id="scoreSearch" type="search" placeholder="Search by name…" autocomplete="off">
     <div class="gridscroll"><table class="board" id="score"></table></div>
     <div class="scoreact">
       <button class="pill" id="csv" type="button">Download CSV</button>
@@ -3449,6 +3467,7 @@ function mixDetail(r){
   const byName = (a, b2) => a.n.localeCompare(b2.n);
   const retNames = mine.filter(c => c.k === 'retention').sort(byName);
   const impNames = mine.filter(c => c.k === 'implementation').sort(byName);
+  const unlabelled = mine.filter(c => c.k !== 'retention' && c.k !== 'implementation').sort(byName);
   return head +
     stats([
       [ret.clients, 'retention'],
@@ -3473,7 +3492,8 @@ function mixDetail(r){
       : '') +
     `</p>` +
     (retNames.length ? `<p class="who2">Retention</p>` + moneyList(retNames, 6, 'clients') : '') +
-    (impNames.length ? `<p class="who2">Implementation</p>` + moneyList(impNames, 6, 'clients') : '');
+    (impNames.length ? `<p class="who2">Implementation</p>` + moneyList(impNames, 6, 'clients') : '') +
+    (unlabelled.length ? `<p class="who2">No label</p>` + moneyList(unlabelled, 6, 'clients') : '');
 }
 
 /* The mix, as one row under the business dial — it describes the dial above it
@@ -4496,6 +4516,10 @@ function renderClients(){
   $('asof').className = BOOK_LIVE ? '' : 'bad';
 }
 
+/* Kept across renders so typing in the search box survives a sort click or a
+   Refresh, the same way SORT itself does. */
+let SCORE_SEARCH = '';
+
 function renderScorecard(){
   const {months, days, live, rows} = scoreRows();
   const cell = v => v === null
@@ -4509,8 +4533,19 @@ function renderScorecard(){
            `<button type="button" data-col="${col}" title="Sort by ${esc(SORT_COLS[col].label.toLowerCase())}">` +
            `${esc(SORT_COLS[col].label)}<i aria-hidden="true">${arrow}</i></button></th>`;
   };
+  /* Short form only — this sits in a table row, not the info dialog, so it
+     matches howHtml()'s dayList rather than the modal's own longer one. */
+  const dayList = ds => ds.map(d => {
+    const [, m, day] = d.split('-');
+    return `${Number(day)} ${MONTHS_SHORT[Number(m) - 1]}`;
+  }).join(' · ');
+
+  const q = SCORE_SEARCH.trim().toLowerCase();
+  const shown = q ? rows.filter(r => r.name.toLowerCase().includes(q)) : rows;
+  const cols = Object.keys(SORT_COLS).length;
+
   let t = '<thead><tr>' + Object.keys(SORT_COLS).map(th).join('') + '</tr></thead><tbody>';
-  for (const r of rows){
+  for (const r of shown){
     t += `<tr><td>${esc(r.name)}</td>
       ${cell(r.per.internal)}${cell(r.per.client)}
       <td class="tot ${r.missed ? '' : 'zero'}">${r.missed}</td>
@@ -4519,7 +4554,23 @@ function renderScorecard(){
       <td class="num dim">${bookOf(r.name) ? esc(inr(bookOf(r.name).revenue)) : '—'}</td>
       <td class="dim">${esc(POD_OF.get(r.name) || '—')}</td>
     </tr>`;
+    /* Only for a searched name, not every row by default — same "how many
+       clutters, so it stays behind a click or, here, a search" reasoning
+       moneyList and longList already apply elsewhere on this page. */
+    if (!q) continue;
+    let detail = '';
+    for (const tr2 of TRACKERS){
+      const per = r.per[tr2];
+      if (!per) continue;
+      detail += per.gaps.length
+        ? `<p class="dates"><span class="tk">${esc(SOURCES[tr2].noun)}</span>` +
+          `<span>${esc(dayList(per.gaps))}</span></p>`
+        : `<p class="dates none"><span class="tk">${esc(SOURCES[tr2].noun)}</span><span>Nothing missed.</span></p>`;
+    }
+    t += `<tr class="scoredetail"><td colspan="${cols}">${detail}</td></tr>`;
   }
+  if (q && !shown.length)
+    t += `<tr class="scoredetail"><td colspan="${cols}">No one on the roster matches "${esc(SCORE_SEARCH.trim())}".</td></tr>`;
   $('score').innerHTML = t + '</tbody>';
 
   // Warn rather than report confident nonsense for a month the export no longer covers.
@@ -5335,6 +5386,10 @@ $('score').addEventListener('click', e => {
     ? {col, dir: SORT.dir === 'asc' ? 'desc' : 'asc'}
     : {col, dir: SORT_COLS[col].dir};
   writeStore(SORT_KEY, JSON.stringify(SORT));
+  renderScorecard();
+});
+$('scoreSearch').addEventListener('input', e => {
+  SCORE_SEARCH = e.target.value;
   renderScorecard();
 });
 /* Every group's tabs share one handler — a new group needs its id here and
