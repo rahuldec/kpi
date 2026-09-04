@@ -1343,13 +1343,14 @@ function visitsForTeam(lead, months){
   const byPerson = new Map();
   VISITS.forEach((v, i) => {
     if (months && !months.includes(v.d.slice(0, 7))) return;
-    for (const raw of v.p){
-      const who = canonVisitor(raw);
-      if (!who || !team.has(who)) continue;
-      person++;
-      meetings.add(i);
-      byPerson.set(who, (byPerson.get(who) || 0) + 1);
-    }
+    for (const raw of v.p)
+      for (const name of splitVisitors(raw)){
+        const who = canonVisitor(name);
+        if (!who || !team.has(who)) continue;
+        person++;
+        meetings.add(i);
+        byPerson.set(who, (byPerson.get(who) || 0) + 1);
+      }
   });
   return {person, meetings: meetings.size,
           byPerson: [...byPerson.entries()].sort((a, b) => b[1] - a[1])};
@@ -1369,6 +1370,14 @@ function canonVisitor(raw){
   const hits = [...POD_OF.keys()].filter(r => r.toLowerCase().split(/\s+/)[0] === first);
   return hits.length === 1 ? hits[0] : null;
 }
+
+/* A joint visit sometimes comes through as one string naming everyone who
+   went — "Rahul Sharma, Gobind Monga" or "Rahul and Akshat Wahi" — rather
+   than as separate entries the way individually-marked attendees already
+   are. Split before calling canonVisitor, or the whole unsplit string
+   matches nobody, and a real roster name buried inside it loses its credit
+   entirely rather than just failing to resolve on its own merits. */
+const splitVisitors = raw => String(raw).split(/\s*(?:,|&|\band\b)\s*/i).map(s => s.trim()).filter(Boolean);
 
 /* One row per meeting from the portal's own API — `fetchRaw('visits')` returns
    the proxied `{ data: [...] }` JSON body as text; this turns it into the same
@@ -1397,10 +1406,11 @@ function buildVisits(){
   VISIT_UNPLACED = [];
   const seen = new Set();
   for (const v of VISITS)
-    for (const raw of v.p){
-      const who = canonVisitor(raw);
-      if (!who && !seen.has(raw)){ seen.add(raw); VISIT_UNPLACED.push(raw); }
-    }
+    for (const raw of v.p)
+      for (const name of splitVisitors(raw)){
+        const who = canonVisitor(name);
+        if (!who && !seen.has(name)){ seen.add(name); VISIT_UNPLACED.push(name); }
+      }
 }
 
 
@@ -3946,10 +3956,10 @@ function renderVisits(){
   const allMeetings = new Set();
   VISITS.forEach((v, i) => {
     if (months.length && !months.includes(v.d.slice(0, 7))) return;
-    if (v.p.some(x => {
-      const who = canonVisitor(x);
+    if (v.p.some(x => splitVisitors(x).some(name => {
+      const who = canonVisitor(name);
       return who && (!meetingScope || meetingScope.has(who));
-    })) allMeetings.add(i);
+    }))) allMeetings.add(i);
   });
 
   /* Counted, not scored. There is no target here, so these are figures rather
@@ -4920,17 +4930,18 @@ function showActive(){
     showContent();
     let n, meetingsCount;
     if (viewerSeesAll()){
-      n = VISITS.reduce((a, v) => a + v.p.length, 0);
+      n = VISITS.reduce((a, v) => a + v.p.reduce((b, raw) => b + splitVisitors(raw).length, 0), 0);
       meetingsCount = VISITS.length;
     } else {
       const lead = viewerLead();
       const teamSet = new Set([lead, ...(POD_TEAM.get(lead) || [])]);
       let pv = 0; const mset = new Set();
       VISITS.forEach((v, i) => {
-        for (const raw of v.p){
-          const who = canonVisitor(raw);
-          if (who && teamSet.has(who)){ pv++; mset.add(i); }
-        }
+        for (const raw of v.p)
+          for (const name of splitVisitors(raw)){
+            const who = canonVisitor(name);
+            if (who && teamSet.has(who)){ pv++; mset.add(i); }
+          }
       });
       n = pv; meetingsCount = mset.size;
     }
