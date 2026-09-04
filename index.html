@@ -3558,11 +3558,17 @@ function implDetail(r){
            `${p.incomplete} of ${p.all} still open</span></p>`;
   }
   if (overdue.length) h += `</div>`;
-  const onTrack = r.impl.reduce((n, x) => n + x.projects.length, 0) -
-    overdue.reduce((n, x) => n + x.overdue.length, 0);
-  if (onTrack)
-    h += `<p class="${overdue.length ? 'dates none' : 'none'}">${onTrack} ` +
-         `${onTrack === 1 ? 'project has' : 'projects have'} no overdue tasks.</p>`;
+  /* Named, not just counted — a project with nothing overdue used to
+     disappear into a bare "N projects have no overdue tasks", unfindable by
+     anyone reading the card. Per-project rather than per-client: a client
+     with more than one implementation project can have one overdue and one
+     clear, and the clear one still deserves its own name rather than being
+     implied by the client heading above (which, here, is about the other,
+     overdue project). */
+  const onTrackNames = r.impl.flatMap(x => x.projects.filter(p => !p.overdue).map(p => p.name));
+  if (onTrackNames.length)
+    h += `<p class="${overdue.length ? 'dates none' : 'none'}">No overdue tasks on ` +
+         `${esc(onTrackNames.join(', '))}.</p>`;
   return h;
 }
 
