@@ -1,10 +1,10 @@
 // Fetches the tracker data as CSV, server-side.
 //
 // Why this exists: the browser cannot reliably fetch docs.google.com or
-// app.asana.com directly — CORS, and for Asana also the Personal Access Token,
-// which must never reach the client. This runs on Vercel's server, where CORS
-// does not apply and the token stays put, and hands CSV back to the page from
-// your own domain.
+// app.asana.com directly — CORS, and for Asana also the OAuth client secret
+// and refresh token, which must never reach the client. This runs on Vercel's
+// server, where CORS does not apply and the secrets stay put, and hands CSV
+// back to the page from your own domain.
 //
 // Sheets-backed sources must be readable without a login:
 //   Share -> General access -> Anyone with the link -> Viewer
@@ -12,23 +12,16 @@
 // Several sources behind a handful of shapes. Selected with ?src=; anything
 // unrecognised falls back to internal.
 //
-// The two trackers (internal, client) used to be per-person daily timesheets
-// synced from Asana into a Google Sheet and read back out as a publish-to-web
-// CSV — an extra hop with its own staleness (Google caches published output for
-// a few minutes) and its own failure mode (a revoked publication). As of Sep
-// 2026 they instead read the Asana project directly via the API — see the
-// `asanaProject` branch below — which is why they carry no `id`/`gid` here.
-//
-// The escalations sheet is still Sheets-sourced and a different animal besides:
-// one row per client escalation, keyed by the client rather than by a person,
-// in a spreadsheet with more than one tab — the first holds the Asana
-// integration URL, not the export, so asking Google for the default tab
-// returns a CSV with no "Due Date" column. Tab ids (gids) are not sequential
-// and Asana's integration can recreate a tab with a new id, so any hardcoded
-// gid is a time bomb; instead the right tab is identified by its contents
-// (it shares the tracker's export shape, but is told apart by a different
-// column — see `signature` below). Set ESC_SHEET_GID in Vercel -> Settings ->
-// Environment Variables to skip the search if you ever want to pin it.
+// Three of these — the two trackers (internal, client) and escalations — used
+// to be synced from Asana into a Google Sheet and read back out as a
+// publish-to-web CSV — an extra hop with its own staleness (Google caches
+// published output for a few minutes) and its own failure mode (a revoked
+// publication). As of Sep 2026 they instead read their Asana project directly
+// via the API — see the `asanaProject` branch below — which is why they carry
+// no `id`/`gid` here. The trackers and escalations answer different questions
+// (a row per person-day vs. a row per client escalation) so they come back in
+// different shapes; `asanaShape` on the source picks which of
+// grabAsanaProject/grabAsanaEscalations builds the CSV.
 //
 // The book is different again. "CS Team Plan" is an uploaded .xlsx, and Drive
 // only exports Docs-editor files, so /export?format=csv has nothing to serve for
@@ -57,11 +50,16 @@ const SOURCES = {
                  envVar: 'ASANA_INTERNAL_PROJECT_GID' },
   client:      { asanaProject: process.env.ASANA_CLIENT_PROJECT_GID || '1214674246739192',
                  envVar: 'ASANA_CLIENT_PROJECT_GID' },
-  escalations: { id: process.env.ESC_SHEET_ID    || '1Y1S-jDHFyUe3IJw-B3X8CgM9JFnRwl_L7fkNtzgVEAw',
-                 gid: process.env.ESC_SHEET_GID   || '',
-                 // This export has no Due Date on most rows, so the tracker test
-                 // would reject the right tab. Match on what it does have.
-                 signature: csv => /projects/i.test(csv) && /parent task/i.test(csv) },
+  /* Client Escalations, also read directly from Asana now rather than its old
+     Sheets export. Different shape from the trackers above — see `asanaShape`
+     and grabAsanaEscalations — so it is marked to use that instead of the
+     Due Date/Assignee shape the trackers want. Subtasks (the individual
+     complaints inside one escalation) are never fetched: parseEscalations in
+     index.html only ever keeps parentless rows, so there is nothing to gain by
+     asking Asana for them here. */
+  escalations: { asanaProject: process.env.ASANA_ESCALATIONS_PROJECT_GID || '1213179774324454',
+                 envVar: 'ASANA_ESCALATIONS_PROJECT_GID',
+                 asanaShape: 'escalations' },
   /* Module adoption. Not a single tab but one per RM per quarter, and the set
      grows every quarter — so this source addresses tabs by NAME rather than by
      gid. gviz serves any tab of a native Google Sheet as CSV given its title,
@@ -221,6 +219,44 @@ async function grabAsanaProject(projectGid, token) {
   return { ok: true, body: rows.map(r => r.map(csvEscape).join(',')).join('\n') };
 }
 
+/* Every top-level task in the Client Escalations project — no subtasks, since
+   parseEscalations in index.html only ever keeps rows with an empty "Parent
+   task" (a subtask is one of the individual complaints inside an escalation,
+   not an escalation itself). GET .../tasks does not return subtasks unless
+   one has explicitly been added to the project too, which is exactly the
+   scope wanted here, so no extra filtering is needed on this end — parent.name
+   is still requested and emitted so index.html's own defence against a
+   misfiled subtask keeps working unchanged.
+
+   `projects` is a comma-joined list of every Asana project the task belongs
+   to (usually "Client Escalations" plus the client's own project) — one CSV
+   field, quoted by csvEscape since it contains a comma, exactly like the old
+   Sheets export's "Projects" column. */
+async function grabAsanaEscalations(projectGid, token) {
+  const fields = 'name,created_at,completed_at,assignee.name,parent.name,projects.name';
+  const rows = [['Projects', 'Parent task', 'Name', 'Assignee', 'Created At', 'Completed At']];
+  let offset = '';
+  do {
+    const url = `https://app.asana.com/api/1.0/projects/${projectGid}/tasks` +
+                `?opt_fields=${fields}&limit=100` + (offset ? `&offset=${offset}` : '');
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!r.ok) return { ok: false, status: r.status };
+    const json = await r.json();
+    for (const t of json.data || []) {
+      rows.push([
+        (t.projects || []).map(p => p.name).join(', '),
+        (t.parent && t.parent.name) || '',
+        t.name || '',
+        (t.assignee && t.assignee.name) || '',
+        t.created_at || '',
+        t.completed_at || '',
+      ]);
+    }
+    offset = (json.next_page && json.next_page.offset) || '';
+  } while (offset);
+  return { ok: true, body: rows.map(r => r.map(csvEscape).join(',')).join('\n') };
+}
+
 /* One tab of a native Google Sheet, addressed by its title. */
 async function grabNamed(id, tab) {
   const url = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq` +
@@ -356,7 +392,9 @@ module.exports = async (req, res) => {
       }
       let hit;
       try {
-        hit = await grabAsanaProject(source.asanaProject, accessToken);
+        hit = source.asanaShape === 'escalations'
+          ? await grabAsanaEscalations(source.asanaProject, accessToken)
+          : await grabAsanaProject(source.asanaProject, accessToken);
       } catch (e) {
         return fail(`Could not reach Asana: ${e.message}`, 'Check the Asana API status.');
       }

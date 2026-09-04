@@ -1,7 +1,8 @@
-// Step 1 of the one-time Asana OAuth bootstrap for api/data.js's internal and
-// client sources. Visit this route once in a browser, approve the consent
-// screen, and Asana redirects to /api/asana-callback with a code that gets
-// exchanged for the refresh token this app runs on long-term.
+// Step 1 of the one-time Asana OAuth bootstrap for api/data.js's Asana-backed
+// sources (internal, client, escalations — anything with an `asanaProject`).
+// Visit this route once in a browser, approve the consent screen, and Asana
+// redirects to /api/asana-callback with a code that gets exchanged for the
+// refresh token this app runs on long-term.
 //
 // The Asana app's OAuth settings must list this deployment's own
 // /api/asana-callback URL as a registered redirect URI, or Asana will refuse
