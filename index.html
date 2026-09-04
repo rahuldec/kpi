@@ -419,6 +419,17 @@ html.modalopen{overflow:hidden}
 /* A figure attached to a name, not a column of its own. */
 .how .amt{color:var(--faint);font-variant-numeric:tabular-nums}
 .how .gaps .sep{color:var(--hair);padding:0 3px}
+/* Client-name-plus-amount lists (retention/implementation, never-scored,
+   not-heard-from) as individual chips rather than one run-on paragraph — see
+   moneyList(). Wraps like text but reads like a list: each name has its own
+   edge, so a long roster stays scannable instead of blurring into prose. */
+.how .moneygrid{display:flex;flex-wrap:wrap;gap:6px 7px;margin:7px 0 0}
+.how .mchip{display:inline-flex;align-items:baseline;gap:5px;
+  background:var(--page);border:1px solid var(--hair);border-radius:8px;
+  padding:4px 10px;font-size:12.5px;line-height:1.4}
+.modal .how .mchip{background:#FAF8F6}
+.how .mchip b{font-weight:600;color:var(--ink)}
+.how .mchip i{font-style:normal;color:var(--faint);font-variant-numeric:tabular-nums}
 
 /* A long list is capped and opens on request. Forty-eight client names is a
    reference table, not something anyone reads on the way past — and it buried
@@ -3282,9 +3293,22 @@ function howHtml(r){
    them is the arithmetic: which clients were never scored (the denominator the
    dial cannot show), and where the scorecard and the book disagree about who
    owns an account. Both change how the number should be read. */
-/* A client and what it bills, as one phrase. Not a label/value row: these run on
-   as a list, so the amount rides with the name rather than starting a column. */
-const clientMoney = c => `${esc(c.n)} <span class="amt">${esc(inr(c.r || 0))}</span>`;
+/* Same idea as longList below, but for client-name-plus-amount lists
+   specifically: "Name ₹amount · Name ₹amount · ..." reads as a run-on
+   sentence once there are more than a handful, with no visual break between
+   where one client's figure ends and the next name begins. Each pair gets its
+   own bordered chip instead, so a reader can find one name without parsing
+   the whole paragraph. Same cap/<details> skeleton as longList — the
+   delegated toggle listener near the bottom of the file works on either,
+   since it only ever looks for a `.cap` element immediately followed by its
+   own <details>, not at what is inside them. */
+function moneyList(clients, shown, label){
+  const chip = c => `<span class="mchip"><b>${esc(c.n)}</b><i>${esc(inr(c.r || 0))}</i></span>`;
+  const grid = list => `<div class="moneygrid">${list.map(chip).join('')}</div>`;
+  if (clients.length <= shown + 2) return grid(clients);
+  return `<div class="moneygrid cap">${clients.slice(0, shown).map(chip).join('')}</div>` +
+         `<details><summary>Show all ${clients.length} ${label}</summary>${grid(clients)}</details>`;
+}
 
 /* The number a section's sentence is about, said first and big. The sentence
    below still carries the rule and every caveat — this doesn't replace it, it
@@ -3340,8 +3364,7 @@ function adoptDetail(r){
     const rev = a.missing.reduce((n, c) => n + (c.r || 0), 0);
     h += `<h5 data-sec="scored">Never scored — ${a.missing.length} of ${a.total} clients, ` +
          `${esc(inr(rev))}</h5>` +
-         longList(a.missing.slice().sort((x, y) => (y.r || 0) - (x.r || 0))
-            .map(clientMoney), 6, 'clients') +
+         moneyList(a.missing.slice().sort((x, y) => (y.r || 0) - (x.r || 0)), 6, 'clients') +
          `<p class="gaps none">These are absent from the percentage above, not ` +
          `counted as zero — the dial describes the ${a.scored} that were scored.</p>`;
   }
@@ -3424,8 +3447,8 @@ function mixDetail(r){
      no equivalent "worst first" reading of who happens to be retention. */
   const mine = CLIENTS.filter(c => c.o === r.lead);
   const byName = (a, b2) => a.n.localeCompare(b2.n);
-  const retNames = mine.filter(c => c.k === 'retention').sort(byName).map(clientMoney);
-  const impNames = mine.filter(c => c.k === 'implementation').sort(byName).map(clientMoney);
+  const retNames = mine.filter(c => c.k === 'retention').sort(byName);
+  const impNames = mine.filter(c => c.k === 'implementation').sort(byName);
   return head +
     stats([
       [ret.clients, 'retention'],
@@ -3449,8 +3472,8 @@ function mixDetail(r){
         `rather than counted as either.`
       : '') +
     `</p>` +
-    (retNames.length ? `<p class="who2">Retention</p>` + longList(retNames, 6, 'clients') : '') +
-    (impNames.length ? `<p class="who2">Implementation</p>` + longList(impNames, 6, 'clients') : '');
+    (retNames.length ? `<p class="who2">Retention</p>` + moneyList(retNames, 6, 'clients') : '') +
+    (impNames.length ? `<p class="who2">Implementation</p>` + moneyList(impNames, 6, 'clients') : '');
 }
 
 /* The mix, as one row under the business dial — it describes the dial above it
@@ -3585,8 +3608,7 @@ function feedDetail(r){
 
   if (f.silent.length)
     h += `<p class="who2">Not heard from</p>` +
-         longList(f.silent.slice().sort((a, b) => (b.r || 0) - (a.r || 0)).map(clientMoney),
-                  6, 'clients');
+         moneyList(f.silent.slice().sort((a, b) => (b.r || 0) - (a.r || 0)), 6, 'clients');
 
   const asks = f.latest.filter(x => x.improve || x.gaps);
   if (asks.length)
