@@ -1,28 +1,34 @@
-// Fetches the tracker sheet as CSV, server-side.
+// Fetches the tracker data as CSV, server-side.
 //
-// Why this exists: the browser cannot reliably fetch docs.google.com directly —
-// that depends on Google returning CORS headers. This runs on Vercel's server,
-// where CORS does not apply, and hands the CSV back to the page from your own
-// domain. It also keeps the sheet URL out of the client.
+// Why this exists: the browser cannot reliably fetch docs.google.com or
+// app.asana.com directly — CORS, and for Asana also the Personal Access Token,
+// which must never reach the client. This runs on Vercel's server, where CORS
+// does not apply and the token stays put, and hands CSV back to the page from
+// your own domain.
 //
-// The sheet must be readable without a login:
+// Sheets-backed sources must be readable without a login:
 //   Share -> General access -> Anyone with the link -> Viewer
-//
-// Why it hunts for the tab: this spreadsheet has more than one tab. The first
-// one holds the Asana integration URL, not the export, so asking Google for the
-// default tab returns a CSV with no "Due Date" column. Tab ids (gids) are not
-// sequential and Asana's integration can recreate a tab with a new id, so any
-// hardcoded gid is a time bomb. Instead we identify the right tab by its
-// contents. Set SHEET_GID in Vercel -> Settings -> Environment Variables to skip
-// the search if you ever want to pin it.
 
-// Four sheets behind three shapes. Selected with ?src=; anything unrecognised
-// falls back to internal.
+// Several sources behind a handful of shapes. Selected with ?src=; anything
+// unrecognised falls back to internal.
 //
-// The two trackers are per-person daily timesheets. The escalations sheet is a
-// different animal: one row per client escalation, keyed by the client rather
-// than by a person. It shares the export shape, so the same tab-hunt works, but
-// it is identified by a different column — see `signature` below.
+// The two trackers (internal, client) used to be per-person daily timesheets
+// synced from Asana into a Google Sheet and read back out as a publish-to-web
+// CSV — an extra hop with its own staleness (Google caches published output for
+// a few minutes) and its own failure mode (a revoked publication). As of Sep
+// 2026 they instead read the Asana project directly via the API — see the
+// `asanaProject` branch below — which is why they carry no `id`/`gid` here.
+//
+// The escalations sheet is still Sheets-sourced and a different animal besides:
+// one row per client escalation, keyed by the client rather than by a person,
+// in a spreadsheet with more than one tab — the first holds the Asana
+// integration URL, not the export, so asking Google for the default tab
+// returns a CSV with no "Due Date" column. Tab ids (gids) are not sequential
+// and Asana's integration can recreate a tab with a new id, so any hardcoded
+// gid is a time bomb; instead the right tab is identified by its contents
+// (it shares the tracker's export shape, but is told apart by a different
+// column — see `signature` below). Set ESC_SHEET_GID in Vercel -> Settings ->
+// Environment Variables to skip the search if you ever want to pin it.
 //
 // The book is different again. "CS Team Plan" is an uploaded .xlsx, and Drive
 // only exports Docs-editor files, so /export?format=csv has nothing to serve for
@@ -38,10 +44,19 @@
 // BOOK_CSV_URL in Vercel -> Settings -> Environment Variables to repoint it
 // without a code change.
 const SOURCES = {
-  internal:    { id: process.env.SHEET_ID        || '1tzsf5iWijfIT8AfXTJZUbrGzH5OkNb-6xMO3EZ59cdo',
-                 gid: process.env.SHEET_GID        || '' },
-  client:      { id: process.env.CLIENT_SHEET_ID || '1oUHAjf6zAiHdLd11jvqerbXC0adx5XDsqlfLoRNOSCY',
-                 gid: process.env.CLIENT_SHEET_GID || '' },
+  /* Asana projects, read directly — one row per task, no Sheets in between.
+     Auth is a registered OAuth app (Client ID + Secret), not a Personal
+     Access Token, so there is a one-time bootstrap: visit /api/asana-authorize,
+     approve the consent screen, and /api/asana-callback prints a refresh token
+     to save as ASANA_REFRESH_TOKEN. After that this needs no further attention
+     — access tokens are silently renewed from the refresh token on every
+     request (see getAsanaAccessToken below). Requires ASANA_CLIENT_ID,
+     ASANA_CLIENT_SECRET and ASANA_REFRESH_TOKEN, plus the numeric project id
+     from the project's own URL (.../project/<this number>/...). */
+  internal:    { asanaProject: process.env.ASANA_INTERNAL_PROJECT_GID || '1214776273281376',
+                 envVar: 'ASANA_INTERNAL_PROJECT_GID' },
+  client:      { asanaProject: process.env.ASANA_CLIENT_PROJECT_GID || '1214674246739192',
+                 envVar: 'ASANA_CLIENT_PROJECT_GID' },
   escalations: { id: process.env.ESC_SHEET_ID    || '1Y1S-jDHFyUe3IJw-B3X8CgM9JFnRwl_L7fkNtzgVEAw',
                  gid: process.env.ESC_SHEET_GID   || '',
                  // This export has no Due Date on most rows, so the tracker test
@@ -141,6 +156,70 @@ const SOURCES = {
 };
 
 const trackerSignature = csv => /due date/i.test(csv) && /assignee/i.test(csv);
+
+/* Quote a CSV field only when it needs it — a bare comma, quote, or newline in
+   an Asana task name or assignee display name. */
+const csvEscape = v => {
+  const s = String(v ?? '');
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+};
+
+/* An OAuth app's access tokens expire in about an hour, so this exchanges the
+   long-lived refresh token (minted once via /api/asana-authorize +
+   /api/asana-callback, see SOURCES above) for a fresh one on demand. Kept in
+   module-scope memory because a warm Vercel instance serves several requests
+   before recycling — most calls hit this cache instead of Asana. Nothing is
+   lost on a cold start: it just refreshes again, same as the first call ever. */
+let cachedAsanaToken = null;
+
+async function getAsanaAccessToken() {
+  if (cachedAsanaToken && cachedAsanaToken.expiresAt > Date.now() + 60000)
+    return cachedAsanaToken.token;
+
+  const body = new URLSearchParams({
+    grant_type: 'refresh_token',
+    client_id: process.env.ASANA_CLIENT_ID || '',
+    client_secret: process.env.ASANA_CLIENT_SECRET || '',
+    refresh_token: process.env.ASANA_REFRESH_TOKEN || '',
+  });
+  const r = await fetch('https://app.asana.com/-/oauth_token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body.toString(),
+  });
+  const json = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const err = new Error(json.error_description || json.error || `HTTP ${r.status}`);
+    err.status = r.status;
+    throw err;
+  }
+  cachedAsanaToken = { token: json.access_token, expiresAt: Date.now() + (json.expires_in || 3600) * 1000 };
+  return cachedAsanaToken.token;
+}
+
+/* Every task in an Asana project, paginated. opt_fields keeps each page small —
+   this only ever needs the three tracker columns. due_on (not due_at) matches
+   what the old Sheets export carried: a date, not a time. Subtasks are not
+   included unless someone has explicitly added them to the project too, which
+   is the same scope the Sheets export had. */
+async function grabAsanaProject(projectGid, token) {
+  const fields = 'name,due_on,assignee.name,assignee.email';
+  const rows = [['Due Date', 'Assignee', 'Assignee Email']];
+  let offset = '';
+  do {
+    const url = `https://app.asana.com/api/1.0/projects/${projectGid}/tasks` +
+                `?opt_fields=${fields}&limit=100` + (offset ? `&offset=${offset}` : '');
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!r.ok) return { ok: false, status: r.status };
+    const json = await r.json();
+    for (const t of json.data || []) {
+      rows.push([t.due_on || '', (t.assignee && t.assignee.name) || '',
+                 (t.assignee && t.assignee.email) || '']);
+    }
+    offset = (json.next_page && json.next_page.offset) || '';
+  } while (offset);
+  return { ok: true, body: rows.map(r => r.map(csvEscape).join(',')).join('\n') };
+}
 
 /* One tab of a native Google Sheet, addressed by its title. */
 async function grabNamed(id, tab) {
@@ -243,6 +322,56 @@ module.exports = async (req, res) => {
       const body = await r.text();
       if (!looksLikeTheExport(body)) return fail('Unexpected response.', source.mismatch);
       return send({ body, gid: null });
+    }
+
+    /* 0c. An Asana project, read directly via the API — no Sheets, no tab hunt.
+       Auth is the OAuth app: exchange the standing refresh token for a fresh
+       access token, then fetch. Each missing env var is reported by name
+       rather than as a generic upstream failure, since all three are one-time
+       setup a deploy can be missing. */
+    if (source.asanaProject !== undefined) {
+      const missingEnv = ['ASANA_CLIENT_ID', 'ASANA_CLIENT_SECRET', 'ASANA_REFRESH_TOKEN']
+        .filter(v => !process.env[v]);
+      if (missingEnv.length)
+        return fail(`${missingEnv.join(', ')} not set on this deployment.`,
+                    'Visit /api/asana-authorize once to run the OAuth consent flow, then ' +
+                    'set the printed ASANA_REFRESH_TOKEN (and ASANA_CLIENT_ID / ' +
+                    'ASANA_CLIENT_SECRET from the Asana app\'s Basic information page) in ' +
+                    'Vercel -> Settings -> Environment Variables.');
+      if (!source.asanaProject)
+        return fail(`${source.envVar} is not set on this deployment.`,
+                    'Open the Asana project and copy the number after "/project/" in its ' +
+                    `URL, then set it as ${source.envVar} in Vercel -> Settings -> ` +
+                    'Environment Variables.');
+      attempted.push(`asana project ${source.asanaProject}`);
+      let accessToken;
+      try {
+        accessToken = await getAsanaAccessToken();
+      } catch (e) {
+        return fail(`Could not refresh the Asana access token: ${e.message}`,
+                    e.status === 400 || e.status === 401
+                      ? 'ASANA_REFRESH_TOKEN has likely been revoked — redo the consent flow ' +
+                        'at /api/asana-authorize and update it in Vercel.'
+                      : 'Check the Asana API status.');
+      }
+      let hit;
+      try {
+        hit = await grabAsanaProject(source.asanaProject, accessToken);
+      } catch (e) {
+        return fail(`Could not reach Asana: ${e.message}`, 'Check the Asana API status.');
+      }
+      if (hit.status === 401)
+        return fail('Asana rejected the access token.',
+                    'This should be self-healing on the next request; if it persists, ' +
+                    'ASANA_REFRESH_TOKEN has likely been revoked — redo the consent flow ' +
+                    'at /api/asana-authorize.');
+      if (hit.status === 404)
+        return fail(`Asana found no project ${source.asanaProject}.`,
+                    `Check ${source.envVar} against the number in the project's own URL, and ` +
+                    'that the token\'s owner has access to it.');
+      if (!hit.ok)
+        return fail(`Asana answered ${hit.status}.`, 'Nothing to read.');
+      return send({ body: hit.body, gid: 'asana' });
     }
 
     if (source.byName) {
