@@ -12,16 +12,18 @@
 // Several sources behind a handful of shapes. Selected with ?src=; anything
 // unrecognised falls back to internal.
 //
-// Three of these — the two trackers (internal, client) and escalations — used
-// to be synced from Asana into a Google Sheet and read back out as a
-// publish-to-web CSV — an extra hop with its own staleness (Google caches
-// published output for a few minutes) and its own failure mode (a revoked
-// publication). As of Sep 2026 they instead read their Asana project directly
-// via the API — see the `asanaProject` branch below — which is why they carry
-// no `id`/`gid` here. The trackers and escalations answer different questions
-// (a row per person-day vs. a row per client escalation) so they come back in
-// different shapes; `asanaShape` on the source picks which of
-// grabAsanaProject/grabAsanaEscalations builds the CSV.
+// Four of these — the two trackers (internal, client), escalations, and
+// implementation — used to be synced from Asana into a Google Sheet and read
+// back out as a publish-to-web CSV — an extra hop with its own staleness
+// (Google caches published output for a few minutes) and its own failure mode
+// (a revoked publication). As of Sep 2026 they instead read their Asana
+// project or portfolio directly via the API — see the `asanaProject`/
+// `asanaPortfolio` branch below — which is why they carry no `id`/`gid` here.
+// The four answer different questions (a row per person-day, a row per client
+// escalation, a row per implementation project) so they come back in
+// different shapes; `asanaShape` (trackers vs. escalations) and `asanaProject`
+// vs. `asanaPortfolio` together pick which of grabAsanaProject/
+// grabAsanaEscalations/grabAsanaImplementationPortfolio builds the CSV.
 //
 // The book is different again. "CS Team Plan" is an uploaded .xlsx, and Drive
 // only exports Docs-editor files, so /export?format=csv has nothing to serve for
@@ -134,23 +136,22 @@ const SOURCES = {
                  mismatch: 'It has no "RM" column as the first header — the link probably ' +
                            'points at the wrong tab. Re-publish with the Team tab selected ' +
                            'and update TEAM_CSV_URL.' },
-  /* An Asana portfolio report ("Client Implementation"), exported the same way
-     the Asana project itself would be — File -> Export -> CSV, or in this case a
-     live "Open Report in Google Sheets" published to the web, so it stays
-     current without anyone re-exporting by hand. One row per implementation
-     project, not per client: the join to the client book happens entirely in
-     index.html, the same way escalations do, because the two are typed into
-     different systems by different people and can't be trusted to agree on a
-     name. */
-  implementation: { url: process.env.IMPLEMENTATION_CSV_URL ||
-                   'https://docs.google.com/spreadsheets/d/e/2PACX-1vTa-IsaEuSdjzhsy_Vclm-4bTWeDmtz7pAbleMxaQJo32zMBSz1-eUl8aZ6dZX1SpeD_4h-3ClLsQAr' +
-                   '/pub?gid=523747668&single=true&output=csv',
-                 signature: csv => /owner/i.test(csv) && /overdue/i.test(csv) && /due date/i.test(csv),
-                 envVar: 'IMPLEMENTATION_CSV_URL',
-                 mismatch: 'It has no "Owner", "Overdue" and "Due Date" columns — the link ' +
-                           'probably points at the wrong tab, or the Asana portfolio export ' +
-                           'changed shape. Re-export the "Client Implementation" portfolio to ' +
-                           'Google Sheets and update IMPLEMENTATION_CSV_URL.' }
+  /* The "Client Implementation" Asana portfolio, now read directly too — but
+     unlike the sources above, a portfolio's projects carry no All Tasks/
+     Complete/Incomplete/Overdue counts of their own via the API; those are
+     Asana's Portfolio Progress view computing over each project's tasks,
+     which is exactly what the old Sheets export captured. Replicating it
+     means listing the portfolio's projects and then, for each one, pulling
+     its own task list to total up — see grabAsanaImplementationPortfolio.
+     That fan-out (one request per project, not one for the whole portfolio)
+     is why this result is cached in memory for a few minutes rather than
+     recomputed on every dashboard load the way the other Asana sources are:
+     a 20+ project portfolio redone from scratch on every page view would be
+     slow, and the old published-Sheet source was never second-fresh either —
+     Google re-renders published output on its own few-minute schedule. */
+  implementation: { asanaPortfolio: process.env.ASANA_IMPLEMENTATION_PORTFOLIO_GID ||
+                       '1210134872553129',
+                 envVar: 'ASANA_IMPLEMENTATION_PORTFOLIO_GID' }
 };
 
 const trackerSignature = csv => /due date/i.test(csv) && /assignee/i.test(csv);
@@ -257,6 +258,82 @@ async function grabAsanaEscalations(projectGid, token) {
   return { ok: true, body: rows.map(r => r.map(csvEscape).join(',')).join('\n') };
 }
 
+/* One project's task totals — all/complete/incomplete/overdue. Asana's API has
+   no field for these; they are what the Portfolio Progress view computes by
+   looking at every task, so that is what this does too. "Overdue" mirrors
+   that view's own definition: incomplete and past its due date, compared
+   against today in UTC — close enough to the workspace's own timezone that a
+   task due today is never wrongly counted overdue a day early. */
+async function countProjectTasks(projectGid, token, todayISO) {
+  let all = 0, complete = 0, overdue = 0;
+  let offset = '';
+  do {
+    const url = `https://app.asana.com/api/1.0/projects/${projectGid}/tasks` +
+                `?opt_fields=completed,due_on&limit=100` + (offset ? `&offset=${offset}` : '');
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!r.ok) {
+      const err = new Error(`project ${projectGid} tasks: HTTP ${r.status}`);
+      err.status = r.status;
+      throw err;
+    }
+    const json = await r.json();
+    for (const t of json.data || []) {
+      all++;
+      if (t.completed) complete++;
+      else if (t.due_on && t.due_on < todayISO) overdue++;
+    }
+    offset = (json.next_page && json.next_page.offset) || '';
+  } while (offset);
+  return { all, complete, incomplete: all - complete, overdue };
+}
+
+/* The Client Implementation portfolio: list its projects, then fan out one
+   request per project to total up its tasks. Cached in memory for a few
+   minutes (see SOURCES.implementation above for why) rather than refetched
+   on every request the way the single-request Asana sources are.
+
+   A project whose own task list can't be fetched (archived, no access) is
+   skipped rather than failing the whole portfolio — implementation tracking
+   is an enrichment on this dashboard, not a foundation, the same reasoning
+   index.html already applies by treating a failed fetch here as "nothing
+   extra to show" rather than taking the page down. */
+let cachedImplementation = null;
+const IMPLEMENTATION_CACHE_MS = 3 * 60 * 1000;
+
+async function grabAsanaImplementationPortfolio(portfolioGid, token) {
+  if (cachedImplementation && cachedImplementation.expiresAt > Date.now())
+    return { ok: true, body: cachedImplementation.body };
+
+  const todayISO = new Date().toISOString().slice(0, 10);
+  const items = [];
+  let offset = '';
+  do {
+    const url = `https://app.asana.com/api/1.0/portfolios/${portfolioGid}/items` +
+                `?opt_fields=name,owner.name,due_on,resource_type&limit=100` +
+                (offset ? `&offset=${offset}` : '');
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!r.ok) return { ok: false, status: r.status };
+    const json = await r.json();
+    for (const it of json.data || []) if (it.resource_type === 'project') items.push(it);
+    offset = (json.next_page && json.next_page.offset) || '';
+  } while (offset);
+
+  const counted = await Promise.all(items.map(async p => {
+    try { return { p, counts: await countProjectTasks(p.gid, token, todayISO) }; }
+    catch (e) { return { p, counts: null }; }
+  }));
+
+  const rows = [['Name', 'Owner', 'Due Date', 'All Tasks', 'Complete', 'Incomplete', 'Overdue']];
+  for (const { p, counts } of counted) {
+    if (!counts) continue;
+    rows.push([p.name || '', (p.owner && p.owner.name) || '', p.due_on || '',
+               counts.all, counts.complete, counts.incomplete, counts.overdue]);
+  }
+  const body = rows.map(r => r.map(csvEscape).join(',')).join('\n');
+  cachedImplementation = { body, expiresAt: Date.now() + IMPLEMENTATION_CACHE_MS };
+  return { ok: true, body };
+}
+
 /* One tab of a native Google Sheet, addressed by its title. */
 async function grabNamed(id, tab) {
   const url = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq` +
@@ -360,12 +437,16 @@ module.exports = async (req, res) => {
       return send({ body, gid: null });
     }
 
-    /* 0c. An Asana project, read directly via the API — no Sheets, no tab hunt.
-       Auth is the OAuth app: exchange the standing refresh token for a fresh
-       access token, then fetch. Each missing env var is reported by name
-       rather than as a generic upstream failure, since all three are one-time
-       setup a deploy can be missing. */
-    if (source.asanaProject !== undefined) {
+    /* 0c. An Asana project or portfolio, read directly via the API — no
+       Sheets, no tab hunt. Auth is the OAuth app: exchange the standing
+       refresh token for a fresh access token, then fetch. Each missing env
+       var is reported by name rather than as a generic upstream failure,
+       since all three are one-time setup a deploy can be missing. */
+    if (source.asanaProject !== undefined || source.asanaPortfolio !== undefined) {
+      const isPortfolio = source.asanaPortfolio !== undefined;
+      const target = isPortfolio ? source.asanaPortfolio : source.asanaProject;
+      const noun = isPortfolio ? 'portfolio' : 'project';
+
       const missingEnv = ['ASANA_CLIENT_ID', 'ASANA_CLIENT_SECRET', 'ASANA_REFRESH_TOKEN']
         .filter(v => !process.env[v]);
       if (missingEnv.length)
@@ -374,12 +455,12 @@ module.exports = async (req, res) => {
                     'set the printed ASANA_REFRESH_TOKEN (and ASANA_CLIENT_ID / ' +
                     'ASANA_CLIENT_SECRET from the Asana app\'s Basic information page) in ' +
                     'Vercel -> Settings -> Environment Variables.');
-      if (!source.asanaProject)
+      if (!target)
         return fail(`${source.envVar} is not set on this deployment.`,
-                    'Open the Asana project and copy the number after "/project/" in its ' +
+                    `Open the Asana ${noun} and copy the number after "/${noun}/" in its ` +
                     `URL, then set it as ${source.envVar} in Vercel -> Settings -> ` +
                     'Environment Variables.');
-      attempted.push(`asana project ${source.asanaProject}`);
+      attempted.push(`asana ${noun} ${target}`);
       let accessToken;
       try {
         accessToken = await getAsanaAccessToken();
@@ -392,9 +473,9 @@ module.exports = async (req, res) => {
       }
       let hit;
       try {
-        hit = source.asanaShape === 'escalations'
-          ? await grabAsanaEscalations(source.asanaProject, accessToken)
-          : await grabAsanaProject(source.asanaProject, accessToken);
+        hit = isPortfolio ? await grabAsanaImplementationPortfolio(target, accessToken)
+            : source.asanaShape === 'escalations' ? await grabAsanaEscalations(target, accessToken)
+            : await grabAsanaProject(target, accessToken);
       } catch (e) {
         return fail(`Could not reach Asana: ${e.message}`, 'Check the Asana API status.');
       }
@@ -404,8 +485,8 @@ module.exports = async (req, res) => {
                     'ASANA_REFRESH_TOKEN has likely been revoked — redo the consent flow ' +
                     'at /api/asana-authorize.');
       if (hit.status === 404)
-        return fail(`Asana found no project ${source.asanaProject}.`,
-                    `Check ${source.envVar} against the number in the project's own URL, and ` +
+        return fail(`Asana found no ${noun} ${target}.`,
+                    `Check ${source.envVar} against the number in the ${noun}'s own URL, and ` +
                     'that the token\'s owner has access to it.');
       if (!hit.ok)
         return fail(`Asana answered ${hit.status}.`, 'Nothing to read.');
