@@ -86,6 +86,7 @@ body{
   font-size:13px;color:var(--faint);overflow:hidden;text-overflow:ellipsis;
   white-space:nowrap;max-width:min(240px,40vw);
 }
+.wrap > .auth .visitors{font-size:13px;color:var(--faint);flex-shrink:0}
 .wrap > .auth button{
   font:inherit;font-size:13px;color:var(--body);background:var(--page);
   border:0;border-radius:8px;padding:6px 10px;cursor:pointer;flex-shrink:0;
@@ -940,6 +941,7 @@ table.board td.tot.zero{font-weight:400;color:var(--faint)}
 <div class="wrap">
   <div class="auth" id="authUser" hidden>
     <span class="who" id="authName"></span>
+    <span class="visitors" id="visitorCount" hidden></span>
     <button type="button" id="logoutBtn">Sign out</button>
   </div>
   <p class="viewscope" id="viewScope" hidden></p>
@@ -4897,6 +4899,25 @@ async function fetchArchive(tracker){
    while an entry is still inside its window. Archived rows only ever fill in
    dates the live fetch no longer reaches, keyed on person + due date so a
    month present in both never double-counts a day. */
+/* Records this login against the running unique-visitor count (see
+   api/visit.js) and shows it next to the sign-out button. Called once per
+   boot, not on every load() — a Refresh click is the same visit, not a new
+   one. Best-effort: no KV store configured yet is the expected state until
+   someone attaches one, so a failure here is swallowed rather than shown,
+   the same way a missing optional source elsewhere never takes the page
+   down over something that isn't core to the dashboard's own data. */
+async function recordVisit(email){
+  try {
+    const res = await fetch(`/api/visit?email=${encodeURIComponent(email)}`, {cache: 'no-store'});
+    if (!res.ok) return;
+    const {count} = await res.json();
+    if (!count) return;
+    const el = $('visitorCount');
+    el.textContent = `Seen by ${count} ${count === 1 ? 'person' : 'people'}`;
+    el.hidden = false;
+  } catch (e) { /* KV not set up yet, or unreachable — not worth surfacing */ }
+}
+
 function mergeArchive(live, archived){
   if (!archived.length) return live;
   const key = r => `${r.name.trim().toLowerCase()}|${r.due}`;
@@ -5024,7 +5045,10 @@ async function load(){
     if (booting){
       gate.hidden = true;
       shell.hidden = false;
-      if (VIEWER.name && !ZohoAuth.isTestMode()) $('authUser').hidden = false;
+      if (VIEWER.name && !ZohoAuth.isTestMode()){
+        $('authUser').hidden = false;
+        if (VIEWER.email) recordVisit(VIEWER.email);
+      }
       if (loginErr) loginErr.hidden = true;
       loading();
     }
