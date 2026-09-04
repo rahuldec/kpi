@@ -2713,7 +2713,38 @@ const ESC_ALIAS = {
      a prefix — one name running on from the other — so neither side reaches the
      other and the escalation counted towards nobody. Same client, same owner
      (Mansi Rana): this is a spelling difference, not a guess. */
-  'Dhanna Bhagat Public School': 'Dhanna Bhagat School'
+  'Dhanna Bhagat Public School': 'Dhanna Bhagat School',
+
+  /* No client project of its own — Projects held only "Client Escalations", so
+     the Name came through instead, and the Name here is the task's own title,
+     not a client name. Same owner as the book row (Ankush Rana) is the
+     evidence, not resemblance to the title text alone. */
+  'Aggarwal college - not satisfied': 'Aggarwal College Faridabad',
+
+  /* Same shape as Milestone in IMPL_ALIAS: this escalation also carries no
+     client project, so its title ("Milestone Kaithal") is what comes through,
+     one word short of the book's "Milestone School Kaithal". A second,
+     separately-tagged escalation for the same client already resolves fine on
+     its own — this is the one that never got the project tag. */
+  'Milestone Kaithal': 'Milestone School Kaithal',
+
+  /* Project is "AIMT" alone, task titled "AIMT Ambala - Website Issues" —
+     matches the book's "SA Jain (PG) College + AIMT" (see the comment below on
+     why that combined name resolves other spellings but not this one: "AIMT"
+     sits at the end of the book name, and the rule below only bridges a
+     prefix, not a suffix). */
+  'AIMT': 'SA Jain (PG) College + AIMT',
+
+  /* Project name and the task's own title disagree here — Projects say "Shah
+     Satnam Girls' School", but the task itself is titled "Shah Satnam Sirsa".
+     The title is taken as the stronger signal: it is what whoever raised the
+     escalation actually called the client, not a project tag someone else set
+     up once. */
+  "Shah Satnam Girls' School": 'Shah Satnam Sirsa',
+
+  /* Confirmed by the account owner: the Kotra campus is part of the
+     "Non Sirsa" side of the book, not its own client. */
+  'Shah Satnam Kotra': 'Shah Satnam Non Sirsa'
   // "GNAV Kurukshetra" and "Manish Papneja" need no entry: the client sheet was
   // renamed to match the escalation project in each case. "SA Jain (PG) College"
   // needs none either — the book now reads "SA Jain (PG) College + AIMT", which
@@ -2844,8 +2875,13 @@ const IMPL_ALIAS = {
 
   /* Plain spelling and abbreviation differences — same institution, evidenced
      by the name itself, not by resemblance to something nearby. */
-  'Puran Murti Group':               'Pooranmurti',
-  'Milestone School Kaithal':        'Milestone Kaithal',
+  /* 'Puran Murti Group' and 'Milestone School Kaithal' used to need an entry
+     here — removed 4 Sep 2026. The book renamed both to match Asana's own
+     spelling exactly (the book now reads "Puran Murti" and "Milestone School
+     Kaithal"), so the prefix rule below and a plain exact match now do this
+     for free. Keeping the old entries would have been actively wrong: the
+     Milestone one specifically was intercepting what is now a perfect direct
+     match and redirecting it to a book name that no longer exists. */
   "Lingaya's Vidyapeeth University": "Linagaya's Vidyapeeth",
   'MAIMT Yamunanagar':               'MAIMT Ynr',
   'MRRA Sen. Sec. School, Kharindwa':'MRRA Kharindwa',
@@ -2854,6 +2890,20 @@ const IMPL_ALIAS = {
   'NPS Kalayat':                     'Nirmal Public Kalayat',
   'Satluj School Shahbad':           'Satluj Shahbad',
   'BM Group Gurugram':               'BM Group of Institutions',
+
+  /* Confirmed by the account owner to be the same institution as "PURAN MURTI
+     COLLEGE OF PHARMACY", which already matches "Puran Murti" on its own —
+     this is a second, differently-named Asana project apparently tracking the
+     same work (same task counts on both, down to the number). Aliasing it
+     here means its 19 tasks are now counted twice against Puran Murti's
+     total until whichever of the two duplicate Asana projects is archived;
+     that double-count is accepted deliberately rather than left permanently
+     unmatched. */
+  'P M COLLEGE OF PHARMACY': 'Puran Murti',
+
+  /* Confirmed by the account owner: this campus is part of Shah Satnam Sirsa,
+     not Non Sirsa. */
+  'Shah Satnam Boys School': 'Shah Satnam Sirsa',
 
   /* The "Hindu" group: fourteen Asana projects, two book rows ("Hindu College",
      "Hindu School"), and three different Asana owners across them — there is no
@@ -2867,11 +2917,18 @@ const IMPL_ALIAS = {
   'Hindu Senior Secondary School':       'Hindu School',
   'Hindu Malviya school':                'Hindu School',
   'Hindu Kanya Vidyalaya':               'Hindu School',    // Vidyalaya
-  // 'SM Hindu', 'Hindu Vidyapeeth, Sonipat' and 'Hindu Global, Sonipat' carry
-  // no College/School word either way — left unmatched and named on the page
-  // rather than assigned a coin flip. 'Rhuchi School' sits beside these in the
-  // portfolio (same Asana owner) but its name has no "Hindu" in it at all and
-  // is not aliased here on that basis alone.
+
+  /* 'SM Hindu', 'Hindu Vidyapeeth, Sonipat' and 'Hindu Global, Sonipat' carried
+     no College/School word either way, so this used to leave them unmatched
+     rather than assign a coin flip — 'Rhuchi School' sat beside them in the
+     portfolio (same Asana owner) but had no "Hindu" in its name at all and
+     wasn't touched on that basis alone. Confirmed 4 Sep 2026 by the account
+     owner: all four are part of the Hindu School side of the group, not the
+     College side — real evidence now, not a guess. */
+  'SM Hindu':                'Hindu School',
+  'Hindu Vidyapeeth, Sonipat': 'Hindu School',
+  'Hindu Global, Sonipat':    'Hindu School',
+  'Rhuchi School':            'Hindu School',
 };
 const iNorm = eNorm;   // same normaliser escalations already uses
 
