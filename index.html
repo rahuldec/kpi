@@ -479,6 +479,7 @@ html.modalopen{overflow:hidden}
    they are context for the row, not a value to compare across rows. */
 .pod{display:block;font-size:12.5px;color:var(--faint);margin-top:3px;line-height:1.45}
 .targetnote{font-size:14px;line-height:1.5;color:var(--body);margin:0 0 10px;max-width:60em}
+.targetnote:empty{display:none}
 #scalewrap{display:inline-flex;align-items:center;gap:7px;font-size:13px;
   color:var(--faint);margin:0 0 18px}
 .hit{color:var(--ink);font-weight:600}
@@ -1122,6 +1123,7 @@ tr.scoredetail .tk{flex:0 0 96px;color:var(--faint);font-weight:500}
       <p class="escnote" id="escnote" hidden></p>
       <div class="clientfilter">
         <label>Owner <select id="cowner"></select></label>
+        <label>RM <select id="crm"></select></label>
         <label>Type <select id="ctype"></select></label>
         <span class="ctot" id="ctot"></span>
       </div>
@@ -4282,7 +4284,7 @@ function renderMeter(){
 }
 
 /* ---------------- client book ---------------- */
-let CFILTER = {owner: '', type: ''};
+let CFILTER = {owner: '', type: '', rm: ''};
 
 /* Sorting the client list. Same shape as the scorecard's, and the same rule about
    blanks: a client with no billing figure is not a client billing zero, so it
@@ -4363,25 +4365,16 @@ function renderByRm(){
          `<td class="num">—</td><td class="num">—</td><td class="num">—</td></tr>`;
   $('byrm').innerHTML = t + '</tbody>';
 
-  /* Say plainly which of the two questions the numbers are answering — a target
-     column with no stated basis is the kind that gets quoted out of context. */
-  const heads = rows.reduce((n,r) => n + r.heads, 0);
-  const owed  = rows.reduce((n,r) => n + targetFor(r.heads), 0);
+  /* The methodology sentence that used to live here (what a team owes and why,
+     scaled or flat) was removed 4 Sep 2026 at the account owner's request. The
+     no-client-book warning survives on its own — unlike the methodology text,
+     it flags something that could otherwise read as an unexplained shortfall. */
   const off = NO_BOOK_TEAMS.filter(n => POD_TEAM.has(n));
-  const offNote = off.length
-    ? ` ${esc(off.join(', '))}${off.length === 1 ? "'s team carries" : ' teams carry'} no client ` +
+  $('targetnote').innerHTML = off.length
+    ? `${esc(off.join(', '))}${off.length === 1 ? "'s team carries" : ' teams carry'} no client ` +
       `book and ${off.length === 1 ? 'is' : 'are'} not listed — a ₹0 against the target would ` +
       `read as a shortfall rather than as nothing to measure.`
     : '';
-  $('targetnote').innerHTML = (TARGET_SCALED
-    ? `A full team is one RM and two assistants carrying <b>${esc(inr(TARGET_FULL_TEAM))}</b>, ` +
-      `so each team is measured against <b>${esc(inr(TARGET_FULL_TEAM / TARGET_TEAM_SIZE))} ` +
-      `per person</b> — ${rows.length} teams, ${heads} people, ${esc(inr(Math.round(owed)))} owed ` +
-      `against ${esc(inr(total))} on the book.`
-    : `Every team is measured against the same <b>${esc(inr(TARGET_FULL_TEAM))}</b>, whatever ` +
-      `its size — ${rows.length} teams, ${esc(inr(Math.round(owed)))} owed against ` +
-      `${esc(inr(total))} on the book. Understaffed teams are held to a full team's number.`) +
-    offNote;
 
   /* The unplaced-people notice used to sit here. It is still reported, once, in
      the KPI meter's hint line where the team totals it affects actually live —
@@ -4394,6 +4387,7 @@ function renderByRm(){
 function renderClientList(){
   const shown = sortClients(scopedClients().filter(c =>
     (!CFILTER.owner || c.o === CFILTER.owner) &&
+    (!CFILTER.rm    || c.h === CFILTER.rm) &&
     (!CFILTER.type  || c.t === CFILTER.type)));
   const sum = shown.reduce((n,c) => n + (c.r||0), 0);
   $('ctot').textContent = `${shown.length} client${shown.length===1?'':'s'} · ${inr(sum)}`;
@@ -4438,6 +4432,7 @@ function fillClientFilters(){
       vals.map(v => `<option>${esc(v)}</option>`).join('');
   };
   opts($('cowner'), [...new Set(scopedClients().map(c => c.o).filter(Boolean))].sort(), 'owners');
+  opts($('crm'),    [...new Set(scopedClients().map(c => c.h).filter(Boolean))].sort(), 'RMs');
   opts($('ctype'),  [...new Set(scopedClients().map(c => c.t).filter(Boolean))].sort(), 'types');
 }
 
@@ -5412,6 +5407,7 @@ $('clientlist').addEventListener('click', e => {
   renderClientList();
 });
 $('cowner').addEventListener('change', e => { CFILTER.owner = e.target.value; renderClientList(); });
+$('crm').addEventListener('change',    e => { CFILTER.rm    = e.target.value; renderClientList(); });
 $('ctype').addEventListener('change',  e => { CFILTER.type  = e.target.value; renderClientList(); });
 /* The dialog. Each card still builds its own panel markup and keeps it hidden —
    that is the single source of the content, and it means the arithmetic shown
