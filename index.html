@@ -4576,8 +4576,20 @@ function showState(html, isError){
 }
 function showContent(){ $('state').hidden = true; $('content').hidden = false; }
 
+/* load() fetches nine things in sequence after the trackers land (see the
+   numbered ticks below) — book, team, adoption, visits, feedback, escalations,
+   implementation, plus the trackers and archives themselves. Counting them
+   gives the spinner a real percentage instead of sitting still for however
+   long the slowest leg (usually Asana) takes. */
+let LOAD_DONE = 0;
+const LOAD_TOTAL = 9;
+function tick(){
+  LOAD_DONE++;
+  loading();
+}
 function loading(){
-  showState('<div class="loading"><i></i><span>Reading the tracker sheet…</span></div>', false);
+  const pct = Math.min(100, Math.round((LOAD_DONE / LOAD_TOTAL) * 100));
+  showState(`<div class="loading"><i></i><span>Reading the tracker sheet… ${pct}%</span></div>`, false);
 }
 function failed(msg, hint){
   showState(
@@ -4892,6 +4904,7 @@ function mergeArchive(live, archived){
 }
 
 async function load(){
+  LOAD_DONE = 0;
   const gate = $('loginGate');
   const shell = $('appShell');
   const loginErr = $('loginErr');
@@ -4932,6 +4945,7 @@ async function load(){
     const archivePending = Promise.all([fetchArchive('internal'), fetchArchive('client')])
       .catch(() => [[], []]);
     const [internal, client] = await trackers;
+    tick();
     /* If both sources come back byte-identical, the function is ignoring ?src=
        and serving one sheet for both. That silently makes every person with no
        entries in the served sheet read as 0% on the other tab — a wrong answer
@@ -4952,6 +4966,7 @@ async function load(){
        it describes the live sheet's own state, which the archive does not
        change, and is still worth knowing even once the gap is covered. */
     const [archInternal, archClient] = await archivePending;
+    tick();
     const internalAll = mergeArchive(internal, archInternal);
     const clientAll = mergeArchive(client, archClient);
     for (const [src, merged] of [['internal', internalAll], ['client', clientAll]]){
@@ -4985,6 +5000,7 @@ async function load(){
       TEAM_LIVE = false;
       TEAM_ERROR = (e && e.message) || String(e);
     }
+    tick();
     buildRoster();
     buildPods();
     /* The login gate itself now depends on the Team tab (EMAIL_OF, built just
@@ -5037,6 +5053,7 @@ async function load(){
       BOOK_LIVE = false;
       BOOK_ERROR = (e && e.message) || String(e);
     }
+    tick();
 
     /* Adoption joins against client names, so like escalations it waits for the
        book. It fails soft to the compiled snapshot rather than emptying the
@@ -5069,6 +5086,7 @@ async function load(){
       ADOPT_LIVE = false;
       ADOPT_ERROR = (e && e.message) || String(e);
     }
+    tick();
     buildAdoption();
 
     /* Independent of the book and every tracker — the only thing it needs is
@@ -5088,6 +5106,7 @@ async function load(){
       VISITS_LIVE = false;
       VISITS_ERROR = (e && e.message) || String(e);
     }
+    tick();
     buildVisits();
 
     /* Feedback joins on client names typed by the respondent, so like escalations
@@ -5108,6 +5127,7 @@ async function load(){
       FEED_LIVE = false;
       FEED_ERROR = (e && e.message) || String(e);
     }
+    tick();
     buildFeedback();
 
     /* Escalations are an enrichment, not a foundation. If that sheet is not
@@ -5121,6 +5141,7 @@ async function load(){
       ESCALATIONS = [];
       ESC_ERROR = (e && e.message) || String(e);
     }
+    tick();
     buildEscalations();
 
     /* Implementation projects join on client names the same way escalations do,
@@ -5134,6 +5155,7 @@ async function load(){
       IMPLEMENTATION = [];
       IMPL_ERROR = (e && e.message) || String(e);
     }
+    tick();
     buildImplementation();
 
     /* Only now is COVER populated, so only now can the picker know which months
