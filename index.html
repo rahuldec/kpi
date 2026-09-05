@@ -3178,8 +3178,12 @@ function scoreRows(){
   const days = months.flatMap(monthDays).sort();
   const joined = $('joined').checked;
   const today = iso(new Date());
-  // Do not score days that have not happened yet.
-  const live = days.filter(d => d <= today);
+  /* Do not score days that have not happened yet — and today itself has not
+     finished happening. The team files in the evening once the day's calls
+     are done, so counting today as missed hours before anyone could
+     reasonably have filed it would flag someone for a day still in progress.
+     It becomes scoreable exactly once, on its first day as a real "yesterday". */
+  const live = days.filter(d => d < today);
 
   const filedBy = {};
   for (const t of TRACKERS){
