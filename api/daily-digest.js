@@ -32,13 +32,13 @@ const LEAVE_RAW = {"Amar Kumar Pandit":["2026-07-08","2026-07-24","2026-07-25"],
 
 // Kept in sync with index.html's own HIDDEN — people not part of the CS team
 // being measured at all.
-const HIDDEN = ['rahul sharma', 'aman sharma'];
+const HIDDEN = ['rahul sharma', 'aman sharma', 'amar kumar pandit'];
 
 // Kept in sync with index.html's own EXEMPT — on the team, but not expected
 // to file to a given tracker.
 const EXEMPT = {
   internal: ['bhavey saluja'],
-  client:   ['sagar mishra', 'sumaiya khan', 'bhavey saluja'],
+  client:   ['sagar mishra', 'sumaiya khan', 'bhavey saluja', 'mehak garg'],
 };
 
 // Kept in sync with index.html's own MANUAL_ROSTER — on the roster despite
@@ -164,7 +164,7 @@ function renderHtml(day, missed) {
     : `<p>Everyone filed both trackers for <b>${pretty}</b>. Nothing missed.</p>`;
   return `<div style="font-family:sans-serif;color:#1D1D1F">${body}` +
     `<p style="margin-top:20px;font-size:12px;color:#86868B">` +
-    `Automated daily digest from the CS Team KPI dashboard. ` +
+    `Automated E-mail from KPI Dashboard. TED ` +
     `<a href="https://cskpi.odpay.in">View live</a>.</p></div>`;
 }
 
