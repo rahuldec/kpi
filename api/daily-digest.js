@@ -198,6 +198,10 @@ function computeMissed(byTracker, day) {
 function renderHtml(day, missed) {
   const pretty = new Date(day + 'T00:00:00').toLocaleDateString('en-GB',
     { weekday: 'long', day: 'numeric', month: 'long' });
+  // Short form for the column header, so each row reads standalone without
+  // scrolling back up to the opening sentence to know which day this is.
+  const shortDate = new Date(day + 'T00:00:00').toLocaleDateString('en-GB',
+    { day: 'numeric', month: 'short' });
   const rows = missed.map(m => {
     /* Only worth calling out once it is a pattern, not a single slip — today's
        own miss already accounts for one of the count, so 2+ means at least
@@ -216,7 +220,7 @@ function renderHtml(day, missed) {
     ? `<p>${missed.length} ${missed.length === 1 ? 'person' : 'people'} did not file for <b>${pretty}</b>:</p>` +
       `<table style="border-collapse:collapse;font-family:sans-serif;font-size:14px">` +
       `<tr><th style="text-align:left;padding:6px 12px;border-bottom:2px solid #1D1D1F">Person</th>` +
-      `<th style="text-align:left;padding:6px 12px;border-bottom:2px solid #1D1D1F">Missed</th></tr>` +
+      `<th style="text-align:left;padding:6px 12px;border-bottom:2px solid #1D1D1F">Missed (${shortDate})</th></tr>` +
       rows + `</table>`
     : `<p>Everyone filed both trackers for <b>${pretty}</b>. Nothing missed.</p>`;
   return `<div style="font-family:sans-serif;color:#1D1D1F">${body}` +
