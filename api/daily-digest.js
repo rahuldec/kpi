@@ -66,9 +66,20 @@ function lastWorkingDay() {
   return iso(d);
 }
 
+// Kept in sync with index.html's own tc() — title-cases a name derived from
+// an email local-part (see the fallback in parseExport below).
+const tc = s => s.split(/\s+/).map(w => w ? w[0].toUpperCase() + w.slice(1).toLowerCase() : w).join(' ');
+
 /* Same shape as index.html's parseExport: find the header row with "Due
    Date" and "Assignee", then one {name, due} per row after it. Duplicated
-   rather than shared for the same reason as the constants above. */
+   rather than shared for the same reason as the constants above.
+
+   Some Asana profiles have no display name set, so the Assignee column comes
+   back as their email instead — index.html derives a name from the email's
+   local part rather than dropping the row, and this must match or anyone in
+   that situation (e.g. Sapna) is silently invisible to the digest: not just
+   never flagged as missing, but absent from the roster entirely, no matter
+   what day is checked. */
 function parseExport(text) {
   const dl = (text.split('\n')[0].match(/\t/g) || []).length >= 2 ? '\t' : ',';
   const rows = splitRows(text, dl);
@@ -76,15 +87,18 @@ function parseExport(text) {
   for (let i = 0; i < Math.min(rows.length, 40); i++) {
     const h = rows[i].map(x => x.trim().toLowerCase());
     const d = h.indexOf('due date'), a = h.indexOf('assignee');
-    if (d > -1 && a > -1) { head = i; ix = { due: d, name: a }; break; }
+    if (d > -1 && a > -1) { head = i; ix = { due: d, name: a, email: h.indexOf('assignee email') }; break; }
   }
   if (head < 0) throw new Error('Could not find a header row with "Due Date" and "Assignee".');
   const out = [];
   for (let i = head + 1; i < rows.length; i++) {
     const r = rows[i]; if (!r || r.length < 2) continue;
     const due = r[ix.due] || '';
-    const name = (r[ix.name] || '').trim();
-    if (!due || !name || name.includes('@')) continue;
+    let name = (r[ix.name] || '').trim();
+    if (!name || name.includes('@')) {
+      name = tc(((ix.email > -1 ? r[ix.email] : '') || name || '').split('@')[0].replace(/[._-]+/g, ' '));
+    }
+    if (!due || !name) continue;
     out.push({ name, due: due.slice(0, 10) });
   }
   return out;
@@ -217,12 +231,12 @@ function renderHtml(day, missed) {
       `${m.trackers.map(t => TRACKER_LABEL[t]).join(', ')}</td></tr>`;
   }).join('');
   const body = missed.length
-    ? `<p>${missed.length} ${missed.length === 1 ? 'person' : 'people'} did not file for <b>${pretty}</b>:</p>` +
+    ? `<p>${missed.length} ${missed.length === 1 ? 'person' : 'people'} did not file time sheet for <b>${pretty}</b>:</p>` +
       `<table style="border-collapse:collapse;font-family:sans-serif;font-size:14px">` +
       `<tr><th style="text-align:left;padding:6px 12px;border-bottom:2px solid #1D1D1F">Person</th>` +
       `<th style="text-align:left;padding:6px 12px;border-bottom:2px solid #1D1D1F">Missed (${shortDate})</th></tr>` +
       rows + `</table>`
-    : `<p>Everyone filed both trackers for <b>${pretty}</b>. Nothing missed.</p>`;
+    : `<p>Everyone filed time sheet for <b>${pretty}</b>. Nothing missed.</p>`;
   return `<div style="font-family:sans-serif;color:#1D1D1F">${body}` +
     `<p style="margin-top:20px;font-size:12px;color:#86868B">` +
     `Automated E-mail from KPI Dashboard.<br><b>TED</b> ` +
@@ -278,8 +292,8 @@ module.exports = async (req, res) => {
     const pretty = new Date(day + 'T00:00:00').toLocaleDateString('en-GB',
       { day: 'numeric', month: 'short' });
     const subject = missed.length
-      ? `CS KPI: ${missed.length} ${missed.length === 1 ? 'person' : 'people'} missed filing (${pretty})`
-      : `CS KPI: everyone filed (${pretty})`;
+      ? `CS KPI: ${missed.length} ${missed.length === 1 ? 'person' : 'people'} missed filing time sheet (${pretty})`
+      : `CS KPI: everyone filed time sheet (${pretty})`;
 
     await sendEmail(subject, renderHtml(day, missed));
     return res.status(200).json({ ok: true, day, missed: missed.length });
