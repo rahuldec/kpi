@@ -188,10 +188,10 @@ function computeMissed(byTracker, day) {
       window: window.length,
     });
   }
-  /* Worst first — the point of carrying a recent-misses count at all is so a
-     reader can tell a repeat pattern from a one-off slip without reading
-     every row; alphabetical order would bury that signal. */
-  missed.sort((a, b) => b.recent - a.recent || a.name.localeCompare(b.name));
+  /* Alphabetical — a name is easier to find in a fixed, familiar order than
+     to hunt for in a list that reshuffles by severity every day. The "Missed
+     N times this week" note on each row still carries the pattern signal. */
+  missed.sort((a, b) => a.name.localeCompare(b.name));
   return missed;
 }
 
@@ -201,10 +201,11 @@ function renderHtml(day, missed) {
   const rows = missed.map(m => {
     /* Only worth calling out once it is a pattern, not a single slip — today's
        own miss already accounts for one of the count, so 2+ means at least
-       one other day in the window went the same way. */
+       one other day in the window went the same way. Plain "this week" reads
+       faster than a fraction, and RECENT_WINDOW (5 working days) is a week. */
     const streak = m.recent >= 2
       ? `<div style="font-size:11px;color:#A82A1C;margin-top:2px">` +
-        `${m.recent} of last ${m.window} working days</div>`
+        `Missed ${m.recent} times this week</div>`
       : '';
     return `<tr><td style="padding:6px 12px;border-bottom:1px solid #E8E8ED">` +
       `${escapeHtml(m.name)}${streak}</td>` +
@@ -220,7 +221,7 @@ function renderHtml(day, missed) {
     : `<p>Everyone filed both trackers for <b>${pretty}</b>. Nothing missed.</p>`;
   return `<div style="font-family:sans-serif;color:#1D1D1F">${body}` +
     `<p style="margin-top:20px;font-size:12px;color:#86868B">` +
-    `Automated E-mail from KPI Dashboard. TED ` +
+    `Automated E-mail from KPI Dashboard.<br><b>TED</b> ` +
     `<a href="https://cskpi.odpay.in">View live</a>.</p></div>`;
 }
 
