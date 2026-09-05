@@ -282,82 +282,63 @@ function computeMissed(byTracker, day) {
 // full list instead — see renderImplementation.
 const ROW_CAP = 5;
 
+// A single accent color for structure (eyebrows, links, bold counts) — the
+// clean/minimal direction deliberately drops per-section hues, pills, dots,
+// gradients, and shadows. RED and GREEN remain as semantic status colors
+// (something needs attention vs. nothing does), which is a different axis
+// from the decorative accent and doesn't count against "one accent".
+const ACCENT = '#B5501C';
+const RED = '#A82A1C';
+const AMBER = '#B8860B';
+const BLUE = '#0071E3';
+const GREEN = '#2E7D32';
+
 const STYLE = `
     * { margin:0; padding:0; box-sizing:border-box;
         font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; }
-    body { background:#f0f2f5; padding:40px 16px; }
-    .email-container { max-width:680px; width:100%; margin:0 auto; background:#ffffff; border-radius:32px;
-      overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.02); }
-    .header-banner { background:linear-gradient(145deg,#ffffff 0%,#f8f9fc 100%); padding:44px 44px 32px;
-      border-bottom:1px solid rgba(0,0,0,.03); position:relative; }
-    .header-top { display:flex; align-items:center; justify-content:center; margin-bottom:16px; position:relative; z-index:1; }
-    .header-top .digest-tag { display:inline-flex; align-items:center; gap:8px; background:rgba(227,138,80,.08);
-      padding:5px 18px 5px 16px; border-radius:100px; font-size:10px; font-weight:700; letter-spacing:.1em;
-      text-transform:uppercase; color:#c06a3a; border:1px solid rgba(227,138,80,.08); }
-    .header-top .digest-tag .pulse { display:inline-block; width:6px; height:6px; border-radius:50%; background:#c06a3a; }
-    .header-banner h1 { font-size:30px; font-weight:700; letter-spacing:-.02em; color:#1a1a1e; line-height:1.15;
-      margin-bottom:6px; position:relative; z-index:1; }
-    .header-banner h1 .highlight { background:linear-gradient(120deg,#fdf2ef 0%,#fdf2ef 40%,transparent 80%);
-      padding:0 4px; color:#b84a2e; }
-    .header-banner .sub { font-size:14px; font-weight:400; color:#7a7a85; letter-spacing:.2px; position:relative;
-      z-index:1; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
-    .header-banner .sub .date { color:#1a1a1e; font-weight:500; }
-    .header-banner .sub .separator { color:#d0d0d8; font-weight:300; }
-    .header-banner .sub .badge { background:#eef3fd; color:#2a6ab8; padding:2px 12px; border-radius:100px;
-      font-size:10px; font-weight:600; letter-spacing:.04em; }
-    .content-body { padding:28px 44px 32px; background:#ffffff; }
-    .section-label-wrapper { display:flex; justify-content:center; margin-bottom:4px; }
-    .section-label { display:inline-flex; align-items:center; gap:10px; padding:8px 28px 8px 24px; font-size:13px;
-      font-weight:700; letter-spacing:.1em; text-transform:uppercase; border-radius:100px; box-shadow:0 2px 8px rgba(0,0,0,.02); }
-    .label-filing { color:#b84a2e; background:#fdf2ef; border:1px solid rgba(184,74,46,.12); box-shadow:0 2px 12px rgba(184,74,46,.06); }
-    .label-escalation { color:#b86a2a; background:#fdf5ed; border:1px solid rgba(184,106,42,.12); box-shadow:0 2px 12px rgba(184,106,42,.06); }
-    .label-implementation { color:#2a6ab8; background:#eef3fd; border:1px solid rgba(42,106,184,.12); box-shadow:0 2px 12px rgba(42,106,184,.06); }
-    .label-ok { color:#2a9d8f; background:#eafaf7; border:1px solid rgba(42,157,143,.12); box-shadow:0 2px 12px rgba(42,157,143,.06); }
-    .section-label .status-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:2px; }
-    .dot-red { background:#b84a2e; } .dot-orange { background:#b86a2a; } .dot-blue { background:#2a6ab8; } .dot-green { background:#2a9d8f; }
-    .section-title { margin:14px 0 20px; font-size:18px; font-weight:600; color:#1a1a1e; letter-spacing:-.01em; text-align:center; }
-    .section-title .highlight { color:#b84a2e; font-weight:700; background:#fdf2ef; padding:0 8px; border-radius:6px; }
-    .section-spacer { margin-top:44px; }
-    .kpi-table { width:100%; border-collapse:collapse; font-size:13.5px; border-radius:16px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.02); }
-    .kpi-table thead th { text-align:left; padding:12px 16px; background:#fafbff; color:#6a6a74; font-weight:600;
-      font-size:10px; letter-spacing:.06em; text-transform:uppercase; border-bottom:2px solid #eaeaef; }
-    .kpi-table tbody td { padding:14px 16px; border-bottom:1px solid #f4f4f8; color:#1e1e22; background:#ffffff; }
-    .kpi-table tbody tr:last-child td { border-bottom:none; }
-    .text-danger { color:#b84a2e; font-weight:600; }
+    body { background:#F5F4F1; padding:40px 16px; color:#1D1D1F; }
+    .email-container { max-width:600px; width:100%; margin:0 auto; background:#FFFFFF;
+      border:1px solid #E5E3DE; border-radius:12px; padding:36px 32px; }
+    .masthead { text-align:center; margin-bottom:28px; }
+    .masthead .eyebrow { font-size:11px; font-weight:600; letter-spacing:.12em; text-transform:uppercase;
+      color:${ACCENT}; margin:0 0 10px; }
+    .masthead h1 { font-size:23px; font-weight:600; letter-spacing:-.01em; color:#1D1D1F; margin:0 0 6px; }
+    .masthead .date { font-size:14px; color:#6E6E73; margin:0; }
+    .divider { border:none; border-top:1px solid #E5E3DE; margin:40px 0; }
+    .section-eyebrow { margin:0; font-size:19px; font-weight:700; letter-spacing:.03em; text-transform:uppercase; text-align:center; }
+    .section-headline { margin:8px 0 0; font-size:14px; font-weight:500; color:#6E6E73; text-align:center; }
+    .kpi-table { width:100%; border-collapse:collapse; margin-top:22px; font-size:14px; }
+    .kpi-table th { text-align:left; padding:0 0 8px; font-size:10.5px; font-weight:600; letter-spacing:.04em;
+      text-transform:uppercase; color:#8A8A8F; border-bottom:1px solid #E5E3DE; }
+    .kpi-table td { padding:10px 0; border-bottom:1px solid #EFEDE8; vertical-align:top; }
+    .kpi-table tr:last-child td { border-bottom:none; }
+    .text-danger { color:${RED}; font-weight:600; }
     .text-right { text-align:right; }
-    .missed-badge { font-size:11px; color:#b84a2e; margin-top:3px; font-weight:400; opacity:.75; letter-spacing:.01em; }
-    .person-name { font-weight:600; color:#1a1a1e; }
-    .center-cell { text-align:center; font-size:12.5px; color:#7a7a85; background:#fafbff!important;
-      padding:18px 16px!important; border-radius:0 0 16px 16px; border-top:1px solid #f0f0f4!important; }
-    .center-cell a { color:#2a6ab8; text-decoration:none; font-weight:500; border-bottom:2px solid rgba(42,106,184,.12); padding-bottom:2px; }
-    .footer { background:#fafbff; padding:24px 44px; border-top:1px solid #eaeaef; text-align:center; }
-    .footer p { margin:0; font-size:12px; line-height:1.6; color:#7a7a85; }
-    .footer a { color:#2a6ab8; text-decoration:none; font-weight:500; }
-    .footer .ted { margin:10px 0 0; font-size:26px; font-weight:800; letter-spacing:.2em; color:#1a1a1e; text-transform:uppercase; }
+    .missed-badge { font-size:11px; color:${RED}; margin-top:2px; opacity:.8; }
+    .person-name { font-weight:600; color:#1D1D1F; }
+    .more-note { padding:12px 0 0; font-size:12.5px; color:#6E6E73; }
+    .more-note a { color:${ACCENT}; text-decoration:none; font-weight:500; }
+    .footer p { margin:0; font-size:12px; color:#8A8A8F; text-align:center; }
+    .footer a { color:${ACCENT}; text-decoration:none; }
+    .footer .ted { margin:10px 0 0; font-size:22px; font-weight:800; letter-spacing:.18em; color:#1D1D1F; text-align:center; }
     @media (max-width:480px) {
-      .header-banner, .content-body, .footer { padding-left:20px; padding-right:20px; }
-      .header-banner h1 { font-size:22px; }
-      .section-label { font-size:11px; padding:6px 18px 6px 16px; }
-      .kpi-table { font-size:12px; } .kpi-table thead th, .kpi-table tbody td { padding:10px 10px; }
-      .section-title { font-size:16px; }
+      .email-container { padding:28px 20px; }
+      .masthead h1 { font-size:20px; }
     }`;
 
-function capNote(remaining, kind) {
-  return `<tr><td colspan="99" class="center-cell">+ ${remaining} additional ${kind} &nbsp;&middot;&nbsp; ` +
-    `<a href="https://cskpi.odpay.in">View complete list on dashboard &rarr;</a></td></tr>`;
+function moreNote(remaining, kind) {
+  return `<p class="more-note">+ ${remaining} additional ${kind} &middot; ` +
+    `<a href="https://cskpi.odpay.in">View complete list on dashboard &rarr;</a></p>`;
 }
 
-function sectionHead(labelCls, dotCls, label, titleHtml) {
-  return `<div class="section-label-wrapper"><div class="section-label ${labelCls}">` +
-    `<span class="status-dot ${dotCls}"></span> ${label}</div></div>` +
-    `<h2 class="section-title">${titleHtml}</h2>`;
+function sectionHead(color, label, headlineHtml) {
+  return `<p class="section-eyebrow" style="color:${color}">${label}</p>` +
+    `<p class="section-headline">${headlineHtml}</p>`;
 }
 
 function renderEscalations(rows, today) {
-  if (rows === null)
-    return `<div class="section-spacer">${sectionHead('label-escalation', 'dot-orange', 'Escalations', 'Data unavailable right now')}</div>`;
-  if (!rows.length)
-    return `<div class="section-spacer">${sectionHead('label-ok', 'dot-green', 'Escalations', 'No open escalations')}</div>`;
+  if (rows === null) return `<div>${sectionHead('#8A8A8F', 'Escalations', 'Data unavailable right now')}</div>`;
+  if (!rows.length) return `<div>${sectionHead(GREEN, 'Escalations', 'No open escalations')}</div>`;
   const sorted = [...rows].sort((a, b) => (a.raised || '9999').localeCompare(b.raised || '9999'));
   const shown = sorted.slice(0, ROW_CAP);
   const rowsHtml = shown.map(e => {
@@ -365,32 +346,30 @@ function renderEscalations(rows, today) {
     const openFor = days === null ? '—' : `${days} day${days === 1 ? '' : 's'}`;
     return `<tr><td><span style="font-weight:500">${escapeHtml(e.client)}</span></td>` +
       `<td>${escapeHtml(e.owner || '—')}</td><td class="text-danger">${openFor}</td></tr>`;
-  }).join('') + (sorted.length > ROW_CAP ? capNote(sorted.length - ROW_CAP, 'open escalations') : '');
-  return `<div class="section-spacer">` +
-    sectionHead('label-escalation', 'dot-orange', 'Escalations',
-      `<span class="highlight">${rows.length}</span> escalation${rows.length === 1 ? '' : 's'} still open`) +
-    `<table class="kpi-table"><thead><tr><th>Client</th><th>Owner</th><th>Open Duration</th></tr></thead>` +
-    `<tbody>${rowsHtml}</tbody></table></div>`;
+  }).join('');
+  const more = sorted.length > ROW_CAP ? moreNote(sorted.length - ROW_CAP, 'open escalations') : '';
+  return `<div>` +
+    sectionHead(AMBER, 'Escalations', `<b>${rows.length}</b> escalation${rows.length === 1 ? '' : 's'} still open`) +
+    `<table class="kpi-table"><tr><th>Client</th><th>Owner</th><th>Open Duration</th></tr>` +
+    `${rowsHtml}</table>${more}</div>`;
 }
 
-// Escalations fold past ROW_CAP into a "+N more" line (see capNote); the
+// Escalations fold past ROW_CAP into a "+N more" line (see moreNote); the
 // implementation list shows every overdue project instead, per request —
 // there's no dashboard link substituting for the full picture here.
 function renderImplementation(rows) {
-  if (rows === null)
-    return `<div class="section-spacer">${sectionHead('label-implementation', 'dot-blue', 'Implementation', 'Data unavailable right now')}</div>`;
-  if (!rows.length)
-    return `<div class="section-spacer">${sectionHead('label-ok', 'dot-green', 'Implementation', 'No projects have overdue tasks')}</div>`;
+  if (rows === null) return `<div>${sectionHead('#8A8A8F', 'Implementation', 'Data unavailable right now')}</div>`;
+  if (!rows.length) return `<div>${sectionHead(GREEN, 'Implementation', 'No projects have overdue tasks')}</div>`;
   const sorted = [...rows].sort((a, b) => b.overdue - a.overdue);
   const rowsHtml = sorted.map(p =>
     `<tr><td><span style="font-weight:500">${escapeHtml(p.name)}</span></td>` +
     `<td>${escapeHtml(p.owner || '—')}</td><td class="text-right text-danger">${p.overdue}</td></tr>`
   ).join('');
-  return `<div class="section-spacer">` +
-    sectionHead('label-implementation', 'dot-blue', 'Implementation',
-      `<span class="highlight">${rows.length}</span> project${rows.length === 1 ? '' : 's'} ${rows.length === 1 ? 'has' : 'have'} overdue tasks`) +
-    `<table class="kpi-table"><thead><tr><th>Project</th><th>Owner</th><th class="text-right">Overdue</th></tr></thead>` +
-    `<tbody>${rowsHtml}</tbody></table></div>`;
+  return `<div>` +
+    sectionHead(BLUE, 'Implementation',
+      `<b>${rows.length}</b> project${rows.length === 1 ? '' : 's'} ${rows.length === 1 ? 'has' : 'have'} overdue tasks`) +
+    `<table class="kpi-table"><tr><th>Project</th><th>Owner</th><th class="text-right">Overdue</th></tr>` +
+    `${rowsHtml}</table></div>`;
 }
 
 function renderHtml(day, missed, escalations, overdueImpl) {
@@ -410,22 +389,21 @@ function renderHtml(day, missed, escalations, overdueImpl) {
       `<td class="text-danger">${m.trackers.map(t => TRACKER_LABEL[t]).join(', ')}</td></tr>`;
   }).join('');
   const filingSection = missed.length
-    ? `<div>${sectionHead('label-filing', 'dot-red', 'Filing Compliance',
-        `<span class="highlight">${missed.length}</span> ${missed.length === 1 ? 'person' : 'people'} missed timesheet submission`)}` +
-      `<table class="kpi-table"><thead><tr><th>Person</th><th>Missed Area (${shortDate})</th></tr></thead>` +
-      `<tbody>${missedRowsHtml}</tbody></table></div>`
-    : `<div>${sectionHead('label-ok', 'dot-green', 'Filing Compliance', `Everyone filed time sheet for ${fullDate}`)}</div>`;
+    ? `<div>${sectionHead(RED, 'Filing Compliance',
+        `<b>${missed.length}</b> ${missed.length === 1 ? 'person' : 'people'} missed timesheet submission`)}` +
+      `<table class="kpi-table"><tr><th>Person</th><th>Missed Area (${shortDate})</th></tr>` +
+      `${missedRowsHtml}</table></div>`
+    : `<div>${sectionHead(GREEN, 'Filing Compliance', `Everyone filed time sheet for ${fullDate}`)}</div>`;
 
   return `<div class="email-container">` +
-    `<div class="header-banner"><div class="header-top">` +
-    `<div class="digest-tag"><span class="pulse"></span> CS Monitoring</div></div>` +
-    `<h1>Daily <span class="highlight">Compliance</span> &amp; Operations</h1>` +
-    `<div class="sub"><span class="date">${fullDate}</span></div></div>` +
-    `<div class="content-body">` +
-    filingSection + renderEscalations(escalations, iso(new Date())) + renderImplementation(overdueImpl) +
-    `</div>` +
-    `<div class="footer"><p>Automated E-mail from KPI Dashboard &nbsp;&middot;&nbsp; ` +
-    `<a href="https://cskpi.odpay.in">View Live Dashboard</a></p><p class="ted">TED</p></div></div>`;
+    `<div class="masthead"><p class="eyebrow">CS Monitoring</p>` +
+    `<h1>Daily Compliance &amp; Operations</h1><p class="date">${fullDate}</p></div>` +
+    `<hr class="divider">` +
+    filingSection + `<hr class="divider">` +
+    renderEscalations(escalations, iso(new Date())) + `<hr class="divider">` +
+    renderImplementation(overdueImpl) + `<hr class="divider">` +
+    `<div class="footer"><p>Automated E-mail from KPI Dashboard &middot; ` +
+    `<a href="https://cskpi.odpay.in">View live</a>.</p><p class="ted">TED</p></div></div>`;
 }
 
 function renderPage(day, missed, escalations, overdueImpl) {
