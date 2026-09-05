@@ -290,7 +290,7 @@ const STYLE = `
       overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.02); }
     .header-banner { background:linear-gradient(145deg,#ffffff 0%,#f8f9fc 100%); padding:44px 44px 32px;
       border-bottom:1px solid rgba(0,0,0,.03); position:relative; }
-    .header-top { display:flex; align-items:center; margin-bottom:16px; position:relative; z-index:1; }
+    .header-top { display:flex; align-items:center; justify-content:center; margin-bottom:16px; position:relative; z-index:1; }
     .header-top .digest-tag { display:inline-flex; align-items:center; gap:8px; background:rgba(227,138,80,.08);
       padding:5px 18px 5px 16px; border-radius:100px; font-size:10px; font-weight:700; letter-spacing:.1em;
       text-transform:uppercase; color:#c06a3a; border:1px solid rgba(227,138,80,.08); }
