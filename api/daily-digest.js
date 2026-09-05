@@ -130,31 +130,87 @@ function buildRoster(byTracker) {
   return roster;
 }
 
-function computeMissed(byTracker, day) {
-  const roster = buildRoster(byTracker);
-  const filedBy = {};
-  for (const src of TRACKERS) {
-    filedBy[src] = new Set(byTracker[src].filter(r => r.due === day).map(r => r.name.toLowerCase()));
+// How far back to look when deciding whether a missed entry is a one-off or
+// a pattern. 5 working days is a calendar week — long enough to catch someone
+// drifting, short enough that a fix shows up in the count within a week.
+const RECENT_WINDOW = 5;
+
+/* The N most recent working days up to and including `day`, oldest first. */
+function recentWorkingDays(day, n) {
+  const out = [];
+  const d = new Date(day + 'T00:00:00');
+  while (out.length < n) {
+    if (isWorkingDay(d)) out.unshift(iso(d));
+    d.setDate(d.getDate() - 1);
   }
-  const missed = [];
+  return out;
+}
+
+/* Which trackers each roster member missed on one specific day — the same
+   per-day rule computeMissed used to apply only to its one reporting day,
+   pulled out here so the recent-misses window below can reuse it without
+   recomputing "not yet joined" / leave / exemption for every day by hand. */
+function missedTrackersOn(byTracker, roster, day) {
+  const filedBy = {};
+  for (const src of TRACKERS)
+    filedBy[src] = new Set(byTracker[src].filter(r => r.due === day).map(r => r.name.toLowerCase()));
+  const out = new Map();
   for (const [key, person] of roster) {
     if (day < person.first) continue;           // not on the tracker yet that day
     if (onLeave(person.name, day)) continue;
     const missedTrackers = TRACKERS.filter(src =>
       !EXEMPT[src].includes(key) && !filedBy[src].has(key));
-    if (missedTrackers.length) missed.push({ name: person.name, trackers: missedTrackers });
+    if (missedTrackers.length) out.set(key, missedTrackers);
   }
-  missed.sort((a, b) => a.name.localeCompare(b.name));
+  return out;
+}
+
+function computeMissed(byTracker, day) {
+  const roster = buildRoster(byTracker);
+
+  /* `day` is always the window's own last entry, so the day being reported on
+     and the tally of how often each person has missed recently come out of
+     the same set of per-day lookups rather than two separate passes. */
+  const window = recentWorkingDays(day, RECENT_WINDOW);
+  const missedByDay = new Map(window.map(d => [d, missedTrackersOn(byTracker, roster, d)]));
+
+  const recentCounts = new Map();
+  for (const dayMisses of missedByDay.values())
+    for (const key of dayMisses.keys())
+      recentCounts.set(key, (recentCounts.get(key) || 0) + 1);
+
+  const missed = [];
+  for (const [key, trackers] of missedByDay.get(day)) {
+    missed.push({
+      name: roster.get(key).name,
+      trackers,
+      recent: recentCounts.get(key) || 0,
+      window: window.length,
+    });
+  }
+  /* Worst first — the point of carrying a recent-misses count at all is so a
+     reader can tell a repeat pattern from a one-off slip without reading
+     every row; alphabetical order would bury that signal. */
+  missed.sort((a, b) => b.recent - a.recent || a.name.localeCompare(b.name));
   return missed;
 }
 
 function renderHtml(day, missed) {
   const pretty = new Date(day + 'T00:00:00').toLocaleDateString('en-GB',
     { weekday: 'long', day: 'numeric', month: 'long' });
-  const rows = missed.map(m =>
-    `<tr><td style="padding:6px 12px;border-bottom:1px solid #E8E8ED">${escapeHtml(m.name)}</td>` +
-    `<td style="padding:6px 12px;border-bottom:1px solid #E8E8ED;color:#A82A1C">` +
-    `${m.trackers.map(t => TRACKER_LABEL[t]).join(', ')}</td></tr>`).join('');
+  const rows = missed.map(m => {
+    /* Only worth calling out once it is a pattern, not a single slip — today's
+       own miss already accounts for one of the count, so 2+ means at least
+       one other day in the window went the same way. */
+    const streak = m.recent >= 2
+      ? `<div style="font-size:11px;color:#A82A1C;margin-top:2px">` +
+        `${m.recent} of last ${m.window} working days</div>`
+      : '';
+    return `<tr><td style="padding:6px 12px;border-bottom:1px solid #E8E8ED">` +
+      `${escapeHtml(m.name)}${streak}</td>` +
+      `<td style="padding:6px 12px;border-bottom:1px solid #E8E8ED;color:#A82A1C">` +
+      `${m.trackers.map(t => TRACKER_LABEL[t]).join(', ')}</td></tr>`;
+  }).join('');
   const body = missed.length
     ? `<p>${missed.length} ${missed.length === 1 ? 'person' : 'people'} did not file for <b>${pretty}</b>:</p>` +
       `<table style="border-collapse:collapse;font-family:sans-serif;font-size:14px">` +
