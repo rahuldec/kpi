@@ -1336,6 +1336,59 @@ let VISIT_UNPLACED = [];
    person who went — deliberately: two people spending a morning at a client is
    two people's time, and a per-meeting count would hide the difference between
    a team of one turning up and a team of three. */
+/* ---------------- PEX knowledge gaps ----------------
+   "PEX Team - Daily Problems" is a separate Asana project: CS raises a task
+   there for every product/tech issue hit at a client, and PEX/QA works it
+   from there. Read for one signal only — how many tasks carry the custom
+   field "PEX Category: Knowledge Gap" per assignee, a training-gap
+   indicator (CS's own requirement-gathering was incomplete, not a product
+   bug) rather than a bug count. All-time, not a rolling window: the project
+   itself never resets, so neither does this. */
+let PEX = [], PEX_ERROR = null;
+
+function parsePex(text){
+  const rows = splitRows(text, ',');
+  let head = -1, ix = {};
+  for (let i = 0; i < Math.min(rows.length, 10); i++){
+    const h = rows[i].map(x => String(x).trim().toLowerCase());
+    const a = h.indexOf('assignee'), c = h.indexOf('pex category');
+    if (a > -1 && c > -1){ head = i; ix = {name: a, category: c}; break; }
+  }
+  if (head < 0) throw new Error('Could not find a header row with "Assignee" and "PEX Category".');
+  const out = [];
+  for (let i = head + 1; i < rows.length; i++){
+    const r = rows[i]; if (!r) continue;
+    const name = (r[ix.name] || '').trim();
+    const category = (r[ix.category] || '').trim();
+    if (name && category) out.push({name, category});
+  }
+  return out;
+}
+
+/* Asana's own assignee field, not free text like the MOM portal's visitor
+   names — it already matches the roster's spelling exactly whenever the
+   person is on the roster at all, so an exact case-insensitive match against
+   POD_OF is enough; no first-name fallback the way canonVisitor needs one. */
+function canonPexName(raw){
+  const n = String(raw).trim().toLowerCase();
+  if (!n) return null;
+  return [...POD_OF.keys()].find(r => r.toLowerCase() === n) || null;
+}
+
+function pexForTeam(lead){
+  const team = new Set([lead, ...(POD_TEAM.get(lead) || [])]);
+  const byPerson = new Map();
+  let total = 0;
+  for (const t of PEX){
+    if (t.category !== 'Knowledge Gap') continue;
+    const who = canonPexName(t.name);
+    if (!who || !team.has(who)) continue;
+    total++;
+    byPerson.set(who, (byPerson.get(who) || 0) + 1);
+  }
+  return {total, byPerson: [...byPerson.entries()].sort((a, b) => b[1] - a[1])};
+}
+
 function visitsForTeam(lead, months){
   const team = new Set([lead, ...(POD_TEAM.get(lead) || [])]);
   let person = 0;
@@ -3254,8 +3307,9 @@ function meterRows(){
     const feed = feedForTeam(e.lead);
     const visits = visitsForTeam(e.lead, MONTHS);
     const impl = implForTeam(e.lead);
+    const pex = pexForTeam(e.lead);
     return {
-      ...e, revenue, target, esc, adopt, feed, visits, impl,
+      ...e, revenue, target, esc, adopt, feed, visits, impl, pex,
       escOpen: esc.filter(x => x.open.length),
       compliance: e.expected ? e.filed / e.expected : null,
       business: target ? revenue / target : 0
@@ -3301,6 +3355,7 @@ function howHtml(r){
   h += feedDetail(r);
   h += visitDetail(r);
   h += escDetail(r);
+  h += pexDetail(r);
 
   if (!r.members.length) return h + `<p class="none">Nobody on this team has any expected days.</p>`;
 
@@ -3703,6 +3758,32 @@ function visitDetail(r){
   const silent = [r.lead, ...r.team].filter(p => !v.byPerson.some(x => x[0] === p));
   if (silent.length)
     h += `<p class="dates none">No visit filed: ${esc(silent.join(', '))}.</p>`;
+  return h + `</div>`;
+}
+
+function pexLine(r, info){
+  if (PEX_ERROR)
+    return `<div class="escline cool"><span class="lbl">Knowledge gaps</span>${info || ''}` +
+           `<span class="n">—</span></div><p class="escwho cool">not loaded</p>`;
+
+  if (!r.pex.total)
+    return `<div class="escline cool"><span class="lbl">Knowledge gaps</span>${info || ''}` +
+           `<span class="n">None</span></div>`;
+
+  return `<div class="escline hot"><span class="lbl">Knowledge gaps</span>${info || ''}` +
+         `<span class="n">${r.pex.total}</span></div>` +
+         `<p class="escwho">${esc(r.pex.byPerson.map(([who, n]) => `${who} (${n})`).join(', '))}</p>`;
+}
+
+function pexDetail(r){
+  let h = `<h5 data-sec="pex">Knowledge gaps</h5>`;
+  if (PEX_ERROR) return h + `<p class="sum">The PEX feed did not load: ${esc(PEX_ERROR)}</p>`;
+  if (!r.pex.total) return h + `<p class="none">Nobody on this team has a Knowledge Gap task raised against them.</p>`;
+
+  h += `<div class="vlist">`;
+  for (const [who, n] of r.pex.byPerson)
+    h += `<p class="dates"><span class="tk">${esc(who)}</span>` +
+         `<span>${n} ${n === 1 ? 'task' : 'tasks'}</span></p>`;
   return h + `</div>`;
 }
 
@@ -4272,6 +4353,7 @@ function renderMeter(){
            mi('feedback', 'client feedback')) +
       visitLine(r, mi('visits', 'client visits')) +
       escLine(r, mi('escalations', 'escalations')) +
+      pexLine(r, mi('pex', 'knowledge gaps')) +
       `<div class="how" id="how${i}" hidden>${panel}</div>` +
       `</div>`;
   }).join('');
@@ -5329,6 +5411,20 @@ async function load(){
     }
     tick();
     buildImplementation();
+
+    /* PEX knowledge gaps join on the roster (POD_OF) alone, not the client
+       book, so unlike escalations/implementation it doesn't wait on anything
+       — but it's still an enrichment: a failure here must never take down
+       the compliance figures either. No build step: pexForTeam reads PEX
+       directly, there's no client-matching cache to precompute. */
+    try {
+      PEX = parsePex(await fetchRaw('pex'));
+      PEX_ERROR = null;
+    } catch (e) {
+      PEX = [];
+      PEX_ERROR = (e && e.message) || String(e);
+    }
+    tick();
 
     /* Only now is COVER populated, so only now can the picker know which months
        have data behind them. Rendering it earlier offers months that produce a

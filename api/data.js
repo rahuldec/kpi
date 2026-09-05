@@ -62,6 +62,14 @@ const SOURCES = {
   escalations: { asanaProject: process.env.ASANA_ESCALATIONS_PROJECT_GID || '1213179774324454',
                  envVar: 'ASANA_ESCALATIONS_PROJECT_GID',
                  asanaShape: 'escalations' },
+  /* "PEX Team - Daily Problems" — CS raises a task here for every product/tech
+     issue hit at a client; PEX/QA works it from there. Read for one signal
+     only: how many tasks carry the "PEX Category" custom field value
+     "Knowledge Gap" per assignee — CS's requirement-gathering was incomplete,
+     not a product bug, a training-gap indicator rather than a bug count. */
+  pex:         { asanaProject: process.env.ASANA_PEX_PROJECT_GID || '1210517770853851',
+                 envVar: 'ASANA_PEX_PROJECT_GID',
+                 asanaShape: 'pex' },
   /* Module adoption. Not a single tab but one per RM per quarter, and the set
      grows every quarter — so this source addresses tabs by NAME rather than by
      gid. gviz serves any tab of a native Google Sheet as CSV given its title,
@@ -251,6 +259,35 @@ async function grabAsanaEscalations(projectGid, token) {
         (t.assignee && t.assignee.name) || '',
         t.created_at || '',
         t.completed_at || '',
+      ]);
+    }
+    offset = (json.next_page && json.next_page.offset) || '';
+  } while (offset);
+  return { ok: true, body: rows.map(r => r.map(csvEscape).join(',')).join('\n') };
+}
+
+/* Every task in the PEX "Daily Problems" project — one row per task with just
+   its assignee and its "PEX Category" custom field value. A task can carry
+   custom fields from more than one project if it's multi-homed (this one's
+   tasks often also sit in a QA/dev board with its own fields), so
+   `custom_fields.name` comes back with all of them; only the one named
+   "PEX Category" is kept, everything else is index.html's problem to ignore. */
+async function grabAsanaPex(projectGid, token) {
+  const fields = 'name,assignee.name,assignee.email,custom_fields.name,custom_fields.display_value';
+  const rows = [['Assignee', 'Assignee Email', 'PEX Category']];
+  let offset = '';
+  do {
+    const url = `https://app.asana.com/api/1.0/projects/${projectGid}/tasks` +
+                `?opt_fields=${fields}&limit=100` + (offset ? `&offset=${offset}` : '');
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!r.ok) return { ok: false, status: r.status };
+    const json = await r.json();
+    for (const t of json.data || []) {
+      const category = (t.custom_fields || []).find(f => f.name === 'PEX Category');
+      rows.push([
+        (t.assignee && t.assignee.name) || '',
+        (t.assignee && t.assignee.email) || '',
+        (category && category.display_value) || '',
       ]);
     }
     offset = (json.next_page && json.next_page.offset) || '';
@@ -475,6 +512,7 @@ module.exports = async (req, res) => {
       try {
         hit = isPortfolio ? await grabAsanaImplementationPortfolio(target, accessToken)
             : source.asanaShape === 'escalations' ? await grabAsanaEscalations(target, accessToken)
+            : source.asanaShape === 'pex' ? await grabAsanaPex(target, accessToken)
             : await grabAsanaProject(target, accessToken);
       } catch (e) {
         return fail(`Could not reach Asana: ${e.message}`, 'Check the Asana API status.');
