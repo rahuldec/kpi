@@ -333,7 +333,7 @@ const STYLE = `
     .footer { background:#fafbff; padding:24px 44px; border-top:1px solid #eaeaef; text-align:center; }
     .footer p { margin:0; font-size:12px; line-height:1.6; color:#7a7a85; }
     .footer a { color:#2a6ab8; text-decoration:none; font-weight:500; }
-    .footer .ted { margin:8px 0 0; font-size:11px; font-weight:700; letter-spacing:.2em; color:#1a1a1e; opacity:.15; text-transform:uppercase; }
+    .footer .ted { margin:10px 0 0; font-size:26px; font-weight:800; letter-spacing:.2em; color:#1a1a1e; text-transform:uppercase; }
     @media (max-width:480px) {
       .header-banner, .content-body, .footer { padding-left:20px; padding-right:20px; }
       .header-banner h1 { font-size:22px; }
