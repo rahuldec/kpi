@@ -192,161 +192,6 @@ function parseImplementation(text) {
 const daysBetween = (fromISO, toISO) =>
   Math.round((new Date(toISO + 'T00:00:00') - new Date(fromISO + 'T00:00:00')) / 86400000);
 
-/* Client names only, from the CS Team Plan book — trimmed down from
-   index.html's parseBook, which also carries billing/team/category/handler
-   for the dashboard's own use. The digest only needs enough to tell whether
-   an escalation client or implementation project name matches something in
-   the book at all, so the header-detection and the "real client row, not a
-   scratch row" Sr No. check are kept and everything else is dropped. */
-function parseBookNames(text) {
-  const dl = (text.split('\n')[0].match(/\t/g) || []).length >= 2 ? '\t' : ',';
-  const rows = splitRows(text, dl);
-  let head = -1, ix = {};
-  for (let i = 0; i < Math.min(rows.length, 40); i++) {
-    const h = rows[i].map(x => x.trim().toLowerCase());
-    const name = h.indexOf('client name');
-    const bill = h.findIndex(x => x.includes('total billing'));
-    const sr = h.findIndex(x => x === 'sr no.' || x === 'sr no' || x === 'sr. no.');
-    if (name > -1 && bill > -1) { head = i; ix = { sr, name }; break; }
-  }
-  if (head < 0) return [];
-  const out = [];
-  for (let i = head + 1; i < rows.length; i++) {
-    const r = rows[i]; if (!r) continue;
-    const sr = String(r[ix.sr] ?? '').trim();
-    const n = String(r[ix.name] ?? '').trim();
-    if (n && /^\d+$/.test(sr)) out.push(n);
-  }
-  return out;
-}
-
-/* Every client string Asana carries for escalations, closed ones included —
-   unlike parseEscalations above, which only keeps what's still open. The
-   unmatched check cares about every aliasing gap that exists, not just the
-   ones currently affecting something open, so it can catch a mapping problem
-   before it happens to matter for compliance. */
-function allEscalationClients(text) {
-  const rows = splitRows(text, ',');
-  let head = -1, ix = {};
-  for (let i = 0; i < Math.min(rows.length, 10); i++) {
-    const h = rows[i].map(x => String(x).trim().toLowerCase());
-    const p = h.indexOf('projects');
-    if (p > -1 && h.indexOf('parent task') > -1) {
-      head = i;
-      ix = { projects: p, parent: h.indexOf('parent task'), name: h.indexOf('name') };
-      break;
-    }
-  }
-  if (head < 0) return [];
-  const out = [];
-  for (let i = head + 1; i < rows.length; i++) {
-    const r = rows[i]; if (!r || r.length < 2) continue;
-    if ((r[ix.parent] || '').trim()) continue; // a sub-task, not an escalation
-    const projects = (r[ix.projects] || '').split(',').map(x => x.trim()).filter(Boolean);
-    const client = projects.find(x => x.toLowerCase() !== ESC_PROJECT) || (r[ix.name] || '').trim();
-    if (client) out.push(client);
-  }
-  return out;
-}
-
-// Same reasoning as allEscalationClients: every implementation project name,
-// not just the ones with overdue tasks right now.
-function allImplementationNames(text) {
-  const rows = splitRows(text, ',');
-  let head = -1, ix = {};
-  for (let i = 0; i < Math.min(rows.length, 10); i++) {
-    const h = rows[i].map(x => String(x).trim().toLowerCase());
-    const owner = h.indexOf('owner'), overdue = h.indexOf('overdue');
-    if (owner > -1 && overdue > -1) { head = i; ix = { name: h.indexOf('name') }; break; }
-  }
-  if (head < 0) return [];
-  const out = [];
-  for (let i = head + 1; i < rows.length; i++) {
-    const r = rows[i]; if (!r) continue;
-    const name = (r[ix.name] || '').trim();
-    if (name) out.push(name);
-  }
-  return out;
-}
-
-/* Kept in sync with index.html's own ESC_ALIAS — hand-written evidence about
-   which client an escalation belongs to, for the same reason index.html
-   needs it: exact-match and safe prefix-containment alone don't bridge every
-   spelling difference between what Asana carries and what the book says.
-   Comments there explain the evidence behind each entry; not repeated here. */
-const ESC_ALIAS = {
-  'MSG Glorious Int School': 'Shah Satnam Sirsa',
-  'Sirsa MSG Glorious': 'Shah Satnam Sirsa',
-  'Dhanna Bhagat Public School': 'Dhanna Bhagat School',
-  'Aggarwal college - not satisfied': 'Aggarwal College Faridabad',
-  'Milestone Kaithal': 'Milestone School Kaithal',
-  'AIMT': 'SA Jain (PG) College + AIMT',
-  "Shah Satnam Girls' School": 'Shah Satnam Sirsa',
-  'Shah Satnam Kotra': 'Shah Satnam Non Sirsa',
-};
-
-/* Kept in sync with index.html's own IMPL_ALIAS — same shape and reason as
-   ESC_ALIAS above, for implementation project names instead of escalation
-   clients. See index.html for the evidence behind each entry. */
-const IMPL_ALIAS = {
-  'Dalmia Vidya Mandir, Dalmiapuram (Extramarks)': 'Dalmia Group',
-  'Dalmia Vidya Mandir, Kalyanpur (Extramarks)':   'Dalmia Group',
-  'Dalmia Vidya Mandir- Thangskai (Extramarks)':   'Dalmia Group',
-  'Dalmiya Vidya Mandir, Kadappa (Extramarks)':    'Dalmia Group',
-  'Dalmia Vidya Mandir, Rajgangpur (Extramarks)':  'Dalmia Group',
-  "Lingaya's Vidyapeeth University": "Linagaya's Vidyapeeth",
-  'MAIMT Yamunanagar':               'MAIMT Ynr',
-  'MRRA Sen. Sec. School, Kharindwa':'MRRA Kharindwa',
-  'The Genesis School':              'Genesis School Karnal',
-  'DPS Yamuna Nagar':                'DPS YNR CRM',
-  'NPS Kalayat':                     'Nirmal Public Kalayat',
-  'Satluj School Shahbad':           'Satluj Shahbad',
-  'BM Group Gurugram':               'BM Group of Institutions',
-  'P M COLLEGE OF PHARMACY': 'Puran Murti',
-  'Shah Satnam Boys School': 'Shah Satnam Sirsa',
-  'Hindu Engineering College, Sonipat':  'Hindu College',
-  'Hindu Girls College':                 'Hindu College',
-  'Hindu Architecture College, Sonipat':  'Hindu College',
-  'Hindu Institute of Management (HIM)': 'Hindu College',
-  'Hindu Senior Secondary School':       'Hindu School',
-  'Hindu Malviya school':                'Hindu School',
-  'Hindu Kanya Vidyalaya':               'Hindu School',
-  'SM Hindu':                'Hindu School',
-  'Hindu Vidyapeeth, Sonipat': 'Hindu School',
-  'Hindu Global, Sonipat':    'Hindu School',
-  'Rhuchi School':            'Hindu School',
-};
-
-const bookNorm = s => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
-
-/* Same matching algorithm as index.html's buildEscalations/buildImplementation
-   (they're identical apart from which alias table and name list they use) —
-   alias lookup first, then exact match, then a safe prefix-containment match
-   only when exactly one book row qualifies. Anything left over, plus any
-   alias pointing at a client no longer in the book, comes back as unmatched. */
-function computeUnmatched(bookNames, alias, rawNames) {
-  const byNorm = new Map(bookNames.map(n => [bookNorm(n), n]));
-  const aliasByNorm = new Map(Object.entries(alias).map(([from, to]) => [bookNorm(from), to]));
-  const unmatched = [];
-  for (const [from, to] of Object.entries(alias))
-    if (!byNorm.has(bookNorm(to)))
-      unmatched.push(`"${from}" is aliased to "${to}", which is not in the client book`);
-  for (const name of rawNames) {
-    const aliased = aliasByNorm.get(bookNorm(name)) || name;
-    const k = bookNorm(aliased);
-    let hit = byNorm.get(k);
-    if (!hit) {
-      const cands = bookNames.filter(n => {
-        const nk = bookNorm(n);
-        return nk.startsWith(k) || k.startsWith(nk);
-      });
-      if (cands.length === 1) hit = cands[0];
-    }
-    if (!hit && !unmatched.includes(name)) unmatched.push(name);
-  }
-  return unmatched;
-}
-
 /* Everyone who has ever filed to either tracker, plus MANUAL_ROSTER, minus
    HIDDEN — the same roster index.html's buildRoster() derives, without the
    canonical-casing lookup against the Team tab (cosmetic only: it decides how
@@ -468,10 +313,8 @@ const STYLE = `
     .label-escalation { color:#b86a2a; background:#fdf5ed; border:1px solid rgba(184,106,42,.12); box-shadow:0 2px 12px rgba(184,106,42,.06); }
     .label-implementation { color:#2a6ab8; background:#eef3fd; border:1px solid rgba(42,106,184,.12); box-shadow:0 2px 12px rgba(42,106,184,.06); }
     .label-ok { color:#2a9d8f; background:#eafaf7; border:1px solid rgba(42,157,143,.12); box-shadow:0 2px 12px rgba(42,157,143,.06); }
-    .label-data { color:#6a6a74; background:#f4f4f8; border:1px solid rgba(0,0,0,.05); }
     .section-label .status-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:2px; }
-    .dot-red { background:#b84a2e; } .dot-orange { background:#b86a2a; } .dot-blue { background:#2a6ab8; }
-    .dot-green { background:#2a9d8f; } .dot-grey { background:#8a8a94; }
+    .dot-red { background:#b84a2e; } .dot-orange { background:#b86a2a; } .dot-blue { background:#2a6ab8; } .dot-green { background:#2a9d8f; }
     .section-title { margin:14px 0 20px; font-size:18px; font-weight:600; color:#1a1a1e; letter-spacing:-.01em; text-align:center; }
     .section-title .highlight { color:#b84a2e; font-weight:700; background:#fdf2ef; padding:0 8px; border-radius:6px; }
     .section-spacer { margin-top:44px; }
@@ -550,26 +393,7 @@ function renderImplementation(rows) {
     `<tbody>${rowsHtml}</tbody></table></div>`;
 }
 
-/* Silent when there's nothing to flag — unlike the sections above, a clean
-   result here just means the alias tables are currently in sync, which isn't
-   worth a line in an email the whole team reads. `null` (book fetch failed,
-   or nothing to compare) also renders nothing rather than a false all-clear. */
-function renderUnmatched(escUnmatched, implUnmatched) {
-  const parts = [];
-  if (escUnmatched && escUnmatched.length)
-    parts.push(`<p style="margin:0"><b>${escUnmatched.length} escalation${escUnmatched.length === 1 ? '' : 's'}</b> ` +
-      `could not be matched to a client: ${escapeHtml(escUnmatched.join(', '))}.</p>`);
-  if (implUnmatched && implUnmatched.length)
-    parts.push(`<p style="margin:${parts.length ? '8px' : '0'} 0 0"><b>${implUnmatched.length} implementation ` +
-      `project${implUnmatched.length === 1 ? '' : 's'}</b> could not be matched to a client: ` +
-      `${escapeHtml(implUnmatched.join(', '))}.</p>`);
-  if (!parts.length) return '';
-  return `<div class="section-spacer">` +
-    sectionHead('label-data', 'dot-grey', 'Data Quality', 'Client-matching gaps found') +
-    `<div style="font-size:13px;color:#4a4a52;line-height:1.6">${parts.join('')}</div></div>`;
-}
-
-function renderHtml(day, missed, escalations, overdueImpl, escUnmatched, implUnmatched) {
+function renderHtml(day, missed, escalations, overdueImpl) {
   const dateObj = new Date(day + 'T00:00:00');
   const fullDate = dateObj.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   // Short form for the column header, so each row reads standalone without
@@ -599,17 +423,16 @@ function renderHtml(day, missed, escalations, overdueImpl, escUnmatched, implUnm
     `<div class="sub"><span class="date">${fullDate}</span></div></div>` +
     `<div class="content-body">` +
     filingSection + renderEscalations(escalations, iso(new Date())) + renderImplementation(overdueImpl) +
-    renderUnmatched(escUnmatched, implUnmatched) +
     `</div>` +
     `<div class="footer"><p>Automated E-mail from KPI Dashboard &nbsp;&middot;&nbsp; ` +
     `<a href="https://cskpi.odpay.in">View Live Dashboard</a></p><p class="ted">TED</p></div></div>`;
 }
 
-function renderPage(day, missed, escalations, overdueImpl, escUnmatched, implUnmatched) {
+function renderPage(day, missed, escalations, overdueImpl) {
   return `<!doctype html><html><head><meta charset="UTF-8">` +
     `<meta name="viewport" content="width=device-width, initial-scale=1.0">` +
     `<title>CS Monitoring &middot; Daily Compliance</title><style>${STYLE}</style></head>` +
-    `<body>${renderHtml(day, missed, escalations, overdueImpl, escUnmatched, implUnmatched)}</body></html>`;
+    `<body>${renderHtml(day, missed, escalations, overdueImpl)}</body></html>`;
 }
 
 const escapeHtml = s => String(s).replace(/[&<>"']/g, c =>
@@ -666,25 +489,15 @@ module.exports = async (req, res) => {
     const byTracker = {};
     for (const src of TRACKERS) byTracker[src] = await fetchTracker(baseUrl, src);
 
-    // Escalations, implementation, and the client book are all an enrichment
-    // on top of the core filing-compliance report, not a foundation for it —
-    // the same call index.html already makes about this data (see
-    // buildImplementation's comment). A fetch failure in any of them shows up
-    // as its own line in the email rather than taking down the whole digest.
-    const [escText, implText, bookNames] = await Promise.all([
-      fetchRaw(baseUrl, 'escalations').catch(() => null),
-      fetchRaw(baseUrl, 'implementation').catch(() => null),
-      fetchRaw(baseUrl, 'book').then(parseBookNames).catch(() => null),
+    // Escalations and implementation are an enrichment on top of the core
+    // filing-compliance report, not a foundation for it — the same call
+    // index.html already makes about this data (see buildImplementation's
+    // comment). A fetch failure here shows up as its own line in the email
+    // rather than taking down the whole digest.
+    const [escalations, overdueImpl] = await Promise.all([
+      fetchRaw(baseUrl, 'escalations').then(parseEscalations).catch(() => null),
+      fetchRaw(baseUrl, 'implementation').then(parseImplementation).catch(() => null),
     ]);
-    const escalations = escText === null ? null : parseEscalations(escText);
-    const overdueImpl = implText === null ? null : parseImplementation(implText);
-
-    // Needs both the raw text (for every name, not just the open/overdue
-    // ones) and the book — either missing means "can't tell", not "clean".
-    const escUnmatched = escText !== null && bookNames !== null
-      ? computeUnmatched(bookNames, ESC_ALIAS, allEscalationClients(escText)) : null;
-    const implUnmatched = implText !== null && bookNames !== null
-      ? computeUnmatched(bookNames, IMPL_ALIAS, allImplementationNames(implText)) : null;
 
     const missed = computeMissed(byTracker, day);
     const pretty = new Date(day + 'T00:00:00').toLocaleDateString('en-GB',
@@ -693,13 +506,11 @@ module.exports = async (req, res) => {
       ? `CS KPI: ${missed.length} ${missed.length === 1 ? 'person' : 'people'} missed filing time sheet (${pretty})`
       : `CS KPI: everyone filed time sheet (${pretty})`;
 
-    await sendEmail(subject, renderPage(day, missed, escalations, overdueImpl, escUnmatched, implUnmatched), testTo);
+    await sendEmail(subject, renderPage(day, missed, escalations, overdueImpl), testTo);
     return res.status(200).json({
       ok: true, day, missed: missed.length,
       openEscalations: escalations === null ? 'unavailable' : escalations.length,
       overdueImplementation: overdueImpl === null ? 'unavailable' : overdueImpl.length,
-      unmatchedEscalations: escUnmatched === null ? 'unavailable' : escUnmatched.length,
-      unmatchedImplementation: implUnmatched === null ? 'unavailable' : implUnmatched.length,
       testTo: testTo || undefined,
     });
   } catch (e) {
