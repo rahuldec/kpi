@@ -274,55 +274,12 @@ function computeMissed(byTracker, day) {
      to hunt for in a list that reshuffles by severity every day. The "Missed
      N times this week" note on each row still carries the pattern signal. */
   missed.sort((a, b) => a.name.localeCompare(b.name));
-
-  /* How many missed on the working day right before `day` — the window
-     already covers it, so this is a free comparison rather than a second
-     fetch. Genuinely "vs the previous working day", not "vs last week": with
-     only one day of lookback available there is no honest weekly number to
-     show, so the email says exactly what this is. */
-  const dayIdx = window.indexOf(day);
-  const prevMissedCount = dayIdx > 0 ? missedByDay.get(window[dayIdx - 1]).size : null;
-
-  /* Every (person, tracker) pair actually expected on `day` — on the roster
-     by then, not on leave, not exempt from that specific tracker. Compliance
-     rate is missed obligations against this, not against headcount, since
-     exemptions and leave both shrink what a "full" day even means. */
-  let totalObligations = 0;
-  for (const [key, person] of roster) {
-    if (day < person.first || onLeave(person.name, day)) continue;
-    for (const src of TRACKERS) if (!EXEMPT[src].includes(key)) totalObligations++;
-  }
-
-  return { missed, prevMissedCount, totalObligations };
+  return missed;
 }
 
-/* ISO-8601 week number — the "Week 36" style label in the masthead. Genuinely
-   computed from the reporting date, not a counter this stateless function has
-   nowhere to persist. */
-function isoWeek(d) {
-  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  const day = t.getUTCDay() || 7;
-  t.setUTCDate(t.getUTCDate() + 4 - day);
-  const yearStart = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
-  return Math.ceil((((t - yearStart) / 86400000) + 1) / 7);
-}
-
-/* Escalations carry no priority field of their own in Asana — this bands the
-   one real signal available (days open) into the same four labels the design
-   calls for. The cutoffs are a judgment call, not something Asana defines:
-   past 60 days is "how did this go unnoticed", past 20 is "should have a plan
-   by now", past a week is worth a mention, under that is routine. */
-function escalationPriority(days) {
-  if (days === null) return { label: 'Low', cls: 'low' };
-  if (days > 60) return { label: 'Critical', cls: 'critical' };
-  if (days > 20) return { label: 'High', cls: 'high' };
-  if (days > 7) return { label: 'Medium', cls: 'medium' };
-  return { label: 'Low', cls: 'low' };
-}
-
-// How many rows a table shows before folding the rest into a "+N more" line
-// linking to the live dashboard — an implementation list with 25 overdue
-// projects makes for an email nobody scrolls through otherwise.
+// How many rows the escalations table shows before folding the rest into a
+// "+N more" line linking to the live dashboard. Implementation shows its
+// full list instead — see renderImplementation.
 const ROW_CAP = 5;
 
 const STYLE = `
@@ -349,18 +306,6 @@ const STYLE = `
     .header-banner .sub .badge { background:#eef3fd; color:#2a6ab8; padding:2px 12px; border-radius:100px;
       font-size:10px; font-weight:600; letter-spacing:.04em; }
     .content-body { padding:28px 44px 32px; background:#ffffff; }
-    .quick-stats { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:32px;
-      padding-bottom:24px; border-bottom:1px solid #f0f2f5; }
-    .quick-stat { background:#f8f9fc; border-radius:14px; padding:14px 12px; text-align:center; border:1px solid #f0f2f5; }
-    .quick-stat .number { font-size:22px; font-weight:700; color:#1a1a1e; letter-spacing:-.02em; line-height:1.2; }
-    .quick-stat .number.red { color:#b84a2e; } .quick-stat .number.orange { color:#b86a2a; }
-    .quick-stat .number.blue { color:#2a6ab8; } .quick-stat .number.green { color:#2a9d8f; }
-    .quick-stat .number.grey { color:#8a8a94; }
-    .quick-stat .label { font-size:9px; text-transform:uppercase; letter-spacing:.06em; color:#8a8a94;
-      font-weight:600; margin-top:4px; }
-    .quick-stat .trend { font-size:9px; font-weight:600; margin-top:2px; letter-spacing:.03em; }
-    .quick-stat .trend.up { color:#2a9d8f; } .quick-stat .trend.down { color:#b84a2e; }
-    .quick-stat .trend.flat { color:#8a8a94; }
     .section-label-wrapper { display:flex; justify-content:center; margin-bottom:4px; }
     .section-label { display:inline-flex; align-items:center; gap:10px; padding:8px 28px 8px 24px; font-size:13px;
       font-weight:700; letter-spacing:.1em; text-transform:uppercase; border-radius:100px; box-shadow:0 2px 8px rgba(0,0,0,.02); }
@@ -385,11 +330,6 @@ const STYLE = `
     .center-cell { text-align:center; font-size:12.5px; color:#7a7a85; background:#fafbff!important;
       padding:18px 16px!important; border-radius:0 0 16px 16px; border-top:1px solid #f0f0f4!important; }
     .center-cell a { color:#2a6ab8; text-decoration:none; font-weight:500; border-bottom:2px solid rgba(42,106,184,.12); padding-bottom:2px; }
-    .status-badge { display:inline-block; padding:2px 12px; border-radius:100px; font-size:10px; font-weight:600; letter-spacing:.04em; }
-    .status-badge.critical { background:#fdf2ef; color:#b84a2e; }
-    .status-badge.high { background:#fdf5ed; color:#b86a2a; }
-    .status-badge.medium { background:#fef9e7; color:#b7950b; }
-    .status-badge.low { background:#eef3fd; color:#2a6ab8; }
     .footer { background:#fafbff; padding:24px 44px; border-top:1px solid #eaeaef; text-align:center; }
     .footer p { margin:0; font-size:12px; line-height:1.6; color:#7a7a85; }
     .footer a { color:#2a6ab8; text-decoration:none; font-weight:500; }
@@ -397,15 +337,10 @@ const STYLE = `
     @media (max-width:480px) {
       .header-banner, .content-body, .footer { padding-left:20px; padding-right:20px; }
       .header-banner h1 { font-size:22px; }
-      .quick-stats { grid-template-columns:repeat(2,1fr); gap:8px; }
-      .quick-stat { padding:10px 8px; } .quick-stat .number { font-size:18px; }
       .section-label { font-size:11px; padding:6px 18px 6px 16px; }
       .kpi-table { font-size:12px; } .kpi-table thead th, .kpi-table tbody td { padding:10px 10px; }
       .section-title { font-size:16px; }
     }`;
-
-const statCell = (n, label, cls, trendHtml) =>
-  `<div class="quick-stat"><div class="number ${cls}">${n}</div><div class="label">${label}</div>${trendHtml || ''}</div>`;
 
 function capNote(remaining, kind) {
   return `<tr><td colspan="99" class="center-cell">+ ${remaining} additional ${kind} &nbsp;&middot;&nbsp; ` +
@@ -428,29 +363,29 @@ function renderEscalations(rows, today) {
   const rowsHtml = shown.map(e => {
     const days = e.raised ? daysBetween(e.raised, today) : null;
     const openFor = days === null ? '—' : `${days} day${days === 1 ? '' : 's'}`;
-    const pr = escalationPriority(days);
     return `<tr><td><span style="font-weight:500">${escapeHtml(e.client)}</span></td>` +
-      `<td>${escapeHtml(e.owner || '—')}</td><td class="text-danger">${openFor}</td>` +
-      `<td><span class="status-badge ${pr.cls}">${pr.label}</span></td></tr>`;
+      `<td>${escapeHtml(e.owner || '—')}</td><td class="text-danger">${openFor}</td></tr>`;
   }).join('') + (sorted.length > ROW_CAP ? capNote(sorted.length - ROW_CAP, 'open escalations') : '');
   return `<div class="section-spacer">` +
     sectionHead('label-escalation', 'dot-orange', 'Escalations',
       `<span class="highlight">${rows.length}</span> escalation${rows.length === 1 ? '' : 's'} still open`) +
-    `<table class="kpi-table"><thead><tr><th>Client</th><th>Owner</th><th>Open Duration</th><th>Priority</th></tr></thead>` +
+    `<table class="kpi-table"><thead><tr><th>Client</th><th>Owner</th><th>Open Duration</th></tr></thead>` +
     `<tbody>${rowsHtml}</tbody></table></div>`;
 }
 
+// Escalations fold past ROW_CAP into a "+N more" line (see capNote); the
+// implementation list shows every overdue project instead, per request —
+// there's no dashboard link substituting for the full picture here.
 function renderImplementation(rows) {
   if (rows === null)
     return `<div class="section-spacer">${sectionHead('label-implementation', 'dot-blue', 'Implementation', 'Data unavailable right now')}</div>`;
   if (!rows.length)
     return `<div class="section-spacer">${sectionHead('label-ok', 'dot-green', 'Implementation', 'No projects have overdue tasks')}</div>`;
   const sorted = [...rows].sort((a, b) => b.overdue - a.overdue);
-  const shown = sorted.slice(0, ROW_CAP);
-  const rowsHtml = shown.map(p =>
+  const rowsHtml = sorted.map(p =>
     `<tr><td><span style="font-weight:500">${escapeHtml(p.name)}</span></td>` +
     `<td>${escapeHtml(p.owner || '—')}</td><td class="text-right text-danger">${p.overdue}</td></tr>`
-  ).join('') + (sorted.length > ROW_CAP ? capNote(sorted.length - ROW_CAP, 'projects with overdue tasks') : '');
+  ).join('');
   return `<div class="section-spacer">` +
     sectionHead('label-implementation', 'dot-blue', 'Implementation',
       `<span class="highlight">${rows.length}</span> project${rows.length === 1 ? '' : 's'} ${rows.length === 1 ? 'has' : 'have'} overdue tasks`) +
@@ -458,42 +393,12 @@ function renderImplementation(rows) {
     `<tbody>${rowsHtml}</tbody></table></div>`;
 }
 
-function renderHtml(day, missedResult, escalations, overdueImpl) {
-  const { missed, prevMissedCount, totalObligations } = missedResult;
+function renderHtml(day, missed, escalations, overdueImpl) {
   const dateObj = new Date(day + 'T00:00:00');
   const fullDate = dateObj.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   // Short form for the column header, so each row reads standalone without
   // scrolling back up to the opening sentence to know which day this is.
   const shortDate = dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-  const updatedAt = new Date().toLocaleTimeString('en-IN',
-    { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true }).replace(/am|pm/i, s => s.toUpperCase());
-
-  const missedObligations = missed.reduce((s, m) => s + m.trackers.length, 0);
-  const complianceRate = totalObligations
-    ? Math.round(((totalObligations - missedObligations) / totalObligations) * 100) : 100;
-  const complianceCls = complianceRate >= 95 ? 'green' : complianceRate >= 80 ? 'orange' : 'red';
-
-  /* The only stat with a genuine day-over-day comparison available (see
-     computeMissed) — escalations and implementation are point-in-time Asana
-     snapshots with no history this stateless function keeps, so those two
-     stats and the compliance rate get a number but no invented trend. */
-  let missedTrend = '';
-  if (prevMissedCount !== null) {
-    const diff = missed.length - prevMissedCount;
-    const trendCls = diff > 0 ? 'down' : diff < 0 ? 'up' : 'flat';
-    const arrow = diff > 0 ? '&uarr;' : diff < 0 ? '&darr;' : '&rarr;';
-    const text = diff === 0 ? 'Same as last working day' : `${arrow} ${Math.abs(diff)} vs last working day`;
-    missedTrend = `<div class="trend ${trendCls}">${text}</div>`;
-  }
-
-  const escN = escalations === null ? '—' : escalations.length;
-  const implN = overdueImpl === null ? '—' : overdueImpl.length;
-  const quickStats =
-    statCell(missed.length, missed.length === 1 ? 'Missed Timesheet' : 'Missed Timesheets',
-      missed.length ? 'red' : 'green', missedTrend) +
-    statCell(escN, 'Open Escalations', escalations === null ? 'grey' : escalations.length ? 'orange' : 'green') +
-    statCell(implN, 'Overdue Projects', overdueImpl === null ? 'grey' : overdueImpl.length ? 'blue' : 'green') +
-    statCell(`${complianceRate}%`, 'Compliance Rate', complianceCls);
 
   const missedRowsHtml = missed.map(m => {
     /* Only worth calling out once it is a pattern, not a single slip — today's
@@ -513,23 +418,21 @@ function renderHtml(day, missedResult, escalations, overdueImpl) {
 
   return `<div class="email-container">` +
     `<div class="header-banner"><div class="header-top">` +
-    `<div class="digest-tag"><span class="pulse"></span> CS KPI Digest</div></div>` +
+    `<div class="digest-tag"><span class="pulse"></span> CS Monitoring</div></div>` +
     `<h1>Daily <span class="highlight">Compliance</span> &amp; Operations</h1>` +
-    `<div class="sub"><span class="date">${fullDate}</span><span class="separator">&middot;</span>` +
-    `<span>Week ${isoWeek(dateObj)}</span><span class="separator">&middot;</span>` +
-    `<span class="badge">Updated: ${updatedAt} IST</span></div></div>` +
-    `<div class="content-body"><div class="quick-stats">${quickStats}</div>` +
+    `<div class="sub"><span class="date">${fullDate}</span></div></div>` +
+    `<div class="content-body">` +
     filingSection + renderEscalations(escalations, iso(new Date())) + renderImplementation(overdueImpl) +
     `</div>` +
     `<div class="footer"><p>Automated E-mail from KPI Dashboard &nbsp;&middot;&nbsp; ` +
     `<a href="https://cskpi.odpay.in">View Live Dashboard</a></p><p class="ted">TED</p></div></div>`;
 }
 
-function renderPage(day, missedResult, escalations, overdueImpl) {
+function renderPage(day, missed, escalations, overdueImpl) {
   return `<!doctype html><html><head><meta charset="UTF-8">` +
     `<meta name="viewport" content="width=device-width, initial-scale=1.0">` +
-    `<title>CS KPI Digest &middot; Daily Compliance</title><style>${STYLE}</style></head>` +
-    `<body>${renderHtml(day, missedResult, escalations, overdueImpl)}</body></html>`;
+    `<title>CS Monitoring &middot; Daily Compliance</title><style>${STYLE}</style></head>` +
+    `<body>${renderHtml(day, missed, escalations, overdueImpl)}</body></html>`;
 }
 
 const escapeHtml = s => String(s).replace(/[&<>"']/g, c =>
@@ -596,16 +499,16 @@ module.exports = async (req, res) => {
       fetchRaw(baseUrl, 'implementation').then(parseImplementation).catch(() => null),
     ]);
 
-    const missedResult = computeMissed(byTracker, day);
+    const missed = computeMissed(byTracker, day);
     const pretty = new Date(day + 'T00:00:00').toLocaleDateString('en-GB',
       { day: 'numeric', month: 'short' });
-    const subject = missedResult.missed.length
-      ? `CS KPI: ${missedResult.missed.length} ${missedResult.missed.length === 1 ? 'person' : 'people'} missed filing time sheet (${pretty})`
+    const subject = missed.length
+      ? `CS KPI: ${missed.length} ${missed.length === 1 ? 'person' : 'people'} missed filing time sheet (${pretty})`
       : `CS KPI: everyone filed time sheet (${pretty})`;
 
-    await sendEmail(subject, renderPage(day, missedResult, escalations, overdueImpl), testTo);
+    await sendEmail(subject, renderPage(day, missed, escalations, overdueImpl), testTo);
     return res.status(200).json({
-      ok: true, day, missed: missedResult.missed.length,
+      ok: true, day, missed: missed.length,
       openEscalations: escalations === null ? 'unavailable' : escalations.length,
       overdueImplementation: overdueImpl === null ? 'unavailable' : overdueImpl.length,
       testTo: testTo || undefined,
