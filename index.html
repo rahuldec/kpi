@@ -197,7 +197,7 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
    Collapsing them would hide exactly the case worth looking at. */
 .meters{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
 .mcard{border:1px solid var(--line);border-radius:13px;padding:16px 17px 15px;
-  box-shadow:0 1px 3px rgba(0,0,0,.04),0 8px 28px rgba(0,0,0,.035)}
+  box-shadow:0 2px 6px rgba(0,0,0,.08),0 12px 32px rgba(0,0,0,.08)}
 .mcard h4{font-size:16px;font-weight:600;letter-spacing:-.012em;color:var(--ink);margin:0 0 2px}
 .mcard .who{font-size:12.5px;color:var(--faint);margin:0 0 14px;line-height:1.45}
 /* Every row on a card is label · (i) · figure · detail, and the detail is the
@@ -470,7 +470,6 @@ html.modalopen{overflow:hidden}
 .how .vlist{margin-top:4px}
 .board tr.flat td{color:var(--faint)}
 
-#meterhint .period{margin:0}
 .escwho,.covwho,.implwho{font-size:12.5px;line-height:1.45;color:var(--miss);margin:5px 0 0 97px}
 .escwho.cool,.covwho.cool,.implwho.cool{color:var(--faint)}
 
@@ -1024,8 +1023,6 @@ tr.scoredetail .tk{flex:0 0 96px;color:var(--faint);font-weight:500}
 
   <section id="meter" hidden>
     <div class="card">
-      <h3>Team KPI</h3>
-      <div class="hint" id="meterhint"></div>
       <div class="meters" id="meters"></div>
     </div>
   </section>
@@ -3331,23 +3328,13 @@ function howHtml(r){
     return `${Number(day)} ${MONTHS_SHORT[Number(m) - 1]}`;
   }).join(' · ');
 
-  const skipping = $('joined').checked;
   let h = `<h5 data-sec="compliance">How compliance is worked out</h5>` +
     stats([
       [r.expected, 'expected'],
       [r.filed, 'filed'],
       [r.expected - r.filed, 'missed'],
       [`${r.expected ? Math.round(r.filed / r.expected * 100) : 0}%`, 'compliance'],
-    ]) +
-    `<p class="sum">` +
-    `Every working day counts as one expected entry per tracker — two a day, ` +
-    `Sundays and company holidays excluded, other Saturdays counted, approved ` +
-    `leave excused for whoever took it, and nothing counted for days that have ` +
-    `not happened yet. ` +
-    (skipping ? `Days before a person's first ever entry are skipped. ` : '') +
-    `For this team that is <b>${r.expected} expected</b>, <b>${r.filed} filed</b>, ` +
-    `<b>${r.expected - r.filed} missed</b> — ` +
-    `${r.expected ? Math.round(r.filed / r.expected * 100) : 0}%.</p>`;
+    ]);
 
   h += bookDetail(r);
   h += implDetail(r);
@@ -3468,7 +3455,6 @@ function adoptDetail(r){
    for every team once the scaled option is on. */
 function bookDetail(r){
   const n = r.adopt.total;
-  const heads = r.team.length + 1;
   const gap = r.target - r.revenue;
   return `<h5 data-sec="business">How business is worked out</h5>` +
     stats([
@@ -3477,28 +3463,6 @@ function bookDetail(r){
       [inr(Math.round(r.target)), 'target'],
       [inr(Math.round(Math.abs(gap))), gap > 0 ? 'short' : 'over'],
     ]) +
-    `<p class="sum">` +
-    `The book is the total billing of every client the client book gives ` +
-    `<b>${esc(r.lead)}</b> as owner` +
-    (n ? ` — <b>${n} ${n === 1 ? 'client' : 'clients'}</b>` : '') +
-    `, <b>${esc(inr(r.revenue))}</b>, as at ${esc(pretty(CLIENTS_ASOF))}. ` +
-    `Assistants are not counted separately: a team works one book. ` +
-    `The target is ` +
-    (TARGET_SCALED
-      ? `scaled to team size — ${esc(inr(TARGET_FULL_TEAM))} for a full three, so ` +
-        `<b>${esc(inr(Math.round(r.target)))}</b> for ${heads} ` +
-        `${heads === 1 ? 'person' : 'people'}`
-      : `a flat <b>${esc(inr(TARGET_FULL_TEAM))}</b> per team, whatever its size`) +
-    ` — ` +
-    (gap > 0 ? `<b>${esc(inr(Math.round(gap)))} short</b>.`
-             : `<b>${esc(inr(Math.round(-gap)))} over</b>.`) +
-    /* When the live book fails, CLIENTS_ASOF quietly becomes the snapshot's date
-       and the sentence above still reads as a deliberate as-of — a plausible,
-       dated, wrong figure, which is the exact shape of the stale-BOOK bug. Say
-       it outright, in the same words the adoption section uses. */
-    (BOOK_LIVE ? '' : ` Read from the snapshot built into this page` +
-      (BOOK_ERROR ? ` because the live book failed: ${esc(BOOK_ERROR)}` : '') + `.`) +
-    `</p>` +
     mixDetail(r);
 }
 
@@ -3526,7 +3490,6 @@ function mixDetail(r){
       `</p>`;
 
   const ret = b.retention, imp = b.implementation;
-  const share = x => b.labelled ? Math.round(x.clients / b.labelled * 100) : 0;
   /* Same client objects the business dial's own list draws from — CLIENTS
      filtered to this lead, split on the same `k` the stats above are counted
      from, so the names named here can never disagree with the counts beside
@@ -3546,22 +3509,6 @@ function mixDetail(r){
       [imp.clients, 'implementation'],
       [inr(imp.revenue), 'implementation book'],
     ]) +
-    `<p class="sum">` +
-    `Of the ${b.labelled} of ${b.clients} ` +
-    `${b.clients === 1 ? 'client' : 'clients'} the book labels, ` +
-    `<b>${ret.clients}</b> ${ret.clients === 1 ? 'is' : 'are'} retention ` +
-    `(${share(ret)}% by count, <b>${esc(inr(ret.revenue))}</b>) and ` +
-    `<b>${imp.clients}</b> ${imp.clients === 1 ? 'is' : 'are'} implementation ` +
-    `(${share(imp)}%, <b>${esc(inr(imp.revenue))}</b>). ` +
-    `Both are already inside the business figure above; this says what it is ` +
-    `made of, not how much of it there is.` +
-    (b.labelled < b.clients
-      ? ` The other ${b.clients - b.labelled} ${b.clients - b.labelled === 1
-          ? 'client carries' : 'clients carry'} no label and ` +
-        `${b.clients - b.labelled === 1 ? 'is' : 'are'} left out of both sides ` +
-        `rather than counted as either.`
-      : '') +
-    `</p>` +
     (retNames.length ? `<p class="who2">Retention</p>` + moneyList(retNames, 6, 'clients') : '') +
     (impNames.length ? `<p class="who2">Implementation</p>` + moneyList(impNames, 6, 'clients') : '') +
     (unlabelled.length ? `<p class="who2">No label</p>` + moneyList(unlabelled, 6, 'clients') : '');
@@ -3620,9 +3567,6 @@ function escDetail(r){
   }
   if (open.length) h += `</div>`;
   const shut = r.esc.reduce((n, x) => n + (x.all.length - x.open.length), 0);
-  if (shut)
-    h += `<p class="${open.length ? 'dates none' : 'none'}">${shut} resolved earlier ` +
-         `on ${esc(r.esc.filter(x => x.all.length > x.open.length).map(x => x.client).join(', '))}.</p>`;
   if (!open.length && !shut) return '';
   return h;
 }
@@ -3686,33 +3630,12 @@ function feedDetail(r){
       [f.sat === null ? '—' : f.sat.toFixed(1), 'satisfaction /5'],
       ...(f.support === null ? [] : [[f.support.toFixed(1), 'support /5']]),
       ...(f.reco === null ? [] : [[f.reco.toFixed(1), 'recommend /5']]),
-    ]) +
-    `<p class="sum">` +
-    `The most recent response from each client that answered, averaged. ` +
-    `<b>${f.heard} of ${f.total}</b> clients replied` +
-    (f.responses > f.heard
-      ? ` (${f.responses} submissions in total — only the latest from each client counts, ` +
-        `so a client that answers often does not outvote one that answered once)` : '') +
-    `. Satisfaction <b>${f.sat === null ? '—' : f.sat.toFixed(1)}/5</b>` +
-    (f.support === null ? '' : `, support ${f.support.toFixed(1)}/5`) +
-    (f.reco === null ? '' : `, recommendation ${f.reco.toFixed(1)}/5`) +
-    `. The ${f.total - f.heard} that did not reply are left out, not counted as unhappy.</p>`;
-
-  if (f.thin)
-    h += `<p class="sum"><b>Fewer than ${FEEDBACK_MIN_N} replies.</b> This is a couple of ` +
-         `opinions rather than a measurement of the team, and it is shown for that reason ` +
-         `only — nothing on this page ranks teams on it.</p>`;
+    ]);
 
   if (f.silent.length)
     h += `<p class="who2">Not heard from</p>` +
          moneyList(f.silent.slice().sort((a, b) => (b.r || 0) - (a.r || 0)), 6, 'clients');
 
-  const asks = f.latest.filter(x => x.improve || x.gaps);
-  if (asks.length)
-    h += `<p class="who2">What they asked for</p><div class="asks">` +
-         asks.map(x => `<p class="dates"><span class="tk">${esc(x.client.n)}</span>` +
-                       `<span>${esc([x.improve, x.gaps].filter(Boolean).join(' — '))}</span></p>`)
-             .join('') + `</div>`;
   return h;
 }
 
@@ -4300,7 +4223,6 @@ function renderMeter(){
         ? `${POD_GAPS.map(esc).join('. ')}. Fix the Team tab in the CS Team Plan sheet.`
         : `Nobody on the roster is in a team yet — add them to the Team tab in the CS Team Plan sheet.`) +
       `</p>`;
-    $('meterhint').textContent = '';
     return;
   }
 
@@ -4362,21 +4284,6 @@ function renderMeter(){
   closeHow();
   OPEN_CARD = null;
 
-  const running = MONTHS.includes(thisMonth());
-  /* Nothing but the period. The warnings that used to sit here — unmatched
-     escalations, teams with no book, people in no team — were asked for twice to
-     be taken off this view, so they are off it. Each one is still computed and
-     still reported where its own data lives: unmatched escalations on the client
-     book, unscored clients on the adoption tab, unplaced visitors on Field.
-
-     Two have nowhere else and are genuinely no longer shown anywhere: the
-     excluded teams and the people in no team. That is a deliberate choice, not
-     an oversight. */
-  $('meterhint').innerHTML =
-    `<p class="period">Compliance and adoption for <b>${esc(monthsLabel())}` +
-    `${running ? ' to date' : ''}</b>. Module adoption is ${esc(ADOPTION_QUARTER)} and does ` +
-    `not move with the month picker. The four dials are shown side by side, ` +
-    `not blended &mdash; tap any <i>i</i> for how one is worked out.</p>`;
 }
 
 /* ---------------- client book ---------------- */
