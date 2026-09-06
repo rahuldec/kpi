@@ -207,8 +207,8 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
    the label and value being pushed apart. Same rule on .escline and .visitline
    below. */
 .dial{display:flex;align-items:baseline;gap:2px 9px;margin:0 0 4px;flex-wrap:wrap}
-.dial .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);
-  width:88px;flex:none}
+.dial .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--body);
+  font-weight:600;width:88px;flex:none}
 .dial .val{font-size:19px;font-weight:600;letter-spacing:-.018em;font-variant-numeric:tabular-nums}
 .dial .sub{font-size:12.5px;color:var(--faint);margin-left:auto;text-align:right}
 .track{height:7px;border-radius:4px;background:var(--hair);overflow:hidden;margin:0 0 14px}
@@ -396,7 +396,7 @@ html.modalopen{overflow:hidden}
    headline div with nothing after it. */
 .covwho + .dial,.mixbar + .dial,.implwho + .dial,.implline + .dial{padding-top:14px;border-top:1px solid var(--hair)}
 .visitline .lbl,.escline .lbl,.implline .lbl,.mixline .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.07em;
-  color:var(--faint);width:88px;flex:none}
+  color:var(--body);font-weight:600;width:88px;flex:none}
 /* "Implementation" is one unbreakable word, wider than the 88px column every
    other one-line label here fits inside — at 88px it overflows straight
    through the (i) button beside it rather than wrapping (there's no space to
