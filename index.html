@@ -4002,8 +4002,15 @@ function renderVisits(){
   for (const r of rows){
     const team = POD_TEAM.get(r.lead) || [];
     const heads = team.length + 1;
+    // Each member with their own count, not just a name list — byPerson only
+    // carries people with at least one visit, so anyone else on the team
+    // reads as (0) rather than being silently left out.
+    const counts = new Map(r.byPerson);
+    const members = [r.lead, ...team]
+      .map(name => ({ name, n: counts.get(name) || 0 }))
+      .sort((a, b) => b.n - a.n);
     t += `<tr${r.person ? '' : ' class="flat"'}><td>${esc(r.lead)}</td>` +
-         `<td>${team.length ? esc(team.join(', ')) : '—'}</td>` +
+         `<td>${esc(members.map(m => `${m.name} (${m.n})`).join(', '))}</td>` +
          `<td class="num">${heads}</td>` +
          `<td class="num">${r.person || '—'}</td>` +
          `<td class="num">${r.meetings || '—'}</td></tr>`;
