@@ -1437,25 +1437,29 @@ const splitVisitors = raw => String(raw).split(/\s*(?:,|&|\band\b)\s*/i).map(s =
    `team: "okie_dokie"` — the client's own attendees earn the client nothing
    here. Only offline meetings count as a visit: an online one is a call, and
    calls are already counted by the tracker on the compliance side. */
-/* Split each name field into atomic pieces before adding to the per-meeting
-   Set, not after — `employee_name` often carries a joined string ("Akshat
-   Wahi, Rahul Sharma") for exactly the same two people `attendees` also
-   lists separately ("Akshat Wahi", "Rahul Sharma"). Deduping on the raw
-   string, as this used to, treats the joined form and the individual
-   entries as three different people instead of two, and downstream
-   splitting then credits each of them twice for one meeting. Splitting here
-   means the Set dedupes on the actual name, whichever field it came from. */
+/* Resolve each name to a roster identity before adding it to the per-meeting
+   Set, not after. Two problems compound otherwise: `employee_name` often
+   carries a joined string ("Akshat Wahi, Rahul Sharma") for exactly the same
+   people `attendees` also lists separately, and — the one a raw-string Set
+   still can't catch even after splitting — the same person sometimes appears
+   as their full name in one field and a bare first name/nickname ("Bhavey
+   Saluja" vs "Bhavey") in the other. Those only turn out to be the same
+   person once canonVisitor's first-name fallback resolves them, which is too
+   late for a Set keyed on the string itself. Deduping on the resolved name —
+   falling back to the raw piece only when nobody on the roster matches it,
+   so an unplaced name still surfaces in VISIT_UNPLACED — fixes both at once. */
 function parseVisits(rows){
   if (!Array.isArray(rows)) throw new Error('The visits feed did not return a list of meetings.');
   const out = [];
   for (const m of rows){
     if (!m || m.meeting_type !== 'offline') continue;
     const people = new Set();
-    if (m.employee_name)
-      for (const name of splitVisitors(m.employee_name)) people.add(name);
+    const add = raw => {
+      for (const name of splitVisitors(raw)) people.add(canonVisitor(name) || name);
+    };
+    if (m.employee_name) add(m.employee_name);
     for (const a of (m.attendees || []))
-      if (a && a.team === 'okie_dokie' && a.name)
-        for (const name of splitVisitors(a.name)) people.add(name);
+      if (a && a.team === 'okie_dokie' && a.name) add(a.name);
     const d = String(m.meeting_date || '').slice(0, 10);
     if (people.size && d) out.push({d, p: [...people]});
   }
