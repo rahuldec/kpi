@@ -1033,11 +1033,6 @@ tr.scoredetail .tk{flex:0 0 96px;color:var(--faint);font-weight:500}
   </section>
 
   <section id="meter" hidden>
-    <div class="card" id="pexmodulecard">
-      <h3>Knowledge gaps by module</h3>
-      <p class="targetnote" id="pexmodulenote"></p>
-      <table class="board" id="pexmodules"></table>
-    </div>
     <div class="card">
       <div class="meters" id="meters"></div>
     </div>
@@ -1367,7 +1362,7 @@ function parsePex(text){
   for (let i = 0; i < Math.min(rows.length, 10); i++){
     const h = rows[i].map(x => String(x).trim().toLowerCase());
     const a = h.indexOf('assignee'), c = h.indexOf('pex category');
-    if (a > -1 && c > -1){ head = i; ix = {name: a, category: c, module: h.indexOf('module')}; break; }
+    if (a > -1 && c > -1){ head = i; ix = {name: a, category: c}; break; }
   }
   if (head < 0) throw new Error('Could not find a header row with "Assignee" and "PEX Category".');
   const out = [];
@@ -1375,37 +1370,9 @@ function parsePex(text){
     const r = rows[i]; if (!r) continue;
     const name = (r[ix.name] || '').trim();
     const category = (r[ix.category] || '').trim();
-    const module = (ix.module > -1 ? r[ix.module] : '') || '';
-    if (name && category) out.push({name, category, module: module.trim()});
+    if (name && category) out.push({name, category});
   }
   return out;
-}
-
-/* The same Knowledge Gap tasks pexForTeam rolls up per person, seen instead
-   by Module — the one cut that turns "five reps need training" into "this
-   part of the product keeps tripping people up." Company-wide, not
-   per-lead: a module problem doesn't belong to one team any more than a
-   product bug does, so this reads all of PEX rather than one team's slice.
-   A task with no Module set (older rows, mostly) goes in an explicit
-   "No module set" bucket rather than being silently dropped — that gap is
-   itself worth knowing about, not nothing. */
-function pexModuleReport(){
-  const byModule = new Map();
-  for (const t of PEX){
-    if (t.category !== 'Knowledge Gap') continue;
-    const mod = t.module || 'No module set';
-    const who = canonPexName(t.name) || t.name;
-    if (!byModule.has(mod)) byModule.set(mod, new Map());
-    const people = byModule.get(mod);
-    people.set(who, (people.get(who) || 0) + 1);
-  }
-  return [...byModule.entries()]
-    .map(([module, people]) => ({
-      module,
-      total: [...people.values()].reduce((a, b) => a + b, 0),
-      reps: [...people.entries()].sort((a, b) => b[1] - a[1]),
-    }))
-    .sort((a, b) => b.total - a.total || b.reps.length - a.reps.length);
 }
 
 /* Asana's own assignee field, not free text like the MOM portal's visitor
@@ -4257,24 +4224,6 @@ function dial(label, value, sub, met, info){
 function renderMeter(){
   const {ym, rows, loose, excluded} = meterRows();
   const pct = v => v === null ? null : Math.round(v * 100);
-
-  // Company-wide, so it renders once here rather than per team card — see
-  // pexModuleReport for why a module is the unit, not a person.
-  const modules = pexModuleReport();
-  const multiRep = modules.filter(m => m.reps.length > 1).length;
-  $('pexmodulecard').hidden = !modules.length;
-  if (modules.length){
-    $('pexmodulenote').textContent =
-      `${modules.length} ${modules.length === 1 ? 'module has' : 'modules have'} Knowledge Gap ` +
-      `tasks · ${multiRep} of them span more than one rep`;
-    $('pexmodules').innerHTML =
-      `<thead><tr><th>Module</th><th class="num">Tasks</th><th>Reps</th></tr></thead><tbody>` +
-      modules.map(m =>
-        `<tr${m.reps.length > 1 ? '' : ' class="flat"'}><td>${esc(m.module)}</td>` +
-        `<td class="num">${m.total}</td>` +
-        `<td>${esc(m.reps.map(([name, n]) => `${name} (${n})`).join(', '))}</td></tr>`
-      ).join('') + `</tbody>`;
-  }
 
   /* An empty grid is the worst thing this view can show: it looks like a loading
      state rather than a result. Say what happened and why. */
