@@ -481,11 +481,11 @@ module.exports = async (req, res) => {
     const pretty = new Date(day + 'T00:00:00').toLocaleDateString('en-GB',
       { day: 'numeric', month: 'short' });
     // Escalations may be null (fetch failed) — that segment is dropped rather
-    // than printing a false "0 open escalations" for data that didn't load.
-    const missedPart = `${missed.length} missed timesheet${missed.length === 1 ? '' : 's'}`;
+    // than printing a false "0 Open Escalations" for data that didn't load.
+    const missedPart = `${missed.length} Missed Timesheet${missed.length === 1 ? '' : 's'}`;
     const escPart = escalations === null ? null
-      : `${escalations.length} open escalation${escalations.length === 1 ? '' : 's'}`;
-    const subject = `CS KPI : ${pretty} : ${[missedPart, escPart].filter(Boolean).join(' · ')}`;
+      : `${escalations.length} Open Escalation${escalations.length === 1 ? '' : 's'}`;
+    const subject = `CS KPI Update – ${pretty}: ${[missedPart, escPart].filter(Boolean).join(' | ')}`;
 
     await sendEmail(subject, renderPage(day, missed, escalations, overdueImpl), testTo);
     return res.status(200).json({
