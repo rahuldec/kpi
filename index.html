@@ -3997,16 +3997,16 @@ function renderVisits(){
 
   $('visitteamnote').textContent =
     `${esc(monthsLabel())} · teams with no client book are not shown here`;
-  let t = `<thead><tr><th>Team</th><th class="num">People</th>` +
-          `<th class="num">Person-visits</th><th class="num">Meetings</th>` +
-          `<th class="num">Per person</th></tr></thead><tbody>`;
+  let t = `<thead><tr><th>Team</th><th>Team members</th><th class="num">People</th>` +
+          `<th class="num">Person-visits</th><th class="num">Meetings</th></tr></thead><tbody>`;
   for (const r of rows){
-    const heads = (POD_TEAM.get(r.lead) || []).length + 1;
+    const team = POD_TEAM.get(r.lead) || [];
+    const heads = team.length + 1;
     t += `<tr${r.person ? '' : ' class="flat"'}><td>${esc(r.lead)}</td>` +
+         `<td>${team.length ? esc(team.join(', ')) : '—'}</td>` +
          `<td class="num">${heads}</td>` +
          `<td class="num">${r.person || '—'}</td>` +
-         `<td class="num">${r.meetings || '—'}</td>` +
-         `<td class="num">${r.person ? (r.person / heads).toFixed(1) : '—'}</td></tr>`;
+         `<td class="num">${r.meetings || '—'}</td></tr>`;
   }
   $('visitteams').innerHTML = t + `</tbody>`;
 
