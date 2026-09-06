@@ -224,6 +224,17 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
    asserts .met's presence for "target met"), only what paints them. */
 .mcard .dial:last-of-type + .track{margin-bottom:0}
 
+/* A simple horizontal bar chart, reusing the same track/fill the dials use —
+   one brand-orange bar per row rather than a new visual language, so a chart
+   next to a dial reads as the same page rather than two different tools. */
+.barchart{display:flex;flex-direction:column;gap:10px;margin:4px 0 18px}
+.barrow{display:flex;align-items:center;gap:10px;font-size:13px}
+.barrow .barlabel{width:132px;flex:none;color:var(--ink);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.barrow .track{flex:1;margin:0}
+.barrow .barvalue{width:32px;flex:none;text-align:right;font-variant-numeric:tabular-nums;
+  color:var(--faint)}
+
 /* ── how-it-adds-up panel ─────────────────────────────────────────────────────
    Opens as a dialog over the grid. It began as a panel expanding under its own
    card — the reasoning being that an RM wants their dates beside their number —
@@ -1090,11 +1101,13 @@ tr.scoredetail .tk{flex:0 0 96px;color:var(--faint);font-weight:500}
     </div>
     <div class="card">
       <h3>By team</h3>
+      <div class="barchart" id="visitteamchart"></div>
       <p class="targetnote" id="visitteamnote"></p>
       <table class="board" id="visitteams"></table>
     </div>
     <div class="card">
       <h3>By person</h3>
+      <div class="barchart" id="visitpeoplechart"></div>
       <p class="targetnote" id="visitpeoplenote"></p>
       <table class="board" id="visitpeople"></table>
     </div>
@@ -3979,6 +3992,9 @@ function renderVisits(){
 
   $('visithint').hidden = true;
 
+  $('visitteamchart').innerHTML = barChart(
+    rows.filter(r => r.person).map(r => ({ label: r.lead, value: r.person })));
+
   $('visitteamnote').textContent =
     `${esc(monthsLabel())} · teams with no client book are not shown here`;
   let t = `<thead><tr><th>Team</th><th class="num">People</th>` +
@@ -3997,6 +4013,16 @@ function renderVisits(){
   const people = new Map();
   for (const r of rows) for (const [who, n] of r.byPerson) people.set(who, {n, lead: r.lead});
   const ranked = [...people.entries()].sort((a, b) => b[1].n - a[1].n || a[0].localeCompare(b[0]));
+
+  // Capped at 10 bars — the table below still lists everyone; the chart is
+  // for "who's out front", not a replacement for the full ranking.
+  const CHART_CAP = 10;
+  $('visitpeoplechart').innerHTML =
+    barChart(ranked.slice(0, CHART_CAP).map(([who, x]) => ({ label: who, value: x.n }))) +
+    (ranked.length > CHART_CAP
+      ? `<p class="targetnote" style="margin-top:2px">+${ranked.length - CHART_CAP} more in the table below.</p>`
+      : '');
+
   $('visitpeoplenote').textContent =
     `${ranked.length} ${ranked.length === 1 ? 'person' : 'people'} filed at least one · ` +
     `${esc(monthsLabel())}`;
@@ -4151,6 +4177,21 @@ function renderFeedback(){
         `<tr><td>${esc(c.n)}</td><td>${esc(c.o)}</td>` +
         `<td class="num">${esc(inr(c.r || 0))}</td></tr>`).join('') + `</tbody>`;
   }
+}
+
+/* A plain horizontal bar chart for a ranked list with no target to compare
+   against (visits, unlike compliance or adoption, has nobody's agreed number
+   to hit) — each bar is scaled to the largest value in the list, not a fixed
+   0–100 scale, so the leader always fills the row and the rest read
+   proportionally against it. */
+function barChart(items){
+  if (!items.length) return '';
+  const max = Math.max(...items.map(x => x.value), 1);
+  return items.map(x =>
+    `<div class="barrow"><span class="barlabel" title="${esc(x.label)}">${esc(x.label)}</span>` +
+    `<div class="track"><i style="width:${Math.max(x.value / max * 100, 2)}%"></i></div>` +
+    `<span class="barvalue">${x.value}</span></div>`
+  ).join('');
 }
 
 /* Same rule as the book table: never round across the line, so a bar that has
