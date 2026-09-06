@@ -3997,10 +3997,10 @@ function renderVisits(){
 
   $('visithint').innerHTML =
     (VISITS_ERROR
-      ? `<b>The visit feed did not load:</b> ${esc(VISITS_ERROR)}`
-      : (VISITS_LIVE ? `Read live.`
+      ? `<b>The MOM Portal feed did not load:</b> ${esc(VISITS_ERROR)}`
+      : (VISITS_LIVE ? `Read live from the MOM Portal.`
                      : `Read from the snapshot built into this page, taken ` +
-                       `${esc(pretty(VISITS_ASOF))}; the live feed is not switched on yet.`)) +
+                       `${esc(pretty(VISITS_ASOF))}; the live MOM Portal feed is not switched on yet.`)) +
     /* Admin-only, same reasoning as the escalations and adoption unmatched
        notes: an attendee not on the roster at all cannot be checked against
        any pod-scoped viewer's team. */
@@ -4741,16 +4741,22 @@ function tick(){
 }
 function loading(){
   const pct = Math.min(100, Math.round((LOAD_DONE / LOAD_TOTAL) * 100));
-  showState(`<div class="loading"><i></i><span>Reading the tracker sheet… ${pct}%</span></div>`, false);
+  showState(`<div class="loading"><i></i><span>Fetching live from Asana… ${pct}%</span></div>`, false);
 }
+/* Reached only when the internal/client tracker fetch itself throws — every
+   other source (book, team, escalations, implementation, adoption, feedback,
+   visits, pex) catches its own failure and degrades soft instead of getting
+   here, so this is always genuinely about the Asana connection, not a sheet. */
 function failed(msg, hint){
   showState(
-    '<h2>Could not load the sheet</h2>' +
+    '<h2>Could not load live data from Asana</h2>' +
     '<p>' + esc(msg) + '</p>' +
     (hint ? '<p>' + esc(hint) + '</p>' : '') +
-    '<p>The sheet must be readable without signing in: <b>Share → General access → ' +
-    'Anyone with the link → Viewer</b>. If that is already set, check the sheet ID and ' +
-    'tab <code>gid</code> in <code>api/data.js</code>.</p>', true);
+    '<p>Check that <code>ASANA_CLIENT_ID</code>, <code>ASANA_CLIENT_SECRET</code> and ' +
+    '<code>ASANA_REFRESH_TOKEN</code> are set in Vercel, and that the token still has ' +
+    'access to the internal and client tracker projects — visit ' +
+    '<code>/api/asana-authorize</code> to redo the consent flow if the refresh token has ' +
+    'been revoked.</p>', true);
 }
 
 /* ---------------- load ---------------- */
