@@ -934,7 +934,7 @@ tr.scoredetail .tk{flex:0 0 96px;color:var(--faint);font-weight:500}
     <div class="group">
       <span class="grouplabel" id="grouplabel">Compliance</span>
       <div class="sources" id="sources">
-        <button type="button" data-src="internal">Internal team calls</button>
+        <button type="button" data-src="internal">Internal calls</button>
         <button type="button" data-src="client">Client calls</button>
         <button type="button" data-src="scorecard">Scorecard</button>
       </div>
@@ -957,14 +957,14 @@ tr.scoredetail .tk{flex:0 0 96px;color:var(--faint);font-weight:500}
     <div class="group">
       <span class="grouplabel">Voice</span>
       <div class="sources" id="sources5">
-        <button type="button" data-src="feedback">Client feedback</button>
+        <button type="button" data-src="feedback">Feedback</button>
       </div>
     </div>
 
     <div class="group">
       <span class="grouplabel">Field</span>
       <div class="sources" id="sources6">
-        <button type="button" data-src="visits">Client visits</button>
+        <button type="button" data-src="visits">Visits</button>
       </div>
     </div>
 
@@ -1824,8 +1824,8 @@ const SOURCES = {
   clients:   {label: 'CS client book',                 noun: 'calls'},
   meter:     {label: 'CS team KPI Matrix',              noun: 'calls'},
   adoption:  {label: 'ERP module adoption',            noun: 'calls'},
-  feedback:  {label: 'Client feedback',                noun: 'calls'},
-  visits:    {label: 'Client visits',                  noun: 'calls'}
+  feedback:  {label: 'Feedback',                       noun: 'calls'},
+  visits:    {label: 'Visits',                         noun: 'calls'}
 };
 const TRACKERS = ['internal','client'];
 const MONTH_KEY = 'kpi.months';
