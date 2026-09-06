@@ -266,15 +266,20 @@ async function grabAsanaEscalations(projectGid, token) {
   return { ok: true, body: rows.map(r => r.map(csvEscape).join(',')).join('\n') };
 }
 
-/* Every task in the PEX "Daily Problems" project — one row per task with just
-   its assignee and its "PEX Category" custom field value. A task can carry
-   custom fields from more than one project if it's multi-homed (this one's
-   tasks often also sit in a QA/dev board with its own fields), so
-   `custom_fields.name` comes back with all of them; only the one named
-   "PEX Category" is kept, everything else is index.html's problem to ignore. */
+/* Every task in the PEX "Daily Problems" project — one row per task with its
+   assignee, its "PEX Category" custom field value, and its "Module" value —
+   Category says what kind of problem it was (a Knowledge Gap vs. a real
+   Production Bug), Module says which part of the product it was in. Together
+   they're what tells a Knowledge Gap clustered in one module across several
+   reps apart from one rep's own gap: same category, but a product/training
+   question instead of a people one. A task can carry custom fields from more
+   than one project if it's multi-homed (this one's tasks often also sit in a
+   QA/dev board with its own fields), so `custom_fields.name` comes back with
+   all of them; only the two named here are kept, everything else is
+   index.html's problem to ignore. */
 async function grabAsanaPex(projectGid, token) {
   const fields = 'name,assignee.name,assignee.email,custom_fields.name,custom_fields.display_value';
-  const rows = [['Assignee', 'Assignee Email', 'PEX Category']];
+  const rows = [['Assignee', 'Assignee Email', 'PEX Category', 'Module']];
   let offset = '';
   do {
     const url = `https://app.asana.com/api/1.0/projects/${projectGid}/tasks` +
@@ -284,10 +289,12 @@ async function grabAsanaPex(projectGid, token) {
     const json = await r.json();
     for (const t of json.data || []) {
       const category = (t.custom_fields || []).find(f => f.name === 'PEX Category');
+      const module = (t.custom_fields || []).find(f => f.name === 'Module');
       rows.push([
         (t.assignee && t.assignee.name) || '',
         (t.assignee && t.assignee.email) || '',
         (category && category.display_value) || '',
+        (module && module.display_value) || '',
       ]);
     }
     offset = (json.next_page && json.next_page.offset) || '';
