@@ -212,19 +212,21 @@ function buildRoster(byTracker) {
   return roster;
 }
 
-// How far back to look when deciding whether a missed entry is a one-off or
-// a pattern. 5 working days is a calendar week — long enough to catch someone
-// drifting, short enough that a fix shows up in the count within a week.
-const RECENT_WINDOW = 5;
-
-/* The N most recent working days up to and including `day`, oldest first. */
-function recentWorkingDays(day, n) {
-  const out = [];
+/* Every working day from the Monday of `day`'s own calendar week through
+   `day` itself, oldest first — genuinely "this week", not a fixed 5-working-day
+   lookback. The earlier version counted back 5 working days regardless of
+   week boundaries, so a Monday's email could say "missed 4 times this week"
+   using mostly *last* week's days — technically a pattern, but not the week
+   anyone reading "this week" on a Monday would picture. On a Monday the
+   window is just that Monday; by Saturday it's the full working week. */
+function weekWorkingDays(day) {
   const d = new Date(day + 'T00:00:00');
-  while (out.length < n) {
-    if (isWorkingDay(d)) out.unshift(iso(d));
-    d.setDate(d.getDate() - 1);
-  }
+  const back = d.getDay() === 0 ? 6 : d.getDay() - 1; // days back to Monday
+  const monday = new Date(d);
+  monday.setDate(monday.getDate() - back);
+  const out = [];
+  for (const cur = new Date(monday); cur <= d; cur.setDate(cur.getDate() + 1))
+    if (isWorkingDay(cur)) out.push(iso(cur));
   return out;
 }
 
@@ -251,9 +253,9 @@ function computeMissed(byTracker, day) {
   const roster = buildRoster(byTracker);
 
   /* `day` is always the window's own last entry, so the day being reported on
-     and the tally of how often each person has missed recently come out of
+     and the tally of how often each person has missed this week come out of
      the same set of per-day lookups rather than two separate passes. */
-  const window = recentWorkingDays(day, RECENT_WINDOW);
+  const window = weekWorkingDays(day);
   const missedByDay = new Map(window.map(d => [d, missedTrackersOn(byTracker, roster, d)]));
 
   const recentCounts = new Map();
@@ -382,8 +384,9 @@ function renderHtml(day, missed, escalations, overdueImpl) {
   const missedRowsHtml = missed.map(m => {
     /* Only worth calling out once it is a pattern, not a single slip — today's
        own miss already accounts for one of the count, so 2+ means at least
-       one other day in the window went the same way. Plain "this week" reads
-       faster than a fraction, and RECENT_WINDOW (5 working days) is a week. */
+       one other day this week went the same way. On a Monday the week-so-far
+       window is just that Monday, so this can never fire yet — which is
+       correct: there's no "pattern" to report until a second day exists. */
     const streak = m.recent >= 2 ? `<div class="missed-badge">Missed ${m.recent} times this week</div>` : '';
     return `<tr><td><div class="person-name">${escapeHtml(m.name)}</div>${streak}</td>` +
       `<td class="text-danger">${m.trackers.map(t => TRACKER_LABEL[t]).join(', ')}</td></tr>`;
