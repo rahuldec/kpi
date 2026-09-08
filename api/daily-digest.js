@@ -330,7 +330,7 @@ const STYLE = `
 
 function moreNote(remaining, kind) {
   return `<p class="more-note">+ ${remaining} additional ${kind} &middot; ` +
-    `<a href="https://cskpi.odpay.in">View complete list on dashboard &rarr;</a></p>`;
+    `<a href="https://cskpi.oderp.in">View complete list on dashboard &rarr;</a></p>`;
 }
 
 function sectionHead(color, label, headlineHtml) {
@@ -406,7 +406,7 @@ function renderHtml(day, missed, escalations, overdueImpl) {
     renderEscalations(escalations, iso(new Date())) + `<hr class="divider">` +
     renderImplementation(overdueImpl) + `<hr class="divider">` +
     `<div class="footer"><p>Automated E-mail from KPI Dashboard &middot; ` +
-    `<a href="https://cskpi.odpay.in">View live</a>.</p><p class="ted">TED</p></div></div>`;
+    `<a href="https://cskpi.oderp.in">View live</a>.</p><p class="ted">TED</p></div></div>`;
 }
 
 function renderPage(day, missed, escalations, overdueImpl) {
