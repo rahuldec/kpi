@@ -5177,6 +5177,12 @@ async function load(){
       BOOK_LIVE = false;
       BOOK_ERROR = (e && e.message) || String(e);
     }
+    /* fillClientFilters() ran once at script load, off CLIENTS_FALLBACK — the
+       only value CLIENTS could have before this fetch resolved. Without
+       rerunning it here, the Owner/RM/Type dropdown options stay frozen on
+       that stale snapshot forever, even though the client list itself
+       (rendered from CLIENTS below) already reflects the live book. */
+    fillClientFilters();
     tick();
 
     /* Adoption joins against client names, so like escalations it waits for the
