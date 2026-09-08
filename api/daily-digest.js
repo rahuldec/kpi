@@ -463,8 +463,16 @@ module.exports = async (req, res) => {
     ? testParam : null;
 
   try {
-    const proto = req.headers['x-forwarded-proto'] || 'https';
-    const baseUrl = `${proto}://${req.headers.host}`;
+    /* Deliberately not derived from req.headers.host. Vercel Cron sometimes
+       invokes a deployment's own auto-generated *.vercel.app alias rather
+       than the custom production domain, and that alias has Deployment
+       Protection on it — a request arriving there gets redirected to a
+       Vercel SSO login page instead of served. Building baseUrl from that
+       host then makes every internal /api/data fetch below hit the same
+       protected alias and fail the same way, crashing the whole run. The
+       custom domain has no such protection, so it's hardcoded here instead
+       of trusted from the incoming request. */
+    const baseUrl = process.env.DIGEST_BASE_URL || 'https://cskpi.odpay.in';
     const day = lastWorkingDay();
 
     const byTracker = {};
