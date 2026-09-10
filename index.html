@@ -152,10 +152,9 @@ h1{
 }
 .esc.open{background:var(--miss);color:#fff}
 .esc.shut{background:none;color:var(--faint);border:1px solid var(--line)}
-/* QBR health, at a glance rather than read as text — same pill shape as .esc. */
+/* QBR health, at a glance rather than read as a word — a colour, not a label. */
 .health{
-  display:inline-block;padding:1px 9px;border-radius:20px;
-  font-size:11px;font-weight:600;letter-spacing:.01em;vertical-align:1px;color:#fff;
+  display:inline-block;width:10px;height:10px;border-radius:50%;vertical-align:1px;
 }
 .health.green{background:var(--ok)}
 .health.amber{background:var(--warn)}
@@ -4611,15 +4610,17 @@ function renderByRm(){
    only their own team and an admin sees everyone. "Reviews" counts scored
    clients against the lead's whole team size, the same denominator style the
    book's own rollup uses for clients against target. */
-/* Health as a colour, not a row of counts to read as text — the badge alone
-   says Green/Amber/Red, the way a status light does. Critical rides along
-   as a small suffix rather than its own column, since it only ever matters
-   next to a health that's already not Green. */
+/* Health as a colour, not a word — a dot, the way a status light works,
+   title text carrying the label for anyone who needs it spelled out
+   (a screen reader, a hover). Critical rides along as a small suffix rather
+   than its own column, since it only ever matters next to a health that's
+   already not Green. */
 const QBR_HEALTH_LABEL = {green: 'Green', amber: 'Amber', red: 'Red'};
 function qbrHealthBadge(health, criticalCount){
   if (!health) return '<span class="dim">—</span>';
   const crit = criticalCount ? ` &middot; ${criticalCount} critical` : '';
-  return `<span class="health ${health}">${QBR_HEALTH_LABEL[health]}</span>${crit}`;
+  return `<span class="health ${health}" title="${QBR_HEALTH_LABEL[health]}" ` +
+    `role="img" aria-label="${QBR_HEALTH_LABEL[health]}"></span>${crit}`;
 }
 
 function renderQbr(){
