@@ -4,7 +4,8 @@
 // us, so the real integration can be designed from what's actually there
 // instead of guessing. Delete this file once that integration is built.
 //
-// Same auth as daily-digest.js: refuses to run without CRON_SECRET, so this
+// Gated on its own one-off INSPECT_SECRET rather than CRON_SECRET (which is
+// a Vercel "Secret"-type var and can't be read back to confirm), so this
 // doesn't become an unauthenticated way to read arbitrary Asana data.
 
 async function getAsanaAccessToken() {
@@ -26,7 +27,7 @@ async function getAsanaAccessToken() {
 
 module.exports = async (req, res) => {
   const auth = req.headers.authorization || '';
-  if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!process.env.INSPECT_SECRET || auth !== `Bearer ${process.env.INSPECT_SECRET}`) {
     return res.status(404).end();
   }
 
