@@ -969,6 +969,13 @@ tr.scoredetail .tk{flex:0 0 96px;color:var(--faint);font-weight:500}
     </div>
 
     <div class="group">
+      <span class="grouplabel">Retention</span>
+      <div class="sources" id="sources7">
+        <button type="button" data-src="qbr">QBR</button>
+      </div>
+    </div>
+
+    <div class="group">
       <span class="grouplabel">Overall</span>
       <div class="sources" id="sources3">
         <button type="button" data-src="meter">KPI Matrix</button>
@@ -1115,6 +1122,22 @@ tr.scoredetail .tk{flex:0 0 96px;color:var(--faint);font-weight:500}
       <h3>No visit filed</h3>
       <p class="targetnote" id="visitgapnote"></p>
       <table class="board" id="visitgaps"></table>
+    </div>
+  </section>
+
+  <section id="qbr" hidden>
+    <div class="card">
+      <h3>By team</h3>
+      <table class="board" id="qbrteams"></table>
+    </div>
+    <div class="card" id="qbrcriticalcard" hidden>
+      <h3>Needs attention</h3>
+      <div id="qbrcritical"></div>
+    </div>
+    <div class="card">
+      <h3>Every review</h3>
+      <p class="targetnote" id="qbrunmatched" hidden></p>
+      <table class="board" id="qbrclients"></table>
     </div>
   </section>
 
@@ -1563,6 +1586,20 @@ let FEED_ERROR = null;
 /* Client name -> every response for that client, newest first. */
 let FEED_BY_CLIENT = new Map(), FEED_UNMATCHED = [];
 
+/* QBR (Quarterly Business Review) — a per-client retention review RMs file
+   through an Asana Form each quarter (see api/data.js's grabAsanaQbr for how
+   the raw rows get here). There is no compiled fallback snapshot: this is a
+   brand-new source with no history to fall back to, so a fetch failure shows
+   an explicit error rather than stale data. */
+let QBR = [];
+let QBR_ERROR = null;
+/* Client name (lowercased) -> Map(quarter sortKey -> scored record). Kept as
+   full history, not just the latest quarter, because quarter-on-quarter
+   movement needs the previous quarter's score alongside the current one. */
+let QBR_HISTORY = new Map();
+/* Client name (canonical, from the book) -> latest-quarter record + QoQ. */
+let QBR_BY_CLIENT = new Map(), QBR_UNMATCHED = [];
+
 /* Lowercased owner -> {clients, revenue}. The Clients sheet and the trackers now
    spell people the same way, so this joins on name; anyone not an owner is simply
    absent from the map and shows a dash rather than a zero. */
@@ -1825,7 +1862,8 @@ const SOURCES = {
   meter:     {label: 'CS team KPI Matrix',              noun: 'calls'},
   adoption:  {label: 'ERP module adoption',            noun: 'calls'},
   feedback:  {label: 'Feedback',                       noun: 'calls'},
-  visits:    {label: 'Visits',                         noun: 'calls'}
+  visits:    {label: 'Visits',                         noun: 'calls'},
+  qbr:       {label: 'Quarterly Business Review',      noun: 'reviews'}
 };
 const TRACKERS = ['internal','client'];
 const MONTH_KEY = 'kpi.months';
@@ -2539,6 +2577,166 @@ function adoptForTeam(lead){
     adoption: applicable ? adopted / applicable : null,
     coverage: revTotal ? revCovered / revTotal : null
   };
+}
+
+/* One row per QBR submission, exactly as grabAsanaQbr (api/data.js) emits it —
+   a CSV header this dashboard wrote itself, not a hand-typed sheet, so this is
+   a straight column-name lookup rather than parseFeedback's fuzzy header-hunt
+   below. Every question the Asana Form asks that scoring or the detail view
+   needs has its own column; anything else the form asks was never worth
+   piping through here. */
+function parseQbr(text){
+  const rows = splitRows(text, ',');
+  if (!rows.length) return [];
+  const h = rows[0].map(x => String(x || '').trim());
+  const cell = (r, name) => { const i = h.indexOf(name); return i > -1 ? String(r[i] ?? '').trim() : ''; };
+  const KEY = {
+    'Client Name': 'client', 'Quarter': 'quarterRaw', 'RM Name': 'rm', 'Created At': 'createdAt',
+    'Relationship Rating': 'relationship', 'Decision Maker Connected': 'decisionMaker',
+    'Customer Champion': 'champion', 'Adoption Level': 'adoption', 'Major Modules Used': 'modulesUsed',
+    'Needs Training': 'needsTraining', 'Satisfaction Score': 'satisfaction',
+    'Major Unresolved Issue': 'majorIssue', 'Major Issue Detail': 'majorIssueDetail',
+    'Renewal Likelihood': 'renewal', 'Competitor Evaluation': 'competitorEval',
+    'Renewal Discussion Started': 'renewalDiscussion', 'Renewal Blocker': 'renewalBlocker',
+    'Renewal Action': 'renewalAction', 'Payment Status': 'payment', 'Payment Concern': 'paymentConcern',
+    'Payment Concern Detail': 'paymentConcernDetail', 'Management Intervention Needed': 'managementIntervention',
+    'Management Intervention Detail': 'managementInterventionDetail', 'RM Self Health': 'selfHealth',
+    'RM Self Trend': 'selfTrend', 'RM Confidence': 'confidence', 'Main Health Reason': 'mainReason',
+    'Management Change Note': 'managementChangeNote', 'Module Needing Attention': 'moduleNeedingAttention',
+    'Adoption Blocker Reason': 'adoptionBlockerReason', 'What They Like': 'whatTheyLike',
+    'Biggest Concern': 'biggestConcern', 'Top 3 Actions': 'topActions',
+    'Expansion Opportunity': 'expansionOpportunity', 'Expansion Type': 'expansionType',
+    'One Thing For Management': 'oneThing',
+  };
+  const out = [];
+  for (let i = 1; i < rows.length; i++){
+    const r = rows[i];
+    if (!r || !r.some(v => String(v || '').trim())) continue;
+    const row = {};
+    for (const [col, key] of Object.entries(KEY)) row[key] = cell(r, col);
+    if (!row.client) continue;
+    out.push(row);
+  }
+  return out;
+}
+
+/* Loosely reads a free-text or Yes/No answer as a boolean. Every field this is
+   used on is a real Yes/No dropdown as of 10 Sep 2026, but a handful of
+   earlier submissions answered a since-converted free-text box directly
+   ("yes visits", "not really") — this degrades those gracefully instead of
+   treating anything but the literal word "yes" as a clean negative. */
+function qbrYes(v){
+  const s = String(v || '').trim().toLowerCase();
+  if (!s) return null;
+  if (s === 'yes' || s.startsWith('yes ')) return true;
+  if (s === 'no' || s.startsWith('no ') || s.startsWith('not ')) return false;
+  return true;
+}
+
+/* The scoring spec (QBR.docx): five weighted dimensions, each capped at its
+   own maximum, summed to a 0-100 health score. The three "adjust for X"
+   deductions the doc leaves unquantified (decision-maker/champion on
+   Relationship; modules-used/training on Adoption; payment-concern on
+   Payment) are judgment calls made here — small enough not to flip a health
+   band on their own. A dimension with no recognised answer makes the whole
+   score null rather than guessed at; missing is shown as missing, not as a
+   score of zero for that dimension. */
+function scoreQbr(r){
+  const lc = s => String(s || '').trim().toLowerCase();
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  let rel = {excellent: 20, good: 15, average: 10, weak: 5}[lc(r.relationship)] ?? null;
+  if (rel != null){
+    rel -= lc(r.decisionMaker) === 'no' ? 4 : lc(r.decisionMaker) === 'partially' ? 2 : 0;
+    rel -= lc(r.champion) === 'no' ? 3 : lc(r.champion) === 'not sure' ? 1 : 0;
+    rel = clamp(rel, 0, 20);
+  }
+  let ado = {high: 20, good: 16, average: 12, low: 7, 'very low': 3}[lc(r.adoption)] ?? null;
+  if (ado != null){
+    ado -= lc(r.modulesUsed) === 'no' ? 4 : lc(r.modulesUsed) === 'partially' ? 2 : 0;
+    ado -= qbrYes(r.needsTraining) ? 2 : 0;
+    ado = clamp(ado, 0, 20);
+  }
+  let sat = {5: 20, 4: 16, 3: 12, 2: 7, 1: 3}[Number(r.satisfaction)] ?? null;
+  if (sat != null && !qbrYes(r.majorIssue)) sat = Math.min(25, sat + 5);
+  const ren = {'very likely': 25, likely: 20, uncertain: 12, 'at risk': 6, 'very unlikely': 0}[lc(r.renewal)] ?? null;
+  let pay = {'on time': 10, 'slight delay': 8, delayed: 5, 'significant outstanding': 1, unknown: 5}[lc(r.payment)] ?? null;
+  if (pay != null && qbrYes(r.paymentConcern)) pay = Math.max(0, pay - 3);
+
+  const parts = {rel, ado, sat, ren, pay};
+  if (Object.values(parts).some(p => p == null)) return {score: null, health: null, critical: false, parts};
+  const score = rel + ado + sat + ren + pay;
+  const health = score >= 80 ? 'green' : score >= 60 ? 'amber' : 'red';
+  const critical = lc(r.renewal) === 'very unlikely' || lc(r.competitorEval) === 'yes' ||
+    Number(r.satisfaction) === 1 || lc(r.payment) === 'significant outstanding' ||
+    qbrYes(r.managementIntervention) === true;
+  return {score, health, critical, parts};
+}
+
+/* The Quarter answer names a quarter but never a year ("Q2 (Jul-Sep)") — the
+   year comes from when the review was actually filed, on the assumption an
+   RM files close to the quarter being reviewed. The FY label follows the
+   convention already used when this was discussed: FYnn starts April of
+   20nn, so Jul-Sep 2026 reads "Q2 FY26" — only Q4 (Jan-Mar) rolls back to the
+   previous FY label, since it falls in the following calendar year. sortKey
+   is a plain increasing integer (fy*10+q) so quarters compare correctly
+   across a fiscal-year boundary without string-comparing labels. */
+function qbrQuarterKey(quarterRaw, createdAtIso){
+  const m = String(quarterRaw || '').match(/Q\s*(\d)/i);
+  if (!m || !createdAtIso) return null;
+  const q = Number(m[1]);
+  if (q < 1 || q > 4) return null;
+  const createdYear = new Date(createdAtIso).getFullYear();
+  if (!Number.isFinite(createdYear)) return null;
+  const fy = q === 4 ? createdYear - 1 : createdYear;
+  return {q, fy, label: `Q${q} FY${String(fy).slice(-2)}`, sortKey: fy * 10 + q};
+}
+function qbrPrevQuarterKey({q, fy}){
+  const prev = q === 1 ? {q: 4, fy: fy - 1} : {q: q - 1, fy};
+  return prev.fy * 10 + prev.q;
+}
+
+/* Client name (from the book) -> full quarter history, plus the latest
+   quarter's record with quarter-on-quarter movement attached. Joins on
+   Client Name the same way buildAdoption joins on the module-adoption
+   sheet's client column — a name the form doesn't match to a book client is
+   surfaced in QBR_UNMATCHED, never silently dropped. Sorted by Created At
+   first so that if a client is reviewed twice inside the same quarter
+   (a correction, a re-submission), the later one wins. */
+function buildQbr(){
+  QBR_HISTORY = new Map();
+  QBR_BY_CLIENT = new Map();
+  QBR_UNMATCHED = [];
+  const byName = new Map();
+  for (const c of CLIENTS) byName.set(eNorm(c.n), c);
+
+  const sorted = [...QBR].sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
+  for (const row of sorted){
+    const c = byName.get(eNorm(row.client));
+    if (!c){ QBR_UNMATCHED.push(row.client); continue; }
+    const qk = qbrQuarterKey(row.quarterRaw, row.createdAt);
+    if (!qk) continue;
+    const scored = scoreQbr(row);
+    const key = c.n.toLowerCase();
+    if (!QBR_HISTORY.has(key)) QBR_HISTORY.set(key, new Map());
+    QBR_HISTORY.get(key).set(qk.sortKey, {...qk, ...scored, row, client: c});
+  }
+
+  for (const byQuarter of QBR_HISTORY.values()){
+    const latestKey = Math.max(...byQuarter.keys());
+    const latest = byQuarter.get(latestKey);
+    const prevRec = byQuarter.get(qbrPrevQuarterKey(latest));
+    let qoq = 'First Review';
+    if (prevRec && prevRec.score != null && latest.score != null){
+      const delta = latest.score - prevRec.score;
+      qoq = delta >= 10 ? `Significant Improvement (+${delta})`
+          : delta >= 5  ? `Improving (+${delta})`
+          : delta >= -4 ? `Stable (${delta >= 0 ? '+' : ''}${delta})`
+          : delta >= -9 ? `Declining (${delta})`
+          : `Significant Deterioration (${delta})`;
+    }
+    QBR_BY_CLIENT.set(latest.client.n, {...latest, qoq});
+  }
 }
 
 /* The form's responses tab, exactly as Google writes it: one row per submission,
@@ -4399,6 +4597,91 @@ function renderByRm(){
   $('podgaps').innerHTML = '';
 }
 
+/* Same shape as renderByRm above: one row per lead, scoped so a lead sees
+   only their own team and an admin sees everyone. "Reviews" counts scored
+   clients against the lead's whole team size, the same denominator style the
+   book's own rollup uses for clients against target. */
+function renderQbr(){
+  const leadRows = [...POD_TEAM.keys()].filter(lead => leadInViewerScope(lead)).map(lead => {
+    const team = new Set([lead, ...(POD_TEAM.get(lead) || [])]);
+    const recs = [...QBR_BY_CLIENT.values()].filter(r => r.client.o && team.has(r.client.o));
+    const scored = recs.filter(r => r.score != null);
+    const avg = scored.length ? Math.round(scored.reduce((n, r) => n + r.score, 0) / scored.length) : null;
+    const counts = {green: 0, amber: 0, red: 0};
+    scored.forEach(r => counts[r.health]++);
+    const critical = recs.filter(r => r.critical).length;
+    return {lead, total: recs.length, scored: scored.length, avg, counts, critical};
+  }).sort((a, b) => (b.critical - a.critical) || (a.avg ?? 999) - (b.avg ?? 999));
+
+  let t1 = '<thead><tr><th>Team</th><th class="num">Reviewed</th><th class="num">Avg score</th>' +
+    '<th class="num">Green</th><th class="num">Amber</th><th class="num">Red</th>' +
+    '<th class="num">Critical</th></tr></thead><tbody>';
+  for (const r of leadRows){
+    t1 += `<tr><td>${esc(r.lead)}</td><td class="num">${r.scored}/${r.total || 0}</td>` +
+      `<td class="num">${r.avg == null ? '—' : r.avg}</td>` +
+      `<td class="num">${r.counts.green || '—'}</td>` +
+      `<td class="num">${r.counts.amber || '—'}</td>` +
+      `<td class="num ${r.counts.red ? 'short' : ''}">${r.counts.red || '—'}</td>` +
+      `<td class="num ${r.critical ? 'short' : ''}">${r.critical || '—'}</td></tr>`;
+  }
+  if (!leadRows.length) t1 += '<tr><td colspan="7">No QBR responses yet.</td></tr>';
+  $('qbrteams').innerHTML = t1 + '</tbody>';
+
+  const clientRecs = [...QBR_BY_CLIENT.values()]
+    .filter(r => clientInViewerScope(r.client))
+    .sort((a, b) => (b.critical - a.critical) || (a.score ?? 999) - (b.score ?? 999));
+
+  let t2 = '<thead><tr><th>Client</th><th>RM</th><th>Quarter</th><th class="num">Score</th>' +
+    '<th>Health</th><th>QoQ</th><th class="num">Critical</th></tr></thead><tbody>';
+  for (const r of clientRecs){
+    const healthCls = r.health === 'green' ? 'hit' : r.health === 'red' ? 'short' : '';
+    t2 += `<tr${r.critical ? ' class="flagged"' : ''}>` +
+      `<td>${esc(r.client.n)}</td><td class="dim">${esc(r.row.rm || '—')}</td>` +
+      `<td class="dim">${esc(r.label)}</td>` +
+      `<td class="num">${r.score == null ? '—' : r.score}</td>` +
+      `<td class="num ${healthCls}">${r.health ? r.health.toUpperCase() : '—'}</td>` +
+      `<td class="dim">${esc(r.qoq)}</td>` +
+      `<td class="num">${r.critical ? '<span class="esc open">Yes</span>' : '<span class="dim">—</span>'}</td></tr>`;
+  }
+  if (!clientRecs.length) t2 += '<tr><td colspan="7">No QBR responses yet this quarter.</td></tr>';
+  $('qbrclients').innerHTML = t2 + '</tbody>';
+
+  /* Everything a lead needs to act on a flagged client without opening Asana —
+     the free-text answers behind the flag, not just the flag itself. Only
+     rendered for critical clients: a card per green/amber client with nothing
+     wrong would just be the same table restated. */
+  const critical = clientRecs.filter(r => r.critical);
+  $('qbrcriticalcard').hidden = !critical.length;
+  if (critical.length){
+    $('qbrcritical').innerHTML = critical.map(r => {
+      const row = r.row;
+      const lines = [
+        row.mainReason && ['Main reason', row.mainReason],
+        row.renewalBlocker && ['Renewal blocker', row.renewalBlocker],
+        row.renewalAction && ['Suggested action', row.renewalAction],
+        row.managementInterventionDetail && ['Needs management', row.managementInterventionDetail],
+        row.paymentConcernDetail && ['Payment concern', row.paymentConcernDetail],
+        row.majorIssueDetail && ['Unresolved issue', row.majorIssueDetail],
+        row.topActions && ['Top actions', row.topActions],
+      ].filter(Boolean);
+      return `<div class="mcard"><h4>${esc(r.client.n)}</h4>` +
+        `<p class="who">${esc(row.rm || 'RM not recorded')} &middot; ${esc(r.label)} &middot; ` +
+        `score ${r.score ?? '—'}</p>` +
+        lines.map(([label, text]) => `<p class="sum"><b>${esc(label)}:</b> ${esc(text)}</p>`).join('') +
+        '</div>';
+    }).join('');
+  }
+
+  if (QBR_UNMATCHED.length){
+    $('qbrunmatched').hidden = false;
+    $('qbrunmatched').textContent =
+      `${QBR_UNMATCHED.length} response${QBR_UNMATCHED.length === 1 ? '' : 's'} named a client not ` +
+      `on the book: ${[...new Set(QBR_UNMATCHED)].join(', ')}`;
+  } else {
+    $('qbrunmatched').hidden = true;
+  }
+}
+
 function renderClientList(){
   const shown = sortClients(scopedClients().filter(c =>
     (!CFILTER.owner || c.o === CFILTER.owner) &&
@@ -4730,6 +5013,7 @@ const modeOf = src => src === 'scorecard' ? 'scorecard'
                     : src === 'adoption'  ? 'adoption'
                     : src === 'feedback'  ? 'feedback'
                     : src === 'visits'    ? 'visits'
+                    : src === 'qbr'       ? 'qbr'
                     : 'daily';
 
 /* Slides the selection pill onto the current tab.
@@ -4762,7 +5046,7 @@ function moveNavPill(animate){
 }
 
 function markSource(){
-  for (const g of ['sources','sources2','sources3','sources4','sources5','sources6'])
+  for (const g of ['sources','sources2','sources3','sources4','sources5','sources6','sources7'])
     for (const b of $(g).children)
       b.setAttribute('aria-pressed', String(b.dataset.src === SOURCE));
   const mode = modeOf(SOURCE);
@@ -4773,12 +5057,14 @@ function markSource(){
      : mode === 'adoption' ? 'module adoption'
      : mode === 'feedback' ? 'client feedback'
      : mode === 'visits'   ? 'client visits'
+     : mode === 'qbr'      ? 'quarterly business review'
      : SOURCES[SOURCE].label);
   $('h1').innerHTML = mode === 'scorecard' ? 'Missed days, <em>counted</em>.'
                     : mode === 'clients'   ? 'Who owns <em>what</em>.'
                     : mode === 'adoption'  ? 'What they actually <em>use</em>.'
                     : mode === 'feedback'  ? 'What the clients <em>say</em>.'
                     : mode === 'visits'    ? 'Who went <em>out</em>.'
+                    : mode === 'qbr'       ? 'Who needs <em>attention</em>.'
                     : 'Who <em>hasn\'t</em> filed.';
   const daily = mode === 'daily';
   $('lede').hidden = !daily;
@@ -4788,6 +5074,7 @@ function markSource(){
   $('adoption').hidden  = mode !== 'adoption';
   $('feedback').hidden  = mode !== 'feedback';
   $('visits').hidden    = mode !== 'visits';
+  $('qbr').hidden       = mode !== 'qbr';
   for (const id of DAILY_PANELS){ const el = $(id); if (el) el.hidden = !daily; }
   $('presets').hidden   = !daily;
   $('monthwrap').hidden = mode !== 'scorecard' && mode !== 'meter' && mode !== 'visits';
@@ -4796,7 +5083,7 @@ function markSource(){
   /* Quarterly, and not per-person: neither the month picker nor the joined
      toggle changes a single figure on this tab, so neither is shown. */
   $('joinedwrap').hidden = mode === 'clients' || mode === 'adoption' ||
-                           mode === 'feedback' || mode === 'visits';
+                           mode === 'feedback' || mode === 'visits' || mode === 'qbr';
   $('h1').innerHTML = mode === 'meter' ? 'Compliance and <em>business</em>.' : $('h1').innerHTML;
   if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => moveNavPill());
   else moveNavPill();
@@ -4866,6 +5153,19 @@ function showActive(){
     const scoredCount = [...ADOPT_BY_CLIENT.values()].filter(r => clientInViewerScope(r.client)).length;
     $('fresh').textContent = `${scoredCount} clients scored`;
     renderAdoption();
+    return;
+  }
+  /* Quarterly and self-contained, like adoption — but unlike adoption there is
+     no compiled fallback, so a fetch failure is named directly rather than
+     silently reading as zero reviews. */
+  if (SOURCE === 'qbr'){
+    showContent();
+    const recs = [...QBR_BY_CLIENT.values()].filter(r => clientInViewerScope(r.client));
+    const critical = recs.filter(r => r.critical).length;
+    $('fresh').textContent = QBR_ERROR ? 'QBR project not loaded'
+      : `${recs.length} ${recs.length === 1 ? 'review' : 'reviews'}` +
+        (critical ? ` · ${critical} needing attention` : '');
+    renderQbr();
     return;
   }
   /* Neither per-person nor per-month: the month picker and the joined toggle
@@ -5302,6 +5602,20 @@ async function load(){
     }
     tick();
 
+    /* QBR joins client names against the book, same as escalations/
+       implementation/feedback — but unlike those, there is no compiled
+       fallback: this is a brand-new source with no history to fall back to,
+       so a failure here shows an explicit error rather than stale data. */
+    try {
+      QBR = parseQbr(await fetchRaw('qbr'));
+      QBR_ERROR = null;
+    } catch (e) {
+      QBR = [];
+      QBR_ERROR = (e && e.message) || String(e);
+    }
+    buildQbr();
+    tick();
+
     /* Only now is COVER populated, so only now can the picker know which months
        have data behind them. Rendering it earlier offers months that produce a
        confident 0%. */
@@ -5376,7 +5690,7 @@ $('scoreSearch').addEventListener('input', e => {
 });
 /* Every group's tabs share one handler — a new group needs its id here and
    nothing else. Binding per group is how a tab ends up silently inert. */
-for (const g of ['sources','sources2','sources3','sources4','sources5','sources6'])
+for (const g of ['sources','sources2','sources3','sources4','sources5','sources6','sources7'])
   $(g).addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b || b.dataset.src === SOURCE) return;
     SOURCE = b.dataset.src;

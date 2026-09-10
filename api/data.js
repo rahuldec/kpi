@@ -159,7 +159,17 @@ const SOURCES = {
      Google re-renders published output on its own few-minute schedule. */
   implementation: { asanaPortfolio: process.env.ASANA_IMPLEMENTATION_PORTFOLIO_GID ||
                        '1210134872553129',
-                 envVar: 'ASANA_IMPLEMENTATION_PORTFOLIO_GID' }
+                 envVar: 'ASANA_IMPLEMENTATION_PORTFOLIO_GID' },
+  /* QBR ("Quarterly Business Review") — a quarterly per-client retention
+     review RMs fill in via an Asana Form. Unlike every other Asana source
+     above, this form created no custom fields at all: every answer Asana
+     Forms writes lands as plain text inside the task's own `notes`, as
+     "Question:\nAnswer" blocks separated by a blank line — Client Name and
+     Quarter are just two of those blocks, not native task fields. See
+     grabAsanaQbr/parseQbrNotes below for what actually parses out of it. */
+  qbr:         { asanaProject: process.env.ASANA_QBR_PROJECT_GID || '1218343982584833',
+                 envVar: 'ASANA_QBR_PROJECT_GID',
+                 asanaShape: 'qbr' }
 };
 
 const trackerSignature = csv => /due date/i.test(csv) && /assignee/i.test(csv);
@@ -289,6 +299,97 @@ async function grabAsanaPex(projectGid, token) {
         (t.assignee && t.assignee.email) || '',
         (category && category.display_value) || '',
       ]);
+    }
+    offset = (json.next_page && json.next_page.offset) || '';
+  } while (offset);
+  return { ok: true, body: rows.map(r => r.map(csvEscape).join(',')).join('\n') };
+}
+
+/* Splits a QBR task's `notes` into a lowercased-question -> answer map. Asana
+   Forms serializes every answer as "Question:\nAnswer", blocks separated by a
+   blank line, ending in a fixed "This task was submitted through QBR" footer
+   (stripped before parsing). The label Asana writes always ends in a colon —
+   appended on top of whatever punctuation the question already had ("...is
+   the customer::" for a question already ending in a colon on the form) — so
+   *all* trailing colons are stripped, not just one, before using the label as
+   a lookup key. A question this dashboard doesn't ask for is simply never
+   looked up; nothing needs to enumerate the full form here. */
+function parseQbrNotes(notes) {
+  const body = String(notes || '').split(/\n—+\nThis task was submitted/)[0];
+  const map = new Map();
+  for (const block of body.split(/\n{2,}/)) {
+    const nl = block.indexOf('\n');
+    if (nl < 0) continue;
+    const label = block.slice(0, nl).trim().replace(/:+$/, '').trim().toLowerCase();
+    const value = block.slice(nl + 1).trim();
+    if (label) map.set(label, value);
+  }
+  return map;
+}
+
+/* [CSV column name, notes question label (lowercased, no trailing colon)].
+   Order here is the CSV column order. Four of these (Needs Training, Major
+   Unresolved Issue, Payment Concern, Management Intervention Needed) were
+   originally free-text "Yes/No | details" boxes on the form — unreliable for
+   scoring, since an RM could type anything — and were converted to real
+   Yes/No dropdowns with a separate conditional "If yes, ..." detail question
+   on 10 Sep 2026; the detail questions are carried through for the client
+   detail view but play no part in scoring. */
+const QBR_COLUMNS = [
+  ['Client Name', 'client name'],
+  ['Quarter', 'quarter'],
+  ['RM Name', 'rm'],
+  ['Relationship Rating', 'how is your relationship with the customer?'],
+  ['Decision Maker Connected', 'are you regularly connected with the decision maker?'],
+  ['Customer Champion', 'is there a strong customer champion?'],
+  ['Adoption Level', 'how well is the customer using okie dokie?'],
+  ['Major Modules Used', 'are the major purchased modules being used?'],
+  ['Needs Training', 'does the customer need any training/support to improve adoption?'],
+  ['Satisfaction Score', 'overall customer satisfaction'],
+  ['Major Unresolved Issue', 'is there any major unresolved issue affecting the customer?'],
+  ['Major Issue Detail', 'if yes, then please describe.'],
+  ['Renewal Likelihood', 'how likely is the customer to renew?'],
+  ['Competitor Evaluation', 'is the customer evaluating another solution/competitor?'],
+  ['Renewal Discussion Started', 'has renewal discussion started?'],
+  ['Renewal Blocker', 'what could prevent this customer from renewing?'],
+  ['Renewal Action', 'what should we do to secure the renewal?'],
+  ['Payment Status', 'current payment status'],
+  ['Payment Concern', 'is there any commercial/payment concern that could affect the relationship or renewal?'],
+  ['Payment Concern Detail', 'if yes, then please provide details'],
+  ['Management Intervention Needed', 'does this customer require management intervention?'],
+  ['Management Intervention Detail', 'if yes, please explain why intervention is needed.'],
+  ['RM Self Health', 'how is the customer doing overall?'],
+  ['RM Self Trend', 'compared with last quarter, the customer is'],
+  ['RM Confidence', 'how confident are you that this customer will continue with okie dokie?'],
+  ['Main Health Reason', 'what is the main reason for the current health status?'],
+  ['Management Change Note', 'has there been any important management/key-person change?'],
+  ['Module Needing Attention', 'which module needs attention?'],
+  ['Adoption Blocker Reason', 'why is it not being used properly?'],
+  ['What They Like', 'what does the customer like most about okie dokie?'],
+  ['Biggest Concern', "what is the customer's biggest concern?"],
+  ['Top 3 Actions', 'what are the top 3 things we need to do for this customer?'],
+  ['Expansion Opportunity', 'is there any expansion opportunity?'],
+  ['Expansion Type', 'is there any expansion opportunity? if yes'],
+  ['One Thing For Management', 'if you had to tell management one important thing about this customer, what would it be?'],
+];
+
+/* Every task in the QBR project, its `notes` parsed into the flat columns
+   above plus the task's own Created At — the Quarter answer names a quarter
+   ("Q2 (Jul-Sep)") but never a year, so the dashboard derives the year from
+   when the review was actually filed. */
+async function grabAsanaQbr(projectGid, token) {
+  const fields = 'name,notes,created_at';
+  const rows = [['Created At', ...QBR_COLUMNS.map(c => c[0])]];
+  let offset = '';
+  do {
+    const url = `https://app.asana.com/api/1.0/projects/${projectGid}/tasks` +
+                `?opt_fields=${fields}&limit=100` + (offset ? `&offset=${offset}` : '');
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!r.ok) return { ok: false, status: r.status };
+    const json = await r.json();
+    for (const t of json.data || []) {
+      const map = parseQbrNotes(t.notes);
+      rows.push([t.created_at || '', ...QBR_COLUMNS.map(([, key]) => map.get(key) || '')]);
     }
     offset = (json.next_page && json.next_page.offset) || '';
   } while (offset);
@@ -513,6 +614,7 @@ module.exports = async (req, res) => {
         hit = isPortfolio ? await grabAsanaImplementationPortfolio(target, accessToken)
             : source.asanaShape === 'escalations' ? await grabAsanaEscalations(target, accessToken)
             : source.asanaShape === 'pex' ? await grabAsanaPex(target, accessToken)
+            : source.asanaShape === 'qbr' ? await grabAsanaQbr(target, accessToken)
             : await grabAsanaProject(target, accessToken);
       } catch (e) {
         return fail(`Could not reach Asana: ${e.message}`, 'Check the Asana API status.');
