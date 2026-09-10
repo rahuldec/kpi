@@ -25,6 +25,8 @@
   --miss:#A82A1C;         /* absence — serious, on-palette, distinct from accent */
   --miss-soft:#FBEDEB;
   --gold:#FCDE5C;
+  --ok:#2E7D32;           /* QBR health: Green */
+  --warn:#B8860B;         /* QBR health: Amber */
 }
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
@@ -150,6 +152,14 @@ h1{
 }
 .esc.open{background:var(--miss);color:#fff}
 .esc.shut{background:none;color:var(--faint);border:1px solid var(--line)}
+/* QBR health, at a glance rather than read as text — same pill shape as .esc. */
+.health{
+  display:inline-block;padding:1px 9px;border-radius:20px;
+  font-size:11px;font-weight:600;letter-spacing:.01em;vertical-align:1px;color:#fff;
+}
+.health.green{background:var(--ok)}
+.health.amber{background:var(--warn)}
+.health.red{background:var(--miss)}
 tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px}
 .escnote{
   font-size:13.5px;line-height:1.55;color:var(--body);margin:0 0 16px;
@@ -969,7 +979,7 @@ tr.scoredetail .tk{flex:0 0 96px;color:var(--faint);font-weight:500}
     </div>
 
     <div class="group">
-      <span class="grouplabel">Retention</span>
+      <span class="grouplabel">RM Review</span>
       <div class="sources" id="sources7">
         <button type="button" data-src="qbr">QBR</button>
       </div>
@@ -4601,30 +4611,36 @@ function renderByRm(){
    only their own team and an admin sees everyone. "Reviews" counts scored
    clients against the lead's whole team size, the same denominator style the
    book's own rollup uses for clients against target. */
+/* Health as a colour, not a row of counts to read as text — the badge alone
+   says Green/Amber/Red, the way a status light does. Critical rides along
+   as a small suffix rather than its own column, since it only ever matters
+   next to a health that's already not Green. */
+const QBR_HEALTH_LABEL = {green: 'Green', amber: 'Amber', red: 'Red'};
+function qbrHealthBadge(health, criticalCount){
+  if (!health) return '<span class="dim">—</span>';
+  const crit = criticalCount ? ` &middot; ${criticalCount} critical` : '';
+  return `<span class="health ${health}">${QBR_HEALTH_LABEL[health]}</span>${crit}`;
+}
+
 function renderQbr(){
   const leadRows = [...POD_TEAM.keys()].filter(lead => leadInViewerScope(lead)).map(lead => {
     const team = new Set([lead, ...(POD_TEAM.get(lead) || [])]);
     const recs = [...QBR_BY_CLIENT.values()].filter(r => r.client.o && team.has(r.client.o));
     const scored = recs.filter(r => r.score != null);
     const avg = scored.length ? Math.round(scored.reduce((n, r) => n + r.score, 0) / scored.length) : null;
-    const counts = {green: 0, amber: 0, red: 0};
-    scored.forEach(r => counts[r.health]++);
+    const health = avg == null ? null : avg >= 80 ? 'green' : avg >= 60 ? 'amber' : 'red';
     const critical = recs.filter(r => r.critical).length;
-    return {lead, total: recs.length, scored: scored.length, avg, counts, critical};
+    return {lead, total: recs.length, scored: scored.length, avg, health, critical};
   }).sort((a, b) => (b.critical - a.critical) || (a.avg ?? 999) - (b.avg ?? 999));
 
   let t1 = '<thead><tr><th>Team</th><th class="num">Reviewed</th><th class="num">Avg score</th>' +
-    '<th class="num">Green</th><th class="num">Amber</th><th class="num">Red</th>' +
-    '<th class="num">Critical</th></tr></thead><tbody>';
+    '<th>Health</th></tr></thead><tbody>';
   for (const r of leadRows){
     t1 += `<tr><td>${esc(r.lead)}</td><td class="num">${r.scored}/${r.total || 0}</td>` +
       `<td class="num">${r.avg == null ? '—' : r.avg}</td>` +
-      `<td class="num">${r.counts.green || '—'}</td>` +
-      `<td class="num">${r.counts.amber || '—'}</td>` +
-      `<td class="num ${r.counts.red ? 'short' : ''}">${r.counts.red || '—'}</td>` +
-      `<td class="num ${r.critical ? 'short' : ''}">${r.critical || '—'}</td></tr>`;
+      `<td>${qbrHealthBadge(r.health, r.critical)}</td></tr>`;
   }
-  if (!leadRows.length) t1 += '<tr><td colspan="7">No QBR responses yet.</td></tr>';
+  if (!leadRows.length) t1 += '<tr><td colspan="4">No QBR responses yet.</td></tr>';
   $('qbrteams').innerHTML = t1 + '</tbody>';
 
   const clientRecs = [...QBR_BY_CLIENT.values()]
@@ -4632,18 +4648,16 @@ function renderQbr(){
     .sort((a, b) => (b.critical - a.critical) || (a.score ?? 999) - (b.score ?? 999));
 
   let t2 = '<thead><tr><th>Client</th><th>RM</th><th>Quarter</th><th class="num">Score</th>' +
-    '<th>Health</th><th>QoQ</th><th class="num">Critical</th></tr></thead><tbody>';
+    '<th>Health</th><th>QoQ</th></tr></thead><tbody>';
   for (const r of clientRecs){
-    const healthCls = r.health === 'green' ? 'hit' : r.health === 'red' ? 'short' : '';
     t2 += `<tr${r.critical ? ' class="flagged"' : ''}>` +
       `<td>${esc(r.client.n)}</td><td class="dim">${esc(r.row.rm || '—')}</td>` +
       `<td class="dim">${esc(r.label)}</td>` +
       `<td class="num">${r.score == null ? '—' : r.score}</td>` +
-      `<td class="num ${healthCls}">${r.health ? r.health.toUpperCase() : '—'}</td>` +
-      `<td class="dim">${esc(r.qoq)}</td>` +
-      `<td class="num">${r.critical ? '<span class="esc open">Yes</span>' : '<span class="dim">—</span>'}</td></tr>`;
+      `<td>${qbrHealthBadge(r.health, r.critical ? 1 : 0)}</td>` +
+      `<td class="dim">${esc(r.qoq)}</td></tr>`;
   }
-  if (!clientRecs.length) t2 += '<tr><td colspan="7">No QBR responses yet this quarter.</td></tr>';
+  if (!clientRecs.length) t2 += '<tr><td colspan="6">No QBR responses yet this quarter.</td></tr>';
   $('qbrclients').innerHTML = t2 + '</tbody>';
 
   /* Everything a lead needs to act on a flagged client without opening Asana —
