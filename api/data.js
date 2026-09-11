@@ -169,7 +169,14 @@ const SOURCES = {
      grabAsanaQbr/parseQbrNotes below for what actually parses out of it. */
   qbr:         { asanaProject: process.env.ASANA_QBR_PROJECT_GID || '1218343982584833',
                  envVar: 'ASANA_QBR_PROJECT_GID',
-                 asanaShape: 'qbr' }
+                 asanaShape: 'qbr' },
+  /* "Payment Recovery 26-27" — one task per client account still owed money,
+     grouped in Asana by the CS owner chasing it. Read for the payment-recovery
+     digest (api/payment-recovery-digest.js), not the dashboard itself. */
+  paymentRecovery: { asanaProject: process.env.ASANA_PAYMENT_RECOVERY_PROJECT_GID ||
+                       '1210353223733086',
+                 envVar: 'ASANA_PAYMENT_RECOVERY_PROJECT_GID',
+                 asanaShape: 'paymentRecovery' }
 };
 
 const trackerSignature = csv => /due date/i.test(csv) && /assignee/i.test(csv);
@@ -298,6 +305,38 @@ async function grabAsanaPex(projectGid, token) {
         (t.assignee && t.assignee.name) || '',
         (t.assignee && t.assignee.email) || '',
         (category && category.display_value) || '',
+      ]);
+    }
+    offset = (json.next_page && json.next_page.offset) || '';
+  } while (offset);
+  return { ok: true, body: rows.map(r => r.map(csvEscape).join(',')).join('\n') };
+}
+
+/* Every open (incomplete) task in the "Payment Recovery 26-27" project — one
+   row per client account, its CS owner, and the "Amount in INR" custom field
+   if the task has one set. Completed tasks are accounts already recovered,
+   not still owed, so they are skipped the same way grabAsanaEscalations skips
+   closed escalations. The field is matched by a loose /amount/i test rather
+   than the exact display name, since Asana truncates it in the UI ("Amount
+   in I...") and the same looseness already works for grabAsanaPex's "PEX
+   Category" lookup. */
+async function grabAsanaPaymentRecovery(projectGid, token) {
+  const fields = 'name,completed,assignee.name,custom_fields.name,custom_fields.display_value';
+  const rows = [['Client', 'Owner', 'Amount']];
+  let offset = '';
+  do {
+    const url = `https://app.asana.com/api/1.0/projects/${projectGid}/tasks` +
+                `?opt_fields=${fields}&limit=100` + (offset ? `&offset=${offset}` : '');
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!r.ok) return { ok: false, status: r.status };
+    const json = await r.json();
+    for (const t of json.data || []) {
+      if (t.completed) continue;
+      const amount = (t.custom_fields || []).find(f => /amount/i.test(f.name || ''));
+      rows.push([
+        t.name || '',
+        (t.assignee && t.assignee.name) || 'Unassigned',
+        (amount && amount.display_value) || '',
       ]);
     }
     offset = (json.next_page && json.next_page.offset) || '';
@@ -614,6 +653,7 @@ module.exports = async (req, res) => {
         hit = isPortfolio ? await grabAsanaImplementationPortfolio(target, accessToken)
             : source.asanaShape === 'escalations' ? await grabAsanaEscalations(target, accessToken)
             : source.asanaShape === 'pex' ? await grabAsanaPex(target, accessToken)
+            : source.asanaShape === 'paymentRecovery' ? await grabAsanaPaymentRecovery(target, accessToken)
             : source.asanaShape === 'qbr' ? await grabAsanaQbr(target, accessToken)
             : await grabAsanaProject(target, accessToken);
       } catch (e) {
