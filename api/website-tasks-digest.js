@@ -67,45 +67,88 @@ const escapeHtml = s => String(s).replace(/[&<>"']/g, c =>
 const shorten = (s, n) => s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s;
 const fmtDate = d => d ? d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '—';
 
+/* Same template as api/daily-digest.js — one accent for structure, RED/AMBER/
+   GREEN as semantic status colors, hairline dividers, centered section
+   eyebrow+headline pairs, the same kpi-table and footer shapes — so this
+   reads as the same family of email rather than a one-off design. */
 const ACCENT = '#B5501C';
+const RED = '#A82A1C';
+const AMBER = '#B8860B';
+const GREEN = '#2E7D32';
 
-function taskRowsHtml(tasks, showCompleted) {
-  return tasks.map(t => {
-    const cells = [
-      `<td style="padding:9px 0;border-bottom:1px solid #EFEDE8;vertical-align:top;">${escapeHtml(shorten(t.task, 90))}</td>`,
-      `<td style="padding:9px 0;border-bottom:1px solid #EFEDE8;vertical-align:top;">${escapeHtml(t.assignee)}</td>`,
-      `<td style="padding:9px 0;border-bottom:1px solid #EFEDE8;vertical-align:top;white-space:nowrap;">${fmtDate(t.createdAt)}</td>`,
-    ];
-    if (showCompleted) cells.push(
-      `<td style="padding:9px 0;border-bottom:1px solid #EFEDE8;vertical-align:top;white-space:nowrap;">${fmtDate(t.completedAt)}</td>`);
-    return `<tr>${cells.join('')}</tr>`;
-  }).join('');
+const STYLE = `
+    * { margin:0; padding:0; box-sizing:border-box;
+        font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; }
+    body { background:#F5F4F1; padding:40px 16px; color:#1D1D1F; }
+    .email-container { max-width:600px; width:100%; margin:0 auto; background:#FFFFFF;
+      border:1px solid #E5E3DE; border-radius:12px; padding:36px 32px; }
+    .masthead { text-align:center; margin-bottom:28px; }
+    .masthead .eyebrow { font-size:11px; font-weight:600; letter-spacing:.12em; text-transform:uppercase;
+      color:${ACCENT}; margin:0 0 10px; }
+    .masthead h1 { font-size:23px; font-weight:600; letter-spacing:-.01em; color:#1D1D1F; margin:0 0 6px; }
+    .masthead .date { font-size:14px; color:#6E6E73; margin:0; }
+    .divider { border:none; border-top:1px solid #E5E3DE; margin:40px 0; }
+    .section-eyebrow { margin:0; font-size:19px; font-weight:700; letter-spacing:.03em; text-transform:uppercase; text-align:center; }
+    .section-headline { margin:8px 0 0; font-size:14px; font-weight:500; color:#6E6E73; text-align:center; }
+    .kpi-table { width:100%; border-collapse:collapse; margin-top:22px; font-size:14px; }
+    .kpi-table th { text-align:left; padding:0 0 8px; font-size:10.5px; font-weight:600; letter-spacing:.04em;
+      text-transform:uppercase; color:#8A8A8F; border-bottom:1px solid #E5E3DE; }
+    .kpi-table td { padding:10px 0; border-bottom:1px solid #EFEDE8; vertical-align:top; }
+    .kpi-table tr:last-child td { border-bottom:none; }
+    .task-name { font-weight:500; color:#1D1D1F; }
+    .footer p { margin:0; font-size:12px; color:#8A8A8F; text-align:center; }
+    .footer a { color:${ACCENT}; text-decoration:none; }
+    .footer .ted { margin:10px 0 0; font-size:22px; font-weight:800; letter-spacing:.18em; color:#1D1D1F; text-align:center; }
+    @media (max-width:480px) {
+      .email-container { padding:28px 20px; }
+      .masthead h1 { font-size:20px; }
+    }`;
+
+function sectionHead(color, label, headlineHtml) {
+  return `<p class="section-eyebrow" style="color:${color}">${label}</p>` +
+    `<p class="section-headline">${headlineHtml}</p>`;
 }
 
-function tableHtml(title, count, tasks, showCompleted, emptyText) {
-  const headCols = showCompleted
-    ? ['Task', 'Assignee', 'Created', 'Completed']
-    : ['Task', 'Assignee', 'Created'];
-  const headHtml = headCols.map(h =>
-    `<th style="text-align:left;padding:0 0 8px;font-size:10.5px;font-weight:600;letter-spacing:.04em;` +
-    `text-transform:uppercase;color:#8A8A8F;border-bottom:1px solid #E5E3DE;">${h}</th>`).join('');
-  return `<h2 style="font-size:15px;font-weight:600;margin:26px 0 10px;">${escapeHtml(title)} ` +
-    `<span style="color:#8A8A8F;font-weight:400;">(${count})</span></h2>` +
-    (tasks.length
-      ? `<table style="width:100%;border-collapse:collapse;font-size:13.5px;">` +
-        `<tr>${headHtml}</tr>${taskRowsHtml(tasks, showCompleted)}</table>`
-      : `<p style="font-size:13.5px;color:#8A8A8F;margin:0;">${emptyText}</p>`);
+function renderCompletedToday(tasks) {
+  if (!tasks.length) return `<div>${sectionHead(GREEN, 'Completed Today', 'Nothing closed today')}</div>`;
+  const rowsHtml = tasks.map(t =>
+    `<tr><td><span class="task-name">${escapeHtml(shorten(t.task, 90))}</span></td>` +
+    `<td>${escapeHtml(t.assignee)}</td><td>${fmtDate(t.createdAt)}</td><td>${fmtDate(t.completedAt)}</td></tr>`
+  ).join('');
+  return `<div>` +
+    sectionHead(GREEN, 'Completed Today', `<b>${tasks.length}</b> task${tasks.length === 1 ? '' : 's'} closed today`) +
+    `<table class="kpi-table"><tr><th>Task</th><th>Assignee</th><th>Created</th><th>Completed</th></tr>` +
+    `${rowsHtml}</table></div>`;
 }
 
-function renderHtml(pending, completedToday, dateStr) {
-  return `<div style="max-width:640px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1D1D1F;">` +
-    `<p style="font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:${ACCENT};margin:0 0 6px;">Client Website Tasks</p>` +
-    `<h1 style="font-size:22px;font-weight:600;margin:0 0 4px;">Daily Update</h1>` +
-    `<p style="font-size:14px;color:#6E6E73;margin:0 0 8px;">${dateStr}</p>` +
-    tableHtml('Completed today', completedToday.length, completedToday, true, 'Nothing closed today.') +
-    tableHtml('Pending', pending.length, pending, false, 'Nothing pending — the board is clear.') +
-    `<p style="margin-top:24px;font-size:12px;color:#8A8A8F;">Automated e-mail from the Client Website Tasks Asana project. ` +
-    `Pending lists every open task on the board, not just today's.</p></div>`;
+function renderPending(tasks) {
+  if (!tasks.length) return `<div>${sectionHead(GREEN, 'Pending', 'Nothing pending — the board is clear')}</div>`;
+  const rowsHtml = tasks.map(t =>
+    `<tr><td><span class="task-name">${escapeHtml(shorten(t.task, 90))}</span></td>` +
+    `<td>${escapeHtml(t.assignee)}</td><td>${fmtDate(t.createdAt)}</td></tr>`
+  ).join('');
+  return `<div>` +
+    sectionHead(AMBER, 'Pending', `<b>${tasks.length}</b> task${tasks.length === 1 ? '' : 's'} still open`) +
+    `<table class="kpi-table"><tr><th>Task</th><th>Assignee</th><th>Created</th></tr>` +
+    `${rowsHtml}</table></div>`;
+}
+
+function renderHtml(pending, completedToday, fullDate) {
+  return `<div class="email-container">` +
+    `<div class="masthead"><p class="eyebrow">Client Website Tasks</p>` +
+    `<h1>Daily Update</h1><p class="date">${fullDate}</p></div>` +
+    `<hr class="divider">` +
+    renderCompletedToday(completedToday) + `<hr class="divider">` +
+    renderPending(pending) + `<hr class="divider">` +
+    `<div class="footer"><p>Automated E-mail from the Client Website Tasks Asana project.</p>` +
+    `<p class="ted">TED</p></div></div>`;
+}
+
+function renderPage(pending, completedToday, fullDate) {
+  return `<!doctype html><html><head><meta charset="UTF-8">` +
+    `<meta name="viewport" content="width=device-width, initial-scale=1.0">` +
+    `<title>Client Website Tasks &middot; Daily Update</title><style>${STYLE}</style></head>` +
+    `<body>${renderHtml(pending, completedToday, fullDate)}</body></html>`;
 }
 
 /* `testTo`, when set, replaces the real recipient with a single address — for
@@ -173,7 +216,7 @@ module.exports = async (req, res) => {
       { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
     const subject = `Client Website Tasks — ${pending.length} pending, ${completedToday.length} completed today`;
-    await sendEmail(subject, renderHtml(pending, completedToday, dateStr), testTo);
+    await sendEmail(subject, renderPage(pending, completedToday, dateStr), testTo);
 
     return res.status(200).json({
       ok: true, pending: pending.length, completedToday: completedToday.length, testTo: testTo || undefined,
