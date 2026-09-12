@@ -176,7 +176,14 @@ const SOURCES = {
   paymentRecovery: { asanaProject: process.env.ASANA_PAYMENT_RECOVERY_PROJECT_GID ||
                        '1210353223733086',
                  envVar: 'ASANA_PAYMENT_RECOVERY_PROJECT_GID',
-                 asanaShape: 'paymentRecovery' }
+                 asanaShape: 'paymentRecovery' },
+  /* "Client Website Tasks" — one task per website change request, submitted
+     through an Asana Form. Read for the website-tasks digest
+     (api/website-tasks-digest.js), not the dashboard itself. */
+  websiteTasks: { asanaProject: process.env.ASANA_WEBSITE_TASKS_PROJECT_GID ||
+                       '1211188142613963',
+                 envVar: 'ASANA_WEBSITE_TASKS_PROJECT_GID',
+                 asanaShape: 'websiteTasks' }
 };
 
 const trackerSignature = csv => /due date/i.test(csv) && /assignee/i.test(csv);
@@ -337,6 +344,41 @@ async function grabAsanaPaymentRecovery(projectGid, token) {
         t.name || '',
         (t.assignee && t.assignee.name) || 'Unassigned',
         (amount && amount.display_value) || '',
+      ]);
+    }
+    offset = (json.next_page && json.next_page.offset) || '';
+  } while (offset);
+  return { ok: true, body: rows.map(r => r.map(csvEscape).join(',')).join('\n') };
+}
+
+/* Every task in "Client Website Tasks" — one row per website change request,
+   both open and completed, since the digest needs both (pending backlog and
+   what was closed today), unlike grabAsanaPaymentRecovery which only wants
+   the open ones. created_at/completed_at are Asana's own native task fields,
+   not custom fields — Asana always sets them, so no lookup-by-name is needed
+   the way "Website URL" and "HTML Task Category" require. */
+async function grabAsanaWebsiteTasks(projectGid, token) {
+  const fields = 'name,completed,completed_at,created_at,assignee.name,' +
+    'custom_fields.name,custom_fields.display_value';
+  const rows = [['Task', 'Assignee', 'Website', 'Category', 'Created At', 'Completed At', 'Completed']];
+  let offset = '';
+  do {
+    const url = `https://app.asana.com/api/1.0/projects/${projectGid}/tasks` +
+                `?opt_fields=${fields}&limit=100` + (offset ? `&offset=${offset}` : '');
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!r.ok) return { ok: false, status: r.status };
+    const json = await r.json();
+    for (const t of json.data || []) {
+      const website = (t.custom_fields || []).find(f => /website url/i.test(f.name || ''));
+      const category = (t.custom_fields || []).find(f => /task category/i.test(f.name || ''));
+      rows.push([
+        t.name || '',
+        (t.assignee && t.assignee.name) || 'Unassigned',
+        (website && website.display_value) || '',
+        (category && category.display_value) || '',
+        t.created_at || '',
+        t.completed_at || '',
+        t.completed ? 'true' : 'false',
       ]);
     }
     offset = (json.next_page && json.next_page.offset) || '';
@@ -655,6 +697,7 @@ module.exports = async (req, res) => {
             : source.asanaShape === 'pex' ? await grabAsanaPex(target, accessToken)
             : source.asanaShape === 'paymentRecovery' ? await grabAsanaPaymentRecovery(target, accessToken)
             : source.asanaShape === 'qbr' ? await grabAsanaQbr(target, accessToken)
+            : source.asanaShape === 'websiteTasks' ? await grabAsanaWebsiteTasks(target, accessToken)
             : await grabAsanaProject(target, accessToken);
       } catch (e) {
         return fail(`Could not reach Asana: ${e.message}`, 'Check the Asana API status.');
