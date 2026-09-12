@@ -93,9 +93,12 @@ const STYLE = `
     .kpi-table { width:100%; border-collapse:collapse; margin-top:22px; font-size:14px; }
     .kpi-table th { text-align:left; padding:0 0 8px; font-size:10.5px; font-weight:600; letter-spacing:.04em;
       text-transform:uppercase; color:#8A8A8F; border-bottom:1px solid #E5E3DE; }
-    .kpi-table td { padding:10px 0; border-bottom:1px solid #EFEDE8; vertical-align:top; }
+    .kpi-table th, .kpi-table td { padding-right:14px; }
+    .kpi-table th:last-child, .kpi-table td:last-child { padding-right:0; }
+    .kpi-table td { padding-top:10px; padding-bottom:10px; border-bottom:1px solid #EFEDE8; vertical-align:top; }
     .kpi-table tr:last-child td { border-bottom:none; }
-    .task-name { font-weight:500; color:#1D1D1F; }
+    .kpi-table .nowrap { white-space:nowrap; }
+    .task-name { font-weight:500; color:#1D1D1F; word-break:break-word; }
     .footer p { margin:0; font-size:12px; color:#8A8A8F; text-align:center; }
     .footer a { color:${ACCENT}; text-decoration:none; }
     .footer .ted { margin:10px 0 0; font-size:22px; font-weight:800; letter-spacing:.18em; color:#1D1D1F; text-align:center; }
@@ -113,11 +116,14 @@ function renderCompletedToday(tasks) {
   if (!tasks.length) return `<div>${sectionHead(GREEN, 'Completed Today', 'Nothing closed today')}</div>`;
   const rowsHtml = tasks.map(t =>
     `<tr><td><span class="task-name">${escapeHtml(shorten(t.task, 90))}</span></td>` +
-    `<td>${escapeHtml(t.assignee)}</td><td>${fmtDate(t.createdAt)}</td><td>${fmtDate(t.completedAt)}</td></tr>`
+    `<td class="nowrap">${escapeHtml(t.assignee)}</td>` +
+    `<td class="nowrap">${fmtDate(t.createdAt)}</td>` +
+    `<td class="nowrap">${fmtDate(t.completedAt)}</td></tr>`
   ).join('');
   return `<div>` +
     sectionHead(GREEN, 'Completed Today', `<b>${tasks.length}</b> task${tasks.length === 1 ? '' : 's'} closed today`) +
-    `<table class="kpi-table"><tr><th>Task</th><th>Assignee</th><th>Created</th><th>Completed</th></tr>` +
+    `<table class="kpi-table"><tr><th style="width:50%">Task</th><th style="width:22%">Assignee</th>` +
+    `<th style="width:14%">Created</th><th style="width:14%">Completed</th></tr>` +
     `${rowsHtml}</table></div>`;
 }
 
@@ -125,11 +131,13 @@ function renderPending(tasks) {
   if (!tasks.length) return `<div>${sectionHead(GREEN, 'Pending', 'Nothing pending — the board is clear')}</div>`;
   const rowsHtml = tasks.map(t =>
     `<tr><td><span class="task-name">${escapeHtml(shorten(t.task, 90))}</span></td>` +
-    `<td>${escapeHtml(t.assignee)}</td><td>${fmtDate(t.createdAt)}</td></tr>`
+    `<td class="nowrap">${escapeHtml(t.assignee)}</td>` +
+    `<td class="nowrap">${fmtDate(t.createdAt)}</td></tr>`
   ).join('');
   return `<div>` +
     sectionHead(AMBER, 'Pending', `<b>${tasks.length}</b> task${tasks.length === 1 ? '' : 's'} still open`) +
-    `<table class="kpi-table"><tr><th>Task</th><th>Assignee</th><th>Created</th></tr>` +
+    `<table class="kpi-table"><tr><th style="width:64%">Task</th><th style="width:22%">Assignee</th>` +
+    `<th style="width:14%">Created</th></tr>` +
     `${rowsHtml}</table></div>`;
 }
 
