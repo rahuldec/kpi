@@ -158,13 +158,17 @@ function renderPage(pending, completedToday, fullDate) {
     `<body>${renderHtml(pending, completedToday, fullDate)}</body></html>`;
 }
 
-/* `testTo`, when set, replaces the real recipient with a single address — for
-   confirming a change before it goes to the real list. Still gated by
-   CRON_SECRET like everything else here. */
-async function sendEmail(subject, html, testTo) {
+/* `testTo`, when set, replaces the real recipient with a single address and
+   drops any CC — for confirming a change before it goes to the real list.
+   `toOverride`/`ccOverride`, when set (and testTo is not), send to those
+   addresses instead of the standing WEBSITE_TASKS_TO/_CC env vars — for a
+   one-off real send to a specific list without changing the standing config.
+   Still gated by CRON_SECRET/INSPECT_SECRET like everything else here. */
+async function sendEmail(subject, html, testTo, toOverride, ccOverride) {
   const fallbackTo = 'rahul.sharma@okiedokiepay.com';
   const to = testTo ? [testTo]
-    : (process.env.WEBSITE_TASKS_TO || fallbackTo).split(',').map(s => s.trim()).filter(Boolean);
+    : toOverride || (process.env.WEBSITE_TASKS_TO || fallbackTo).split(',').map(s => s.trim()).filter(Boolean);
+  const cc = testTo ? [] : ccOverride || (process.env.WEBSITE_TASKS_CC || '').split(',').map(s => s.trim()).filter(Boolean);
 
   const r = await fetch(process.env.ZEPTOMAIL_URL || 'https://api.zeptomail.in/v1.1/email', {
     method: 'POST',
@@ -175,6 +179,7 @@ async function sendEmail(subject, html, testTo) {
     body: JSON.stringify({
       from: { address: process.env.ZEPTOMAIL_SENDER || '' },
       to: to.map(address => ({ email_address: { address } })),
+      cc: cc.map(address => ({ email_address: { address } })),
       subject,
       htmlbody: html,
     }),
@@ -204,6 +209,11 @@ module.exports = async (req, res) => {
   const testTo = typeof testParam === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(testParam)
     ? testParam : null;
 
+  const emailList = v => (Array.isArray(v) ? v[0] : v || '')
+    .split(',').map(s => s.trim()).filter(s => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s));
+  const toOverride = req.query.to ? emailList(req.query.to) : null;
+  const ccOverride = req.query.cc ? emailList(req.query.cc) : null;
+
   try {
     // Same reasoning as daily-digest.js: not derived from req.headers.host,
     // since Vercel Cron sometimes hits the protected *.vercel.app alias
@@ -223,10 +233,11 @@ module.exports = async (req, res) => {
       { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
     const subject = `Client Website Tasks — ${pending.length} pending, ${completedToday.length} completed today`;
-    await sendEmail(subject, renderPage(pending, completedToday, dateStr), testTo);
+    await sendEmail(subject, renderPage(pending, completedToday, dateStr), testTo, toOverride, ccOverride);
 
     return res.status(200).json({
-      ok: true, pending: pending.length, completedToday: completedToday.length, testTo: testTo || undefined,
+      ok: true, pending: pending.length, completedToday: completedToday.length,
+      testTo: testTo || undefined, to: toOverride || undefined, cc: ccOverride || undefined,
     });
   } catch (e) {
     return res.status(502).json({ ok: false, error: String((e && e.message) || e) });
