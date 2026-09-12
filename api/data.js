@@ -351,13 +351,13 @@ async function grabAsanaPaymentRecovery(projectGid, token) {
   return { ok: true, body: rows.map(r => r.map(csvEscape).join(',')).join('\n') };
 }
 
-/* Every task in "Client Website Tasks" that sits in the "Website Update
-   Requests" section — the form-submitted change requests the digest is
-   actually about. The project also carries a long tail of older, one-off
-   per-client sections (legacy work areas from before the form existed), so
-   this is filtered by section name rather than reading the whole project,
-   the way grabAsanaEscalations filters out subtasks rather than reading
-   everything the API happens to return.
+/* Every task in "Client Website Tasks" except the ones sitting in a handful
+   of named sections that aren't website change requests — utility/reference
+   sections (Report Card, PDF Templates, Utilities, CMS, Okie Dokie), kept
+   in the project but not part of what this digest reports on. Every other
+   section counts, including the long tail of per-client sections (one per
+   school's own website work). A task in more than one section is excluded
+   if any of its sections is on the list, not only if all of them are.
 
    Both open and completed tasks are kept, since the digest needs both
    (pending backlog and what was closed today), unlike grabAsanaPaymentRecovery
@@ -365,7 +365,9 @@ async function grabAsanaPaymentRecovery(projectGid, token) {
    native task fields, not custom fields — Asana always sets them, so no
    lookup-by-name is needed the way "Website URL" and "HTML Task Category"
    require. */
-const WEBSITE_TASKS_SECTION = 'Website Update Requests';
+const WEBSITE_TASKS_EXCLUDED_SECTIONS = new Set([
+  'Report Card', 'PDF Templates', 'Utilities', 'CMS', 'Okie Dokie',
+]);
 async function grabAsanaWebsiteTasks(projectGid, token) {
   const fields = 'name,completed,completed_at,created_at,assignee.name,' +
     'memberships.section.name,custom_fields.name,custom_fields.display_value';
@@ -378,8 +380,9 @@ async function grabAsanaWebsiteTasks(projectGid, token) {
     if (!r.ok) return { ok: false, status: r.status };
     const json = await r.json();
     for (const t of json.data || []) {
-      const inSection = (t.memberships || []).some(m => m.section && m.section.name === WEBSITE_TASKS_SECTION);
-      if (!inSection) continue;
+      const excluded = (t.memberships || []).some(m =>
+        m.section && WEBSITE_TASKS_EXCLUDED_SECTIONS.has(m.section.name));
+      if (excluded) continue;
       const website = (t.custom_fields || []).find(f => /website url/i.test(f.name || ''));
       const category = (t.custom_fields || []).find(f => /task category/i.test(f.name || ''));
       rows.push([
