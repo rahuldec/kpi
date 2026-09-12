@@ -135,8 +135,8 @@ function renderPending(tasks) {
 
 function renderHtml(pending, completedToday, fullDate) {
   return `<div class="email-container">` +
-    `<div class="masthead"><p class="eyebrow">Client Website Tasks</p>` +
-    `<h1>Daily Update</h1><p class="date">${fullDate}</p></div>` +
+    `<div class="masthead"><p class="eyebrow">Daily Update</p>` +
+    `<h1>Client Website Tasks</h1><p class="date">${fullDate}</p></div>` +
     `<hr class="divider">` +
     renderCompletedToday(completedToday) + `<hr class="divider">` +
     renderPending(pending) + `<hr class="divider">` +
