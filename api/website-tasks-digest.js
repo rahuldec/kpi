@@ -92,7 +92,7 @@ const STYLE = `
     .section-headline { margin:8px 0 0; font-size:14px; font-weight:500; color:#6E6E73; text-align:center; }
     .kpi-table { width:100%; table-layout:fixed; border-collapse:collapse; margin-top:22px; font-size:14px; }
     .kpi-table th { text-align:left; padding:0 8px 8px 0; font-size:10.5px; font-weight:600; letter-spacing:.04em;
-      text-transform:uppercase; color:#8A8A8F; border-bottom:1px solid #E5E3DE; }
+      text-transform:uppercase; color:#8A8A8F; border-bottom:1px solid #E5E3DE; white-space:nowrap; }
     .kpi-table th:last-child, .kpi-table td:last-child { padding-right:0; }
     .kpi-table td { padding:10px 8px 10px 0; border-bottom:1px solid #EFEDE8; vertical-align:top; }
     .kpi-table tr:last-child td { border-bottom:none; }
@@ -121,8 +121,8 @@ function renderCompletedToday(tasks) {
   ).join('');
   return `<div>` +
     sectionHead(GREEN, 'Completed Today', `<b>${tasks.length}</b> task${tasks.length === 1 ? '' : 's'} closed today`) +
-    `<table class="kpi-table"><tr><th>Task</th><th width="130" style="width:130px">Assignee</th>` +
-    `<th width="62" style="width:62px">Created</th><th width="62" style="width:62px">Completed</th></tr>` +
+    `<table class="kpi-table"><tr><th>Task</th><th width="120" style="width:120px">Assignee</th>` +
+    `<th width="60" style="width:60px">Created</th><th width="82" style="width:82px">Completed</th></tr>` +
     `${rowsHtml}</table></div>`;
 }
 
@@ -135,8 +135,8 @@ function renderPending(tasks) {
   ).join('');
   return `<div>` +
     sectionHead(AMBER, 'Pending', `<b>${tasks.length}</b> task${tasks.length === 1 ? '' : 's'} still open`) +
-    `<table class="kpi-table"><tr><th>Task</th><th width="130" style="width:130px">Assignee</th>` +
-    `<th width="62" style="width:62px">Created</th></tr>` +
+    `<table class="kpi-table"><tr><th>Task</th><th width="120" style="width:120px">Assignee</th>` +
+    `<th width="60" style="width:60px">Created</th></tr>` +
     `${rowsHtml}</table></div>`;
 }
 
