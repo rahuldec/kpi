@@ -100,16 +100,16 @@ function sectionHead(color, label, headlineHtml) {
 
 function renderPending(tasks) {
   if (!tasks.length) return `<div>${sectionHead(GREEN, 'Pending at RM', 'Nothing pending — the board is clear')}</div>`;
-  const rowsHtml = tasks.map(t =>
-    `<tr><td><span class="task-name">${escapeHtml(shorten(t.task, 90))}</span></td>` +
-    `<td class="nowrap">${escapeHtml(t.assignee)}</td>` +
-    `<td class="nowrap">${escapeHtml(shorten(t.module || '—', 20))}</td>` +
-    `<td class="nowrap">${fmtDate(t.createdAt)}</td></tr>`
-  ).join('');
+  const rowsHtml = tasks.map(t => {
+    const taskText = shorten(t.task, 90) + (t.module ? ` (${t.module})` : '');
+    return `<tr><td><span class="task-name">${escapeHtml(taskText)}</span></td>` +
+      `<td class="nowrap">${escapeHtml(t.assignee)}</td>` +
+      `<td class="nowrap">${fmtDate(t.createdAt)}</td></tr>`;
+  }).join('');
   return `<div>` +
     sectionHead(AMBER, 'Pending at RM', `<b>${tasks.length}</b> task${tasks.length === 1 ? '' : 's'} still open`) +
     `<table class="kpi-table"><tr><th>Task</th><th width="110" style="width:110px">RM</th>` +
-    `<th width="110" style="width:110px">Module</th><th width="60" style="width:60px">Created</th></tr>` +
+    `<th width="60" style="width:60px">Created</th></tr>` +
     `${rowsHtml}</table></div>`;
 }
 
