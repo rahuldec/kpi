@@ -77,6 +77,7 @@ const STYLE = `
     .divider { border:none; border-top:1px solid #E5E3DE; margin:40px 0; }
     .section-eyebrow { margin:0; font-size:19px; font-weight:700; letter-spacing:.03em; text-transform:uppercase; text-align:center; }
     .section-headline { margin:8px 0 0; font-size:14px; font-weight:500; color:#6E6E73; text-align:center; }
+    .pex-note { margin:6px 0 0; font-size:12.5px; color:#8A8A8F; text-align:center; }
     .kpi-table { width:100%; table-layout:fixed; border-collapse:collapse; margin-top:22px; font-size:14px; }
     .kpi-table th { text-align:left; padding:0 8px 8px 0; font-size:10.5px; font-weight:600; letter-spacing:.04em;
       text-transform:uppercase; color:#8A8A8F; border-bottom:1px solid #E5E3DE; white-space:nowrap; }
@@ -108,6 +109,7 @@ function renderPending(tasks) {
   }).join('');
   return `<div>` +
     sectionHead(AMBER, 'Pending at RM', `<b>${tasks.length}</b> task${tasks.length === 1 ? '' : 's'} still open`) +
+    `<p class="pex-note">These tasks are pending at the RM for clarification.</p>` +
     `<table class="kpi-table"><tr><th>Task</th><th width="110" style="width:110px">RM</th>` +
     `<th width="60" style="width:60px">Created</th></tr>` +
     `${rowsHtml}</table></div>`;
