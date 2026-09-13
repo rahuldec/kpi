@@ -461,8 +461,8 @@ function renderHtml(day, missed, escalations, overdueImpl, pexPending) {
     `<hr class="divider">` +
     filingSection + `<hr class="divider">` +
     renderEscalations(escalations, iso(new Date())) + `<hr class="divider">` +
-    renderImplementation(overdueImpl) + `<hr class="divider">` +
     renderPexPending(pexPending) + `<hr class="divider">` +
+    renderImplementation(overdueImpl) + `<hr class="divider">` +
     `<div class="footer"><p>Automated E-mail from KPI Dashboard &middot; ` +
     `<a href="https://cskpi.oderp.in">View live</a>.</p><p class="ted">TED</p></div></div>`;
 }
