@@ -510,8 +510,14 @@ async function sendEmail(subject, html, testTo) {
 }
 
 module.exports = async (req, res) => {
+  // Accepts CRON_SECRET (what Vercel Cron itself sends) or INSPECT_SECRET (a
+  // plain env var, unlike CRON_SECRET's write-only "Secret" type in Vercel,
+  // so its value can actually be confirmed/shared for a one-off manual test)
+  // — same fallback the newer digests (website-tasks, pex-pending) already use.
   const auth = req.headers.authorization || '';
-  if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
+  const okCron = process.env.CRON_SECRET && auth === `Bearer ${process.env.CRON_SECRET}`;
+  const okInspect = process.env.INSPECT_SECRET && auth === `Bearer ${process.env.INSPECT_SECRET}`;
+  if (!okCron && !okInspect) {
     return res.status(404).end();
   }
 
