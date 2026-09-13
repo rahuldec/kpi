@@ -183,7 +183,15 @@ const SOURCES = {
   websiteTasks: { asanaProject: process.env.ASANA_WEBSITE_TASKS_PROJECT_GID ||
                        '1211188142613963',
                  envVar: 'ASANA_WEBSITE_TASKS_PROJECT_GID',
-                 asanaShape: 'websiteTasks' }
+                 asanaShape: 'websiteTasks' },
+  /* Same "PEX Team - Daily Problems" project the dashboard's Knowledge Gap
+     tracking already reads (see `pex` above), but a different cut: only
+     tasks currently sitting in the project's own "Pending at RM" section and
+     not yet completed. Read for the pex-pending digest
+     (api/pex-pending-digest.js), not the dashboard itself. */
+  pexPending: { asanaProject: process.env.ASANA_PEX_PROJECT_GID || '1210517770853851',
+                 envVar: 'ASANA_PEX_PROJECT_GID',
+                 asanaShape: 'pexPending' }
 };
 
 const trackerSignature = csv => /due date/i.test(csv) && /assignee/i.test(csv);
@@ -393,6 +401,40 @@ async function grabAsanaWebsiteTasks(projectGid, token) {
         t.created_at || '',
         t.completed_at || '',
         t.completed ? 'true' : 'false',
+      ]);
+    }
+    offset = (json.next_page && json.next_page.offset) || '';
+  } while (offset);
+  return { ok: true, body: rows.map(r => r.map(csvEscape).join(',')).join('\n') };
+}
+
+/* Only tasks in the PEX project's own "Pending at RM" section that are still
+   incomplete — the section is used as a Kanban-style status column, so a
+   task can sit in it after being marked complete without anyone moving it
+   out; the completed check is what actually means "still pending", the
+   section membership just scopes which tasks to look at at all. */
+const PEX_PENDING_SECTION = 'Pending at RM';
+async function grabAsanaPexPending(projectGid, token) {
+  const fields = 'name,completed,created_at,assignee.name,' +
+    'memberships.section.name,custom_fields.name,custom_fields.display_value';
+  const rows = [['Task', 'Assignee', 'Module', 'Created At']];
+  let offset = '';
+  do {
+    const url = `https://app.asana.com/api/1.0/projects/${projectGid}/tasks` +
+                `?opt_fields=${fields}&limit=100` + (offset ? `&offset=${offset}` : '');
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!r.ok) return { ok: false, status: r.status };
+    const json = await r.json();
+    for (const t of json.data || []) {
+      if (t.completed) continue;
+      const inSection = (t.memberships || []).some(m => m.section && m.section.name === PEX_PENDING_SECTION);
+      if (!inSection) continue;
+      const module = (t.custom_fields || []).find(f => f.name === 'Module');
+      rows.push([
+        t.name || '',
+        (t.assignee && t.assignee.name) || 'Unassigned',
+        (module && module.display_value) || '',
+        t.created_at || '',
       ]);
     }
     offset = (json.next_page && json.next_page.offset) || '';
@@ -712,6 +754,7 @@ module.exports = async (req, res) => {
             : source.asanaShape === 'paymentRecovery' ? await grabAsanaPaymentRecovery(target, accessToken)
             : source.asanaShape === 'qbr' ? await grabAsanaQbr(target, accessToken)
             : source.asanaShape === 'websiteTasks' ? await grabAsanaWebsiteTasks(target, accessToken)
+            : source.asanaShape === 'pexPending' ? await grabAsanaPexPending(target, accessToken)
             : await grabAsanaProject(target, accessToken);
       } catch (e) {
         return fail(`Could not reach Asana: ${e.message}`, 'Check the Asana API status.');
