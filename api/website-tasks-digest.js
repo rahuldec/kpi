@@ -165,10 +165,11 @@ function renderPage(pending, completedToday, fullDate) {
    one-off real send to a specific list without changing the standing config.
    Still gated by CRON_SECRET/INSPECT_SECRET like everything else here. */
 async function sendEmail(subject, html, testTo, toOverride, ccOverride) {
-  const fallbackTo = 'rahul.sharma@okiedokiepay.com';
+  const fallbackTo = 'customer-success-delight@okiedokiepay.com';
+  const fallbackCc = 'hr@okiedokiepay.com';
   const to = testTo ? [testTo]
     : toOverride || (process.env.WEBSITE_TASKS_TO || fallbackTo).split(',').map(s => s.trim()).filter(Boolean);
-  const cc = testTo ? [] : ccOverride || (process.env.WEBSITE_TASKS_CC || '').split(',').map(s => s.trim()).filter(Boolean);
+  const cc = testTo ? [] : ccOverride || (process.env.WEBSITE_TASKS_CC || fallbackCc).split(',').map(s => s.trim()).filter(Boolean);
 
   const r = await fetch(process.env.ZEPTOMAIL_URL || 'https://api.zeptomail.in/v1.1/email', {
     method: 'POST',

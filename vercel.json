@@ -11,7 +11,7 @@
     },
     {
       "path": "/api/website-tasks-digest",
-      "schedule": "0 12 * * 1-6"
+      "schedule": "30 12 * * 1-6"
     }
   ],
   "headers": [
