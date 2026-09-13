@@ -189,6 +189,31 @@ function parseImplementation(text) {
   return out;
 }
 
+/* Already filtered server-side (api/data.js's grabAsanaPexPending) to tasks
+   in the PEX project's "Pending at RM" section that aren't marked complete —
+   nothing here needs to filter again, just parse the fixed columns it emits:
+   Task, Assignee, Module, Created At. */
+function parsePexPending(text) {
+  const rows = splitRows(text, ',');
+  if (!rows.length) return [];
+  const [head, ...rest] = rows;
+  const ix = {
+    task: head.indexOf('Task'), assignee: head.indexOf('Assignee'),
+    module: head.indexOf('Module'), created: head.indexOf('Created At'),
+  };
+  const out = [];
+  for (const r of rest) {
+    if (!r || !r[ix.task]) continue;
+    out.push({
+      task: (r[ix.task] || '').trim(),
+      assignee: (r[ix.assignee] || 'Unassigned').trim() || 'Unassigned',
+      module: (r[ix.module] || '').trim(),
+      created: (r[ix.created] || '').slice(0, 10),
+    });
+  }
+  return out;
+}
+
 const daysBetween = (fromISO, toISO) =>
   Math.round((new Date(toISO + 'T00:00:00') - new Date(fromISO + 'T00:00:00')) / 86400000);
 
@@ -314,6 +339,19 @@ const STYLE = `
       text-transform:uppercase; color:#8A8A8F; border-bottom:1px solid #E5E3DE; }
     .kpi-table td { padding:10px 0; border-bottom:1px solid #EFEDE8; vertical-align:top; }
     .kpi-table tr:last-child td { border-bottom:none; }
+    /* table-layout:fixed + explicit pixel widths, not percentages: percentage
+       widths plus padding overflow the card in clients that don't honor CSS
+       box-sizing (Outlook and some mobile mail apps render content-box
+       regardless), pushing the last column outside the visible card. Only
+       used where a column carries long free-text (task names) that the
+       plain .kpi-table above never has to wrap. */
+    .kpi-table.fixed { table-layout:fixed; }
+    .kpi-table.fixed th, .kpi-table.fixed td { padding-right:8px; }
+    .kpi-table.fixed th:last-child, .kpi-table.fixed td:last-child { padding-right:0; }
+    .kpi-table.fixed th { white-space:nowrap; }
+    .kpi-table.fixed .nowrap { white-space:nowrap; overflow:hidden; }
+    .kpi-table.fixed .task-name { word-break:break-word; }
+    .pex-note { margin:6px 0 0; font-size:12.5px; color:#8A8A8F; text-align:center; }
     .text-danger { color:${RED}; font-weight:600; }
     .text-right { text-align:right; }
     .missed-badge { font-size:11px; color:${RED}; margin-top:2px; opacity:.8; }
@@ -374,7 +412,26 @@ function renderImplementation(rows) {
     `${rowsHtml}</table></div>`;
 }
 
-function renderHtml(day, missed, escalations, overdueImpl) {
+/* Every task in the PEX project's "Pending at RM" section, shown in full
+   like renderImplementation rather than folded past ROW_CAP like
+   renderEscalations — this list runs a dozen or so items, not hundreds. */
+function renderPexPending(rows) {
+  if (rows === null) return `<div>${sectionHead('#8A8A8F', 'Pending at RM', 'Data unavailable right now')}</div>`;
+  if (!rows.length) return `<div>${sectionHead(GREEN, 'Pending at RM', 'Nothing pending — the board is clear')}</div>`;
+  const sorted = [...rows].sort((a, b) => (a.created || '9999').localeCompare(b.created || '9999'));
+  const rowsHtml = sorted.map(t => {
+    const taskText = t.task + (t.module ? ` (${t.module})` : '');
+    return `<tr><td><span class="task-name" style="font-weight:500">${escapeHtml(taskText)}</span></td>` +
+      `<td class="nowrap">${escapeHtml(t.assignee)}</td></tr>`;
+  }).join('');
+  return `<div>` +
+    sectionHead(AMBER, 'Pending at RM', `<b>${rows.length}</b> task${rows.length === 1 ? '' : 's'} still open`) +
+    `<p class="pex-note">These tasks are pending at the RM for clarification.</p>` +
+    `<table class="kpi-table fixed"><tr><th>Task</th><th width="110" style="width:110px">RM</th></tr>` +
+    `${rowsHtml}</table></div>`;
+}
+
+function renderHtml(day, missed, escalations, overdueImpl, pexPending) {
   const dateObj = new Date(day + 'T00:00:00');
   const fullDate = dateObj.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   // Short form for the column header, so each row reads standalone without
@@ -405,15 +462,16 @@ function renderHtml(day, missed, escalations, overdueImpl) {
     filingSection + `<hr class="divider">` +
     renderEscalations(escalations, iso(new Date())) + `<hr class="divider">` +
     renderImplementation(overdueImpl) + `<hr class="divider">` +
+    renderPexPending(pexPending) + `<hr class="divider">` +
     `<div class="footer"><p>Automated E-mail from KPI Dashboard &middot; ` +
     `<a href="https://cskpi.oderp.in">View live</a>.</p><p class="ted">TED</p></div></div>`;
 }
 
-function renderPage(day, missed, escalations, overdueImpl) {
+function renderPage(day, missed, escalations, overdueImpl, pexPending) {
   return `<!doctype html><html><head><meta charset="UTF-8">` +
     `<meta name="viewport" content="width=device-width, initial-scale=1.0">` +
     `<title>CS Monitoring &middot; Daily Compliance</title><style>${STYLE}</style></head>` +
-    `<body>${renderHtml(day, missed, escalations, overdueImpl)}</body></html>`;
+    `<body>${renderHtml(day, missed, escalations, overdueImpl, pexPending)}</body></html>`;
 }
 
 const escapeHtml = s => String(s).replace(/[&<>"']/g, c =>
@@ -483,9 +541,10 @@ module.exports = async (req, res) => {
     // index.html already makes about this data (see buildImplementation's
     // comment). A fetch failure here shows up as its own line in the email
     // rather than taking down the whole digest.
-    const [escalations, overdueImpl] = await Promise.all([
+    const [escalations, overdueImpl, pexPending] = await Promise.all([
       fetchRaw(baseUrl, 'escalations').then(parseEscalations).catch(() => null),
       fetchRaw(baseUrl, 'implementation').then(parseImplementation).catch(() => null),
+      fetchRaw(baseUrl, 'pexPending').then(parsePexPending).catch(() => null),
     ]);
 
     const missed = computeMissed(byTracker, day);
@@ -498,11 +557,12 @@ module.exports = async (req, res) => {
       : `${escalations.length} Open Escalation${escalations.length === 1 ? '' : 's'}`;
     const subject = `CS KPI Update – ${pretty}: ${[missedPart, escPart].filter(Boolean).join(' | ')}`;
 
-    await sendEmail(subject, renderPage(day, missed, escalations, overdueImpl), testTo);
+    await sendEmail(subject, renderPage(day, missed, escalations, overdueImpl, pexPending), testTo);
     return res.status(200).json({
       ok: true, day, missed: missed.length,
       openEscalations: escalations === null ? 'unavailable' : escalations.length,
       overdueImplementation: overdueImpl === null ? 'unavailable' : overdueImpl.length,
+      pendingAtRm: pexPending === null ? 'unavailable' : pexPending.length,
       testTo: testTo || undefined,
     });
   } catch (e) {
