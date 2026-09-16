@@ -493,7 +493,7 @@ async function sendEmail(subject, html, testTo) {
       Authorization: process.env.ZEPTOMAIL_TOKEN || '',
     },
     body: JSON.stringify({
-      from: { address: process.env.ZEPTOMAIL_SENDER || '' },
+      from: { address: process.env.ZEPTOMAIL_SENDER || '', name: 'CS Monitoring' },
       to: to.map(address => ({ email_address: { address } })),
       cc: cc.map(address => ({ email_address: { address } })),
       subject,
@@ -554,14 +554,12 @@ module.exports = async (req, res) => {
     ]);
 
     const missed = computeMissed(byTracker, day);
-    const pretty = new Date(day + 'T00:00:00').toLocaleDateString('en-GB',
-      { day: 'numeric', month: 'short' });
     // Escalations may be null (fetch failed) — that segment is dropped rather
     // than printing a false "0 Open Escalations" for data that didn't load.
     const missedPart = `${missed.length} Missed Timesheet${missed.length === 1 ? '' : 's'}`;
     const escPart = escalations === null ? null
       : `${escalations.length} Open Escalation${escalations.length === 1 ? '' : 's'}`;
-    const subject = `CS KPI Update – ${pretty}: ${[missedPart, escPart].filter(Boolean).join(' | ')}`;
+    const subject = [missedPart, escPart].filter(Boolean).join(' | ');
 
     await sendEmail(subject, renderPage(day, missed, escalations, overdueImpl, pexPending), testTo);
     return res.status(200).json({
