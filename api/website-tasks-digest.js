@@ -178,7 +178,7 @@ async function sendEmail(subject, html, testTo, toOverride, ccOverride) {
       Authorization: process.env.ZEPTOMAIL_TOKEN || '',
     },
     body: JSON.stringify({
-      from: { address: process.env.ZEPTOMAIL_SENDER || '' },
+      from: { address: process.env.ZEPTOMAIL_SENDER || '', name: 'Website Task Updates' },
       to: to.map(address => ({ email_address: { address } })),
       cc: cc.map(address => ({ email_address: { address } })),
       subject,
@@ -233,7 +233,7 @@ module.exports = async (req, res) => {
     const dateStr = new Date().toLocaleDateString('en-GB',
       { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
-    const subject = `Client Website Tasks — ${pending.length} pending, ${completedToday.length} completed today`;
+    const subject = `${pending.length} pending, ${completedToday.length} completed today`;
     await sendEmail(subject, renderPage(pending, completedToday, dateStr), testTo, toOverride, ccOverride);
 
     return res.status(200).json({
