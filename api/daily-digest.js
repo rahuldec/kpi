@@ -70,6 +70,14 @@ function lastWorkingDay() {
 // an email local-part (see the fallback in parseExport below).
 const tc = s => s.split(/\s+/).map(w => w ? w[0].toUpperCase() + w.slice(1).toLowerCase() : w).join(' ');
 
+/* Kept in sync with index.html's own EMAIL_NAME_OVERRIDE — see the comment
+   there. Without this, a handle like "kjain21569@gmail.com" title-cases to
+   "Kjain21569", which never matches the Team tab's "Khushi Jain" and leaves
+   her permanently unmatched to any pod, silently. */
+const EMAIL_NAME_OVERRIDE = {
+  'kjain21569@gmail.com': 'Khushi Jain',
+};
+
 /* Same shape as index.html's parseExport: find the header row with "Due
    Date" and "Assignee", then one {name, due} per row after it. Duplicated
    rather than shared for the same reason as the constants above.
@@ -96,7 +104,8 @@ function parseExport(text) {
     const due = r[ix.due] || '';
     let name = (r[ix.name] || '').trim();
     if (!name || name.includes('@')) {
-      name = tc(((ix.email > -1 ? r[ix.email] : '') || name || '').split('@')[0].replace(/[._-]+/g, ' '));
+      const emailRaw = ((ix.email > -1 ? r[ix.email] : '') || name || '').trim();
+      name = EMAIL_NAME_OVERRIDE[emailRaw.toLowerCase()] || tc(emailRaw.split('@')[0].replace(/[._-]+/g, ' '));
     }
     if (!due || !name) continue;
     out.push({ name, due: due.slice(0, 10) });

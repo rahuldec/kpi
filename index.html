@@ -2936,6 +2936,20 @@ function feedForTeam(lead){
   };
 }
 
+/* An Asana account with no display name set exports the assignee as its raw
+   email, which the fallback below title-cases from the local part — fine
+   for "sapna.rani@..." -> "Sapna Rani", useless for a handle like
+   "kjain21569@gmail.com" that carries no real name in it at all. This maps
+   those specific known emails straight to the name the Team tab actually
+   spells them with, so the two resolve to the same roster entry instead of
+   this person silently having no pod. Keyed lowercase; add here (and in
+   daily-digest.js's copy) the moment a fallback-derived name turns up that
+   doesn't match its Team tab spelling — nothing on the page flags this on
+   its own since the pod-gap banner that used to is intentionally hidden. */
+const EMAIL_NAME_OVERRIDE = {
+  'kjain21569@gmail.com': 'Khushi Jain',
+};
+
 function parseExport(text){
   const dl=(text.split('\n')[0].match(/\t/g)||[]).length>=2?'\t':',';
   const rows=splitRows(text,dl); let head=-1,ix={};
@@ -2951,7 +2965,8 @@ function parseExport(text){
     const due=normDate(r[ix.due]); if(!due)continue;
     let n=(r[ix.name]||'').trim();
     if(!n||n.includes('@')){ // no display name in Asana — derive one from the email
-      n=tc(((ix.email>-1?r[ix.email]:'')||n||'').split('@')[0].replace(/[._-]+/g,' '));
+      const emailRaw=((ix.email>-1?r[ix.email]:'')||n||'').trim();
+      n=EMAIL_NAME_OVERRIDE[emailRaw.toLowerCase()] || tc(emailRaw.split('@')[0].replace(/[._-]+/g,' '));
     }
     if(!n)continue;
     out.push({name:n,due});
