@@ -161,7 +161,7 @@ async function sendEmail(subject, html, testTo) {
       Authorization: process.env.ZEPTOMAIL_TOKEN || '',
     },
     body: JSON.stringify({
-      from: { address: process.env.ZEPTOMAIL_SENDER || '' },
+      from: { address: process.env.ZEPTOMAIL_SENDER || '', name: 'Payment Updates' },
       to: to.map(address => ({ email_address: { address } })),
       cc: cc.map(address => ({ email_address: { address } })),
       subject,
@@ -202,7 +202,7 @@ module.exports = async (req, res) => {
     const fullDate = new Date().toLocaleDateString('en-GB',
       { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
-    const subject = `Payment Recovery 26-27 — ${accounts.length} open accounts, ₹${inr(grandTotal)}`;
+    const subject = `${accounts.length} open accounts, ₹${inr(grandTotal)}`;
     await sendEmail(subject, renderPage(groups, grandTotal, accounts.length, fullDate), testTo);
 
     return res.status(200).json({ ok: true, accounts: accounts.length, total: grandTotal, testTo: testTo || undefined });
