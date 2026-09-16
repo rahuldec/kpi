@@ -7,7 +7,7 @@
     },
     {
       "path": "/api/payment-recovery-digest",
-      "schedule": "30 1 * * 1,3,6"
+      "schedule": "30 4 * * 1-6"
     },
     {
       "path": "/api/website-tasks-digest",
