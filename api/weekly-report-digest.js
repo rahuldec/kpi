@@ -462,11 +462,9 @@ function renderPage(missed, escalationsAll, overdueImpl, websiteTasks, windowSta
 }
 
 /* `testTo`, when set, replaces the real recipient with a single address and
-   drops any CC — for confirming a change before it goes to the real list.
-   No standing recipient list is configured yet, so this falls back to the
-   account owner alone until WEEKLY_REPORT_TO is set on the deployment. */
+   drops any CC — for confirming a change before it goes to the real list. */
 async function sendEmail(subject, html, testTo) {
-  const fallbackTo = 'rahul.sharma@okiedokiepay.com';
+  const fallbackTo = 'customer-success-delight@okiedokiepay.com';
   const to = testTo ? [testTo]
     : (process.env.WEEKLY_REPORT_TO || fallbackTo).split(',').map(s => s.trim()).filter(Boolean);
   const cc = testTo ? [] : (process.env.WEEKLY_REPORT_CC || '').split(',').map(s => s.trim()).filter(Boolean);
