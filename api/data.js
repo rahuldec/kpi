@@ -191,7 +191,15 @@ const SOURCES = {
      (api/pex-pending-digest.js), not the dashboard itself. */
   pexPending: { asanaProject: process.env.ASANA_PEX_PROJECT_GID || '1210517770853851',
                  envVar: 'ASANA_PEX_PROJECT_GID',
-                 asanaShape: 'pexPending' }
+                 asanaShape: 'pexPending' },
+  /* Same "Client Implementation" portfolio as `implementation` above, but
+     task-level (overdue/due-soon rows, not per-project counts) — see
+     grabAsanaImplementationFollowUp. Read for the implementation follow-up
+     digest (api/implementation-followup-digest.js), not the dashboard. */
+  implementationFollowUp: { asanaPortfolio: process.env.ASANA_IMPLEMENTATION_PORTFOLIO_GID ||
+                       '1210134872553129',
+                 envVar: 'ASANA_IMPLEMENTATION_PORTFOLIO_GID',
+                 asanaShape: 'implementationFollowUp' }
 };
 
 const trackerSignature = csv => /due date/i.test(csv) && /assignee/i.test(csv);
@@ -609,6 +617,67 @@ async function grabAsanaImplementationPortfolio(portfolioGid, token) {
   return { ok: true, body };
 }
 
+/* Same portfolio fan-out as grabAsanaImplementationPortfolio, but keeps the
+   individual incomplete tasks that are overdue or due within the next 7 days
+   — one row per task, not a per-project count — for the follow-up digest
+   (api/implementation-followup-digest.js). Separately cached from the counts
+   version since the two are read by different consumers on different
+   schedules; no reason a dashboard page-load should be blocked on, or share
+   staleness with, a cron-triggered email. A project whose task list can't be
+   fetched is skipped, same reasoning as countProjectTasks's caller above. */
+let cachedImplementationFollowUp = null;
+
+async function grabAsanaImplementationFollowUp(portfolioGid, token) {
+  if (cachedImplementationFollowUp && cachedImplementationFollowUp.expiresAt > Date.now())
+    return { ok: true, body: cachedImplementationFollowUp.body };
+
+  const today = new Date();
+  const todayISO = today.toISOString().slice(0, 10);
+  const soonCutoff = new Date(today);
+  soonCutoff.setDate(soonCutoff.getDate() + 7);
+  const soonISO = soonCutoff.toISOString().slice(0, 10);
+
+  const items = [];
+  let offset = '';
+  do {
+    const url = `https://app.asana.com/api/1.0/portfolios/${portfolioGid}/items` +
+                `?opt_fields=name,resource_type&limit=100` + (offset ? `&offset=${offset}` : '');
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!r.ok) return { ok: false, status: r.status };
+    const json = await r.json();
+    for (const it of json.data || []) if (it.resource_type === 'project') items.push(it);
+    offset = (json.next_page && json.next_page.offset) || '';
+  } while (offset);
+
+  const fields = 'name,assignee.name,due_on,completed';
+  const perProject = await Promise.all(items.map(async p => {
+    const rows = [];
+    try {
+      let off = '';
+      do {
+        const url = `https://app.asana.com/api/1.0/projects/${p.gid}/tasks` +
+                    `?opt_fields=${fields}&limit=100` + (off ? `&offset=${off}` : '');
+        const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+        if (!r.ok) { const e = new Error(`project ${p.gid}: HTTP ${r.status}`); e.status = r.status; throw e; }
+        const json = await r.json();
+        for (const t of json.data || []) {
+          if (t.completed || !t.due_on) continue;
+          if (t.due_on > soonISO) continue;   // neither overdue nor due within 7 days
+          const status = t.due_on < todayISO ? 'Overdue' : 'Due Soon';
+          rows.push([p.name || '', t.name || '', (t.assignee && t.assignee.name) || 'Unassigned', t.due_on, status]);
+        }
+        off = (json.next_page && json.next_page.offset) || '';
+      } while (off);
+    } catch (e) { return []; }
+    return rows;
+  }));
+
+  const rows = [['Project', 'Task', 'Assignee', 'Due Date', 'Status'], ...perProject.flat()];
+  const body = rows.map(r => r.map(csvEscape).join(',')).join('\n');
+  cachedImplementationFollowUp = { body, expiresAt: Date.now() + IMPLEMENTATION_CACHE_MS };
+  return { ok: true, body };
+}
+
 /* One tab of a native Google Sheet, addressed by its title. */
 async function grabNamed(id, tab) {
   const url = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq` +
@@ -748,7 +817,8 @@ module.exports = async (req, res) => {
       }
       let hit;
       try {
-        hit = isPortfolio ? await grabAsanaImplementationPortfolio(target, accessToken)
+        hit = isPortfolio && source.asanaShape === 'implementationFollowUp' ? await grabAsanaImplementationFollowUp(target, accessToken)
+            : isPortfolio ? await grabAsanaImplementationPortfolio(target, accessToken)
             : source.asanaShape === 'escalations' ? await grabAsanaEscalations(target, accessToken)
             : source.asanaShape === 'pex' ? await grabAsanaPex(target, accessToken)
             : source.asanaShape === 'paymentRecovery' ? await grabAsanaPaymentRecovery(target, accessToken)
