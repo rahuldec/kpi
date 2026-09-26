@@ -32,7 +32,7 @@ const LEAVE_RAW = {"Amar Kumar Pandit":["2026-07-08","2026-07-24","2026-07-25"],
 
 // Kept in sync with index.html's own HIDDEN — people not part of the CS team
 // being measured at all.
-const HIDDEN = ['rahul sharma', 'aman sharma', 'amar kumar pandit', 'aadhar mittal'];
+const HIDDEN = ['rahul sharma', 'aman sharma', 'amar kumar pandit'];
 
 // Kept in sync with index.html's own EXEMPT — on the team, but not expected
 // to file to a given tracker.
@@ -45,6 +45,18 @@ const EXEMPT = {
 // having filed nothing yet, so they still show up rather than being invisible
 // until their first entry.
 const MANUAL_ROSTER = ['Bhavey Saluja'];
+
+// Kept in sync with index.html's own TEAM_FALLBACK — used only if the live
+// Team tab fetch fails, so the roster gate below still has something to
+// check against rather than excluding everyone.
+const TEAM_FALLBACK = [
+  { lead: 'Mansi Rana', members: ['Divya', 'Vansh Saini'] },
+  { lead: 'Sultan Malik', members: ['Lokesh Kumar', 'Aanchal Dhiman'] },
+  { lead: 'Sukhmeet Singh', members: ['Gobind Monga', 'Sapna', 'Bhavey Saluja', 'Akshat Wahi'] },
+  { lead: 'Kashish Goel', members: ['Anjali Verma', 'Tanvi Gupta'] },
+  { lead: 'Amit Kumar', members: ['Priya'] },
+  { lead: 'Ankush Rana', members: ['Aadhar Mittal'] },
+];
 
 const TRACKERS = ['internal', 'client'];
 const TRACKER_LABEL = { internal: 'internal calls', client: 'client calls' };
@@ -223,24 +235,69 @@ function parsePexPending(text) {
   return out;
 }
 
+/* Same shape as index.html's own parseTeam: one row per RM, column 0 the
+   lead, every other name column (up to the first "...email" header, if any)
+   one of their ARM/CRs. Kept in sync rather than shared for the same reason
+   as the other duplicated parsers in this file. */
+function parseTeam(text) {
+  const rows = splitRows(text, ',');
+  let head = -1;
+  for (let i = 0; i < Math.min(rows.length, 10); i++)
+    if ((rows[i][0] || '').trim().toLowerCase() === 'rm') { head = i; break; }
+  if (head < 0) throw new Error('Could not find a header row whose first column is "RM".');
+
+  const header = rows[head];
+  const emailStart = header.findIndex((c, i) => i > 0 && /email/i.test(c || ''));
+  const nameCols = emailStart < 0 ? header.length : emailStart;
+
+  const out = [];
+  for (let i = head + 1; i < rows.length; i++) {
+    const r = rows[i]; if (!r) continue;
+    const lead = (r[0] || '').trim();
+    if (!lead) continue;
+    const members = [];
+    for (let c = 1; c < nameCols; c++) {
+      const name = (r[c] || '').trim();
+      if (name) members.push(name);
+    }
+    out.push({ lead, members });
+  }
+  return out;
+}
+
+/* Every name currently on the Team tab, as a lead or as one of their
+   ARM/CRs — lowercased. Kept in sync with index.html's own teamTabNames(). */
+function teamTabNames(teamRows) {
+  const s = new Set();
+  for (const { lead, members } of teamRows) {
+    if (lead) s.add(lead.trim().toLowerCase());
+    for (const m of members || []) s.add(String(m).trim().toLowerCase());
+  }
+  return s;
+}
+
 const daysBetween = (fromISO, toISO) =>
   Math.round((new Date(toISO + 'T00:00:00') - new Date(fromISO + 'T00:00:00')) / 86400000);
 
-/* Everyone who has ever filed to either tracker, plus MANUAL_ROSTER, minus
-   HIDDEN — the same roster index.html's buildRoster() derives, without the
-   canonical-casing lookup against the Team tab (cosmetic only: it decides how
-   a name is capitalised, never who is on the roster). */
-function buildRoster(byTracker) {
+/* Everyone who has ever filed to either tracker, plus MANUAL_ROSTER, gated on
+   still being listed on the Team tab (as a lead or an ARM/CR) and minus
+   HIDDEN — the same roster index.html's buildRoster() derives. Removing
+   someone from the Team tab is now enough on its own to drop them from this
+   roster; HIDDEN stays as a manual override for anything the sheet doesn't
+   cover on its own. */
+function buildRoster(byTracker, teamRows) {
   const roster = new Map();
+  const onTeam = teamTabNames(teamRows);
   for (const src of TRACKERS)
     for (const r of byTracker[src]) {
       const key = r.name.toLowerCase();
+      if (!onTeam.has(key)) continue;
       if (!roster.has(key)) roster.set(key, { name: r.name, first: r.due });
       else if (r.due < roster.get(key).first) roster.get(key).first = r.due;
     }
   for (const name of MANUAL_ROSTER) {
     const key = name.toLowerCase();
-    if (!roster.has(key)) roster.set(key, { name, first: iso(new Date()) });
+    if (onTeam.has(key) && !roster.has(key)) roster.set(key, { name, first: iso(new Date()) });
   }
   for (const key of [...roster.keys()]) if (HIDDEN.includes(key)) roster.delete(key);
   return roster;
@@ -283,8 +340,8 @@ function missedTrackersOn(byTracker, roster, day) {
   return out;
 }
 
-function computeMissed(byTracker, day) {
-  const roster = buildRoster(byTracker);
+function computeMissed(byTracker, day, teamRows) {
+  const roster = buildRoster(byTracker, teamRows);
 
   /* `day` is always the window's own last entry, so the day being reported on
      and the tally of how often each person has missed this week come out of
@@ -551,6 +608,12 @@ module.exports = async (req, res) => {
     const byTracker = {};
     for (const src of TRACKERS) byTracker[src] = await fetchTracker(baseUrl, src);
 
+    /* The roster gate needs to know who's currently on the Team tab, same as
+       index.html's own live fetch — falls back to the compiled snapshot
+       (same reasoning as index.html's TEAM_LIVE fallback) rather than
+       excluding everyone from the roster if this one fetch has a bad moment. */
+    const teamRows = await fetchRaw(baseUrl, 'team').then(parseTeam).catch(() => TEAM_FALLBACK);
+
     // Escalations and implementation are an enrichment on top of the core
     // filing-compliance report, not a foundation for it — the same call
     // index.html already makes about this data (see buildImplementation's
@@ -562,7 +625,7 @@ module.exports = async (req, res) => {
       fetchRaw(baseUrl, 'pexPending').then(parsePexPending).catch(() => null),
     ]);
 
-    const missed = computeMissed(byTracker, day);
+    const missed = computeMissed(byTracker, day, teamRows);
     // Escalations may be null (fetch failed) — that segment is dropped rather
     // than printing a false "0 Open Escalations" for data that didn't load.
     const missedPart = `${missed.length} Missed Timesheet${missed.length === 1 ? '' : 's'}`;

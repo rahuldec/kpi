@@ -1959,7 +1959,7 @@ const MANUAL_ROSTER = ['Bhavey Saluja'];
    before the roster is built, so they have no row anywhere and no effect on any
    total. Different from EXEMPT above: that is "on the team, not this tracker".
    Match is on the full display name, lowercased, as Asana writes it. */
-const HIDDEN = ['rahul sharma', 'aman sharma', 'amar kumar pandit', 'aadhar mittal'];
+const HIDDEN = ['rahul sharma', 'aman sharma', 'amar kumar pandit'];
 const isHidden = name => HIDDEN.includes(name.trim().toLowerCase());
 
 /* Zoho accounts permitted to sign in who are NOT on the Team tab — leadership
@@ -2208,14 +2208,34 @@ function canonicalNames(){
   return m;
 }
 
+/* Every name currently on the Team tab, as a lead or as one of their
+   ARM/CRs — lowercased, for membership checks. This is the live source of
+   truth for "still on the team": removing someone from the sheet drops them
+   from this set on the next load, with no code change or deploy. */
+function teamTabNames(){
+  const s = new Set();
+  for (const {lead, members} of TEAM_ROWS){
+    if (lead) s.add(lead.trim().toLowerCase());
+    for (const m of members || []) s.add(String(m).trim().toLowerCase());
+  }
+  return s;
+}
+
 /* Keyed case-insensitively — two spellings of one person must not become two
-   people. */
+   people. Gated on teamTabNames(): someone who has filed but is no longer on
+   the Team tab is left off the roster entirely, the same as HIDDEN, so
+   removing a leaver from the sheet is enough on its own — no separate code
+   change needed. The tradeoff is the mirror image of MANUAL_ROSTER below: a
+   real team member who hasn't been added to the sheet YET also reads as
+   absent, same as someone actually gone. Keep the sheet current. */
 function buildRoster(){
   ROSTER = new Map();
   const canon = canonicalNames();
+  const onTeam = teamTabNames();
   for (const rows of Object.values(DATA))
     for (const r of rows){
       const key = r.name.toLowerCase();
+      if (!onTeam.has(key)) continue;
       const prev = ROSTER.get(key);
       if (!prev){
         ROSTER.set(key, {name: canon.get(key) || r.name, first: r.due});
@@ -2231,10 +2251,12 @@ function buildRoster(){
      get no chance to land on the roster on their own — MANUAL_ROSTER is
      exactly that case. first is set to today rather than guessed at: it is
      unused while EXEMPT keeps both trackers null for these names, and today
-     is the least wrong placeholder if that ever changes. */
+     is the least wrong placeholder if that ever changes. Still gated on
+     onTeam: MANUAL_ROSTER's whole point is someone the Team tab already
+     lists but who has never filed, not a way around the sheet gate above. */
   for (const name of MANUAL_ROSTER){
     const key = name.toLowerCase();
-    if (!ROSTER.has(key)) ROSTER.set(key, {name, first: iso(new Date())});
+    if (onTeam.has(key) && !ROSTER.has(key)) ROSTER.set(key, {name, first: iso(new Date())});
   }
 }
 
