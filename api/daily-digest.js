@@ -32,7 +32,7 @@ const LEAVE_RAW = {"Amar Kumar Pandit":["2026-07-08","2026-07-24","2026-07-25"],
 
 // Kept in sync with index.html's own HIDDEN — people not part of the CS team
 // being measured at all.
-const HIDDEN = ['rahul sharma', 'aman sharma', 'amar kumar pandit'];
+const HIDDEN = ['rahul sharma', 'aman sharma', 'amar kumar pandit', 'aadhar mittal'];
 
 // Kept in sync with index.html's own EXEMPT — on the team, but not expected
 // to file to a given tracker.
