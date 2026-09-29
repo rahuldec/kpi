@@ -189,11 +189,19 @@ module.exports = async (req, res) => {
         `/tasks/${gid}/subtasks?opt_fields=name,created_by.name&limit=100`,
         token
       );
-      const mainTasks = subtasks
+      // Prefer [N]-prefixed tasks; fall back to all direct subtasks if none found
+      // (some sprints don't use the [1]/[2] numbering convention)
+      let mainTasks = subtasks
         .filter(t => /^\s*\[\d+\]/.test(t.name))
         .map(t => ({ name: t.name.trim(), creator: t.created_by?.name || '—' }));
 
-      if (!mainTasks.length) continue; // not a sprint-style task, skip
+      if (!mainTasks.length) {
+        mainTasks = subtasks
+          .filter(t => t.name && !t.name.startsWith('QA ') && !t.name.startsWith('----'))
+          .map(t => ({ name: t.name.trim(), creator: t.created_by?.name || '—' }));
+      }
+
+      if (!mainTasks.length) continue;
 
       await sendEmail(sprintName, mainTasks);
     }
