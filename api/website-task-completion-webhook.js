@@ -85,7 +85,6 @@ function buildHtml(taskName) {
   <hr class="divider">
   <div class="footer">
     <p>Automated Email Alert from <a href="https://okiedokie.in" style="color:${ACCENT};text-decoration:none;">OkieDokie</a></p>
-    <p class="pex">PEX</p>
   </div>
 </div></body></html>`;
 }
