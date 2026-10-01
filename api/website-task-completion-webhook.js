@@ -184,18 +184,16 @@ module.exports = async (req, res) => {
 
   const events = (req.body && req.body.events) || [];
 
-  // Find tasks where the completed field changed — fetch each to confirm
-  // it's truly completed (don't rely on new_value, which Asana omits)
+  // Webhook is registered with fields:['completed'] so every event here
+  // is a completed-field change on a task — no need to filter further.
   const changedGids = [
     ...new Set(
       events
         .filter(ev =>
-          ev.action === 'changed' &&
           ev.resource?.resource_type === 'task' &&
-          ev.change?.field === 'completed'
+          ev.resource?.gid
         )
-        .map(ev => ev.resource?.gid)
-        .filter(Boolean)
+        .map(ev => ev.resource.gid)
     ),
   ];
 
