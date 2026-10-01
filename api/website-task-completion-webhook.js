@@ -14,6 +14,8 @@ const ACCENT = '#B5501C';
 const GREEN  = '#2E7D32';
 const BLUE   = '#0066CC';
 
+const LOGO_URL = 'https://okiedokie-erp-images.s3.ap-south-1.amazonaws.com/Okie%20Dokie/2025/12/sourceURL/26aebcbe10f4ac5a3e8b-611ed1b9032568edd4f3-Okie_Dokie_App_icon__2___2_-removebg-preview.png';
+
 const STYLE = `
     * { margin:0; padding:0; box-sizing:border-box;
         font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; }
@@ -21,6 +23,7 @@ const STYLE = `
     .email-container { max-width:600px; width:100%; margin:0 auto; background:#FFFFFF;
       border:1px solid #E5E3DE; border-radius:12px; padding:36px 32px; }
     .masthead { text-align:center; margin-bottom:28px; }
+    .masthead img { width:56px; height:56px; object-fit:contain; margin:0 0 14px; display:block; margin-left:auto; margin-right:auto; }
     .masthead .eyebrow { font-size:11px; font-weight:600; letter-spacing:.12em; text-transform:uppercase;
       color:${GREEN}; margin:0 0 10px; }
     .masthead h1 { font-size:23px; font-weight:600; letter-spacing:-.01em; color:#1D1D1F; margin:0 0 6px; }
@@ -32,6 +35,7 @@ const STYLE = `
     .task-box .task-name { font-size:15px; font-weight:600; color:#1D1D1F; word-break:break-word; }
     .message { font-size:14px; color:#3A3A3C; line-height:1.6; margin:0; }
     .footer p { margin:0; font-size:12px; color:#8A8A8F; text-align:center; }
+    .footer a { color:${ACCENT}; text-decoration:none; }
     .footer .pex { margin:10px 0 0; font-size:22px; font-weight:800; letter-spacing:.18em;
       color:${BLUE}; text-align:center; }
     @media (max-width:480px) {
@@ -63,6 +67,7 @@ function buildHtml(taskName) {
 <title>Task Completed</title><style>${STYLE}</style></head>
 <body><div class="email-container">
   <div class="masthead">
+    <img src="${LOGO_URL}" alt="OkieDokie" width="56" height="56">
     <p class="eyebrow">Task Completed</p>
     <h1>Your request has been resolved</h1>
     <p class="date">${dateStr}</p>
