@@ -131,6 +131,26 @@ async function sendEmail(toAddress, taskName) {
 
 // ─── main handler ─────────────────────────────────────────────────────────────
 module.exports = async (req, res) => {
+  // Self-registration: ?register=1 (gated by INSPECT_SECRET / CRON_SECRET)
+  if (req.query.register === '1') {
+    const auth = req.headers.authorization || '';
+    const ok = (process.env.CRON_SECRET && auth === `Bearer ${process.env.CRON_SECRET}`)
+            || (process.env.INSPECT_SECRET && auth === `Bearer ${process.env.INSPECT_SECRET}`);
+    if (!ok) return res.status(404).end();
+    const token = await getToken();
+    const baseUrl = process.env.DIGEST_BASE_URL || 'https://cskpi.oderp.in';
+    const r = await fetch(`${ASANA_API}/webhooks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ data: {
+        resource: '1211188142613963',
+        target: `${baseUrl}/api/website-task-completion-webhook`,
+        filters: [{ resource_type: 'task', action: 'changed', fields: ['completed'] }],
+      }}),
+    });
+    return res.status(r.status).json(await r.json().catch(() => ({})));
+  }
+
   // Asana handshake: echo X-Hook-Secret back on first registration call
   const hookSecret = req.headers['x-hook-secret'];
   if (hookSecret) {
