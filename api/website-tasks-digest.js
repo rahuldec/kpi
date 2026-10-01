@@ -140,22 +140,23 @@ function renderPending(tasks) {
     `${rowsHtml}</table></div>`;
 }
 
-function renderHtml(pending, completedToday, fullDate) {
+function renderHtml(pending, completedToday, fullDate, pendingOnly) {
+  const eyebrow = pendingOnly ? 'Morning Briefing' : 'Daily Update';
+  let body = renderPending(pending);
+  if (!pendingOnly) body = renderCompletedToday(completedToday) + `<hr class="divider">` + body;
   return `<div class="email-container">` +
-    `<div class="masthead"><p class="eyebrow">Daily Update</p>` +
+    `<div class="masthead"><p class="eyebrow">${eyebrow}</p>` +
     `<h1>Client Website Tasks</h1><p class="date">${fullDate}</p></div>` +
-    `<hr class="divider">` +
-    renderCompletedToday(completedToday) + `<hr class="divider">` +
-    renderPending(pending) + `<hr class="divider">` +
+    `<hr class="divider">` + body + `<hr class="divider">` +
     `<div class="footer"><p>Automated E-mail from the Client Website Tasks Asana project.</p>` +
     `<p class="ted">TED</p></div></div>`;
 }
 
-function renderPage(pending, completedToday, fullDate) {
+function renderPage(pending, completedToday, fullDate, pendingOnly) {
   return `<!doctype html><html><head><meta charset="UTF-8">` +
     `<meta name="viewport" content="width=device-width, initial-scale=1.0">` +
-    `<title>Client Website Tasks &middot; Daily Update</title><style>${STYLE}</style></head>` +
-    `<body>${renderHtml(pending, completedToday, fullDate)}</body></html>`;
+    `<title>Client Website Tasks &middot; ${pendingOnly ? 'Morning Briefing' : 'Daily Update'}</title><style>${STYLE}</style></head>` +
+    `<body>${renderHtml(pending, completedToday, fullDate, pendingOnly)}</body></html>`;
 }
 
 /* `testTo`, when set, replaces the real recipient with a single address and
@@ -214,6 +215,7 @@ module.exports = async (req, res) => {
     .split(',').map(s => s.trim()).filter(s => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s));
   const toOverride = req.query.to ? emailList(req.query.to) : null;
   const ccOverride = req.query.cc ? emailList(req.query.cc) : null;
+  const pendingOnly = req.query.pendingOnly === '1' || req.query.pendingOnly === 'true';
 
   try {
     // Same reasoning as daily-digest.js: not derived from req.headers.host,
@@ -228,16 +230,24 @@ module.exports = async (req, res) => {
     const today = iso(new Date());
     const pending = tasks.filter(t => !t.completed)
       .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-    const completedToday = tasks.filter(t => t.completed && t.completedAt && iso(t.completedAt) === today)
+    const completedToday = pendingOnly ? [] : tasks.filter(t => t.completed && t.completedAt && iso(t.completedAt) === today)
       .sort((a, b) => (a.completedAt || 0) - (b.completedAt || 0));
     const dateStr = new Date().toLocaleDateString('en-GB',
       { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
-    const subject = `${pending.length} pending, ${completedToday.length} completed today`;
-    await sendEmail(subject, renderPage(pending, completedToday, dateStr), testTo, toOverride, ccOverride);
+    const morningTo = (process.env.WEBSITE_TASKS_MORNING_TO || '').split(',').map(s => s.trim()).filter(Boolean);
+    const morningCc = (process.env.WEBSITE_TASKS_MORNING_CC || '').split(',').map(s => s.trim()).filter(Boolean);
+    const resolvedTo = pendingOnly && !toOverride && morningTo.length ? morningTo : toOverride;
+    const resolvedCc = pendingOnly && !ccOverride && morningCc.length ? morningCc : ccOverride;
+
+    const subject = pendingOnly
+      ? `Morning Briefing — ${pending.length} pending task${pending.length === 1 ? '' : 's'}`
+      : `${pending.length} pending, ${completedToday.length} completed today`;
+    await sendEmail(subject, renderPage(pending, completedToday, dateStr, pendingOnly), testTo, resolvedTo, resolvedCc);
 
     return res.status(200).json({
       ok: true, pending: pending.length, completedToday: completedToday.length,
+      pendingOnly: pendingOnly || undefined,
       testTo: testTo || undefined, to: toOverride || undefined, cc: ccOverride || undefined,
     });
   } catch (e) {
