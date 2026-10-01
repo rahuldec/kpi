@@ -149,7 +149,7 @@ function renderHtml(pending, completedToday, fullDate, pendingOnly) {
     `<h1>Client Website Tasks</h1><p class="date">${fullDate}</p></div>` +
     `<hr class="divider">` + body + `<hr class="divider">` +
     `<div class="footer"><p>Automated E-mail from the Client Website Tasks Asana project.</p>` +
-    `<p class="ted">TED</p></div></div>`;
+    `<p class="ted">PEX</p></div></div>`;
 }
 
 function renderPage(pending, completedToday, fullDate, pendingOnly) {
