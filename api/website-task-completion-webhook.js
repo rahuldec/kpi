@@ -121,9 +121,9 @@ async function sendEmail(toAddress, taskName) {
       Authorization: process.env.ZEPTOMAIL_TOKEN || '',
     },
     body: JSON.stringify({
-      from: { address: process.env.ZEPTOMAIL_SENDER || '', name: 'OkieDokie Website Services' },
+      from: { address: process.env.ZEPTOMAIL_SENDER || '', name: 'Okie Dokie Website Services' },
       to: [{ email_address: { address: toAddress } }],
-      subject: 'Your website task has been completed ✓',
+      subject: 'Your Website Work Is Complete',
       htmlbody: buildHtml(taskName),
     }),
   });
