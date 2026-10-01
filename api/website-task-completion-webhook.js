@@ -81,7 +81,7 @@ function buildHtml(taskName) {
     <p class="task-name">${esc(taskName)}</p>
   </div>
   <br>
-  <p class="message">If you have further requests, feel free to submit a new ticket through the form, here is the link:</p>
+  <p class="message">If you have further requests, feel free to submit a new ticket through the form:</p>
   <br>
   <p style="text-align:center;">
     <a href="https://form.asana.com/?k=1BG-dqb9_9fyxT7Uke3ckw&d=480944584143449"
