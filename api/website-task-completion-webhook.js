@@ -136,6 +136,17 @@ async function sendEmail(toAddress, taskName) {
 
 // ─── main handler ─────────────────────────────────────────────────────────────
 module.exports = async (req, res) => {
+  // Test send: ?test=email (gated by INSPECT_SECRET / CRON_SECRET)
+  if (req.query.test) {
+    const auth = req.headers.authorization || '';
+    const ok = (process.env.CRON_SECRET && auth === `Bearer ${process.env.CRON_SECRET}`)
+            || (process.env.INSPECT_SECRET && auth === `Bearer ${process.env.INSPECT_SECRET}`);
+    if (!ok) return res.status(404).end();
+    const testTo = req.query.test;
+    await sendEmail(testTo, 'Please upload the activity on college website — Blood Donation Camp Organised at DAV Centenary College, Faridabad');
+    return res.status(200).json({ ok: true, testTo });
+  }
+
   // Self-registration: ?register=1 (gated by INSPECT_SECRET / CRON_SECRET)
   if (req.query.register === '1') {
     const auth = req.headers.authorization || '';
