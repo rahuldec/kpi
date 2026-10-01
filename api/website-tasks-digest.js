@@ -100,7 +100,7 @@ const STYLE = `
     .task-name { font-weight:500; color:#1D1D1F; word-break:break-word; }
     .footer p { margin:0; font-size:12px; color:#8A8A8F; text-align:center; }
     .footer a { color:${ACCENT}; text-decoration:none; }
-    .footer .ted { margin:10px 0 0; font-size:22px; font-weight:800; letter-spacing:.18em; color:#1D1D1F; text-align:center; }
+    .footer .ted { margin:10px 0 0; font-size:22px; font-weight:800; letter-spacing:.18em; color:#0066CC; text-align:center; }
     @media (max-width:480px) {
       .email-container { padding:28px 20px; }
       .masthead h1 { font-size:20px; }
