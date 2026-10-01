@@ -128,10 +128,9 @@ async function sendEmail(toAddress, taskName) {
       htmlbody: buildHtml(taskName),
     }),
   });
-  if (!r.ok) {
-    const d = await r.json().catch(() => ({}));
-    throw new Error(`ZeptoMail ${r.status}: ${JSON.stringify(d)}`);
-  }
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(`ZeptoMail ${r.status}: ${JSON.stringify(d)}`);
+  return d;
 }
 
 // ─── main handler ─────────────────────────────────────────────────────────────
@@ -143,8 +142,8 @@ module.exports = async (req, res) => {
             || (process.env.INSPECT_SECRET && auth === `Bearer ${process.env.INSPECT_SECRET}`);
     if (!ok) return res.status(404).end();
     const testTo = req.query.test;
-    await sendEmail(testTo, 'Please upload the activity on college website — Blood Donation Camp Organised at DAV Centenary College, Faridabad');
-    return res.status(200).json({ ok: true, testTo });
+    const zepto = await sendEmail(testTo, 'Please upload the activity on college website — Blood Donation Camp Organised at DAV Centenary College, Faridabad');
+    return res.status(200).json({ ok: true, testTo, zepto });
   }
 
   // Self-registration: ?register=1 (gated by INSPECT_SECRET / CRON_SECRET)
