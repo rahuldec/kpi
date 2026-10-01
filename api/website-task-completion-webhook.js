@@ -201,6 +201,9 @@ module.exports = async (req, res) => {
 
   if (!completedGids.length) return res.status(200).json({ skipped: true });
 
+  // Respond immediately so Asana doesn't retry the webhook
+  res.status(200).json({ ok: true, processing: completedGids.length });
+
   try {
     const token = await getToken();
     const results = [];
@@ -223,10 +226,7 @@ module.exports = async (req, res) => {
       await sendEmail(clientEmail, task.name || 'Website task');
       results.push({ gid, sent: clientEmail });
     }
-
-    return res.status(200).json({ ok: true, results });
   } catch (err) {
     console.error('website-task-completion-webhook error:', err);
-    return res.status(500).json({ error: err.message });
   }
 };
