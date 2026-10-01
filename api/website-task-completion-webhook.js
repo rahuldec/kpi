@@ -81,10 +81,18 @@ function buildHtml(taskName) {
     <p class="task-name">${esc(taskName)}</p>
   </div>
   <br>
-  <p class="message">If you notice any issues or have further requests, feel free to <a href="https://form.asana.com/?k=1BG-dqb9_9fyxT7Uke3ckw&d=480944584143449" style="color:${ACCENT};text-decoration:none;font-weight:500;">submit a new ticket</a> through the same form.</p>
+  <p class="message">If you notice any issues or have further requests, feel free to submit a new ticket through the form below.</p>
+  <br>
+  <p style="text-align:center;">
+    <a href="https://form.asana.com/?k=1BG-dqb9_9fyxT7Uke3ckw&d=480944584143449"
+       style="display:inline-block;background:${ACCENT};color:#ffffff;font-size:14px;font-weight:600;
+              text-decoration:none;padding:12px 28px;border-radius:8px;letter-spacing:.01em;">
+      Submit a New Ticket
+    </a>
+  </p>
   <hr class="divider">
   <div class="footer">
-    <p>Automated Email Alert from <a href="https://okiedokie.in" style="color:${ACCENT};text-decoration:none;">OkieDokie</a></p>
+    <p>Automated Email Alert from <a href="https://okiedokiepay.com/" style="color:${ACCENT};text-decoration:none;">Okie Dokie</a></p>
   </div>
 </div></body></html>`;
 }
