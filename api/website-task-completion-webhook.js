@@ -184,47 +184,42 @@ module.exports = async (req, res) => {
 
   const events = (req.body && req.body.events) || [];
 
-  // Find tasks that just flipped to completed
-  const completedGids = [
+  // Find tasks where the completed field changed — fetch each to confirm
+  // it's truly completed (don't rely on new_value, which Asana omits)
+  const changedGids = [
     ...new Set(
       events
         .filter(ev =>
           ev.action === 'changed' &&
           ev.resource?.resource_type === 'task' &&
-          ev.change?.field === 'completed' &&
-          ev.change?.new_value === true
+          ev.change?.field === 'completed'
         )
         .map(ev => ev.resource?.gid)
         .filter(Boolean)
     ),
   ];
 
-  if (!completedGids.length) return res.status(200).json({ skipped: true });
+  if (!changedGids.length) return res.status(200).json({ skipped: true });
 
   // Respond immediately so Asana doesn't retry the webhook
-  res.status(200).json({ ok: true, processing: completedGids.length });
+  res.status(200).json({ ok: true, processing: changedGids.length });
 
   try {
     const token = await getToken();
-    const results = [];
 
-    for (const gid of completedGids) {
-      const task = await (async () => {
-        const r = await fetch(`${ASANA_API}/tasks/${gid}?opt_fields=name,notes`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const d = await r.json().catch(() => ({}));
-        return d.data || {};
-      })();
+    for (const gid of changedGids) {
+      const r = await fetch(`${ASANA_API}/tasks/${gid}?opt_fields=name,notes,completed`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const task = (await r.json().catch(() => ({}))).data || {};
+
+      // Only send if task is actually completed
+      if (!task.completed) continue;
 
       const clientEmail = parseClientEmail(task.notes || '');
-      if (!clientEmail) {
-        results.push({ gid, skipped: 'no client email in notes' });
-        continue;
-      }
+      if (!clientEmail) continue;
 
       await sendEmail(clientEmail, task.name || 'Website task');
-      results.push({ gid, sent: clientEmail });
     }
   } catch (err) {
     console.error('website-task-completion-webhook error:', err);
