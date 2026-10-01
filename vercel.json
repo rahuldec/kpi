@@ -18,6 +18,10 @@
       "schedule": "20 3 * * 1-6"
     },
     {
+      "path": "/api/website-tasks-digest?pendingOnly=1",
+      "schedule": "30 8 * * 1-6"
+    },
+    {
       "path": "/api/weekly-report-digest",
       "schedule": "30 2 * * 1"
     },
