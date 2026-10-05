@@ -2290,7 +2290,7 @@ const isWorkingDay=d=>d.getDay()!==0&&!HOLIDAYS.has(iso(d));
 /* Baseline leave snapshot — compiled into this file as a fallback for when
    /api/leaves is unavailable. Covers Jul 2026 (the original Zoho export) and
    individual Sep-Oct 2026 dates backfilled from the daily Drive PDFs before
-   the live Sheet feed was wired up. The live feed (/api/leaves) is merged into
+   the live Drive feed was wired up. The live feed (/api/leaves) is merged into
    LEAVE_DAYS at load time and covers all dates going forward.
 
    Both Pending and Approved applications count — if someone filed a leave
@@ -5413,7 +5413,7 @@ async function load(){
        file is the normal case for most months, not a load failure. */
     const archivePending = Promise.all([fetchArchive('internal'), fetchArchive('client')])
       .catch(() => [[], []]);
-    /* Live leave data from the Drive-PDF-backed Sheet. Fetched in parallel with
+    /* Live leave data read directly from the Drive PDFs by /api/leaves. Fetched in parallel with
        everything else and merged into LEAVE_DAYS just before the first render so
        any day covered by the Sheet takes precedence over LEAVE_RAW. Fails soft —
        the page falls back to the LEAVE_RAW snapshot compiled into this file. */
