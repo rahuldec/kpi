@@ -34,6 +34,17 @@ const EXEMPT = {
 
 const MANUAL_ROSTER = ['Bhavey Saluja'];
 
+// Kept in sync with index.html's/daily-digest.js's own TEAM_FALLBACK — used
+// only if the live Team tab fetch fails.
+const TEAM_FALLBACK = [
+  { lead: 'Mansi Rana', members: ['Divya', 'Vansh Saini'] },
+  { lead: 'Sultan Malik', members: ['Lokesh Kumar', 'Aanchal Dhiman'] },
+  { lead: 'Sukhmeet Singh', members: ['Gobind Monga', 'Sapna', 'Bhavey Saluja', 'Akshat Wahi'] },
+  { lead: 'Kashish Goel', members: ['Anjali Verma', 'Tanvi Gupta'] },
+  { lead: 'Amit Kumar', members: ['Priya'] },
+  { lead: 'Ankush Rana', members: ['Aadhar Mittal'] },
+];
+
 const TRACKERS = ['internal', 'client'];
 
 const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -96,6 +107,45 @@ async function fetchRaw(baseUrl, src) {
 
 async function fetchTracker(baseUrl, src) {
   return parseExport(await fetchRaw(baseUrl, src));
+}
+
+/* Kept in sync with index.html's/daily-digest.js's own parseTeam. */
+function parseTeam(text) {
+  const rows = splitRows(text, ',');
+  let head = -1;
+  for (let i = 0; i < Math.min(rows.length, 10); i++)
+    if ((rows[i][0] || '').trim().toLowerCase() === 'rm') { head = i; break; }
+  if (head < 0) throw new Error('Could not find a header row whose first column is "RM".');
+
+  const header = rows[head];
+  const emailStart = header.findIndex((c, i) => i > 0 && /email/i.test(c || ''));
+  const nameCols = emailStart < 0 ? header.length : emailStart;
+
+  const out = [];
+  for (let i = head + 1; i < rows.length; i++) {
+    const r = rows[i]; if (!r) continue;
+    const lead = (r[0] || '').trim();
+    if (!lead) continue;
+    const members = [];
+    for (let c = 1; c < nameCols; c++) {
+      const name = (r[c] || '').trim();
+      if (name) members.push(name);
+    }
+    out.push({ lead, members });
+  }
+  return out;
+}
+
+/* Every name currently on the Team tab, as a lead or as one of their
+   ARM/CRs — lowercased. Kept in sync with index.html's/daily-digest.js's own
+   teamTabNames(). */
+function teamTabNames(teamRows) {
+  const s = new Set();
+  for (const { lead, members } of teamRows) {
+    if (lead) s.add(lead.trim().toLowerCase());
+    for (const m of members || []) s.add(String(m).trim().toLowerCase());
+  }
+  return s;
 }
 
 const ESC_PROJECT = 'client escalations';
@@ -196,17 +246,24 @@ function parseWebsiteTasks(csv) {
 const daysBetween = (fromISO, toISO) =>
   Math.round((new Date(toISO + 'T00:00:00') - new Date(fromISO + 'T00:00:00')) / 86400000);
 
-function buildRoster(byTracker) {
+/* Gated on still being listed on the Team tab (as a lead or an ARM/CR) —
+   removing someone from the sheet now drops them from this roster on its
+   own, same as index.html's/daily-digest.js's own buildRoster(). HIDDEN
+   stays as a manual override for anything the sheet doesn't cover on its
+   own. */
+function buildRoster(byTracker, teamRows) {
   const roster = new Map();
+  const onTeam = teamTabNames(teamRows);
   for (const src of TRACKERS)
     for (const r of byTracker[src]) {
       const key = r.name.toLowerCase();
+      if (!onTeam.has(key)) continue;
       if (!roster.has(key)) roster.set(key, { name: r.name, first: r.due });
       else if (r.due < roster.get(key).first) roster.get(key).first = r.due;
     }
   for (const name of MANUAL_ROSTER) {
     const key = name.toLowerCase();
-    if (!roster.has(key)) roster.set(key, { name, first: iso(new Date()) });
+    if (onTeam.has(key) && !roster.has(key)) roster.set(key, { name, first: iso(new Date()) });
   }
   for (const key of [...roster.keys()]) if (HIDDEN.includes(key)) roster.delete(key);
   return roster;
@@ -253,8 +310,8 @@ function missedTrackersOn(byTracker, roster, day) {
 /* Rolls missedTrackersOn up across the whole week: one row per person who
    missed at least once, with how many of the week's working days they
    missed on and which trackers were involved across the week. */
-function computeWeeklyMissed(byTracker, window) {
-  const roster = buildRoster(byTracker);
+function computeWeeklyMissed(byTracker, window, teamRows) {
+  const roster = buildRoster(byTracker, teamRows);
   const perPerson = new Map();
   for (const day of window) {
     for (const [key, trackers] of missedTrackersOn(byTracker, roster, day)) {
@@ -514,13 +571,18 @@ module.exports = async (req, res) => {
     const byTracker = {};
     for (const src of TRACKERS) byTracker[src] = await fetchTracker(baseUrl, src);
 
+    /* The roster gate needs to know who's currently on the Team tab, same as
+       daily-digest.js — falls back to the compiled snapshot rather than
+       excluding everyone from the roster if this one fetch has a bad moment. */
+    const teamRows = await fetchRaw(baseUrl, 'team').then(parseTeam).catch(() => TEAM_FALLBACK);
+
     const [escalationsAll, overdueImpl, websiteTasks] = await Promise.all([
       fetchRaw(baseUrl, 'escalations').then(parseEscalationsAll).catch(() => null),
       fetchRaw(baseUrl, 'implementation').then(parseImplementation).catch(() => null),
       fetchRaw(baseUrl, 'websiteTasks').then(parseWebsiteTasks).catch(() => null),
     ]);
 
-    const missed = computeWeeklyMissed(byTracker, window);
+    const missed = computeWeeklyMissed(byTracker, window, teamRows);
 
     const openedCount = escalationsAll === null ? null
       : escalationsAll.filter(e => e.raised && e.raised >= start && e.raised <= end).length;
