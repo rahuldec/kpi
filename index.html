@@ -2287,20 +2287,16 @@ const HOLIDAYS=new Set([
 ]);
 const isWorkingDay=d=>d.getDay()!==0&&!HOLIDAYS.has(iso(d));
 
-/* Approved leave, per person — unlike a holiday, this excuses one person from
-   one day, not everyone. Imported from a Zoho People export (Leave View,
-   pulled 17 Aug 2026): every "Approved" application's own date breakdown,
-   which already resolves a multi-day request to the individual dates it
-   actually covers (a comp-off spanning a weekend lists the weekend days too,
-   harmlessly — they were never expected days to begin with). Applications
-   left "Cancelled" are excluded outright: a cancelled leave is not a day off,
-   it is a day the person is expected to file like any other.
+/* Baseline leave snapshot — compiled into this file as a fallback for when
+   /api/leaves is unavailable. Covers Jul 2026 (the original Zoho export) and
+   individual Sep-Oct 2026 dates backfilled from the daily Drive PDFs before
+   the live Sheet feed was wired up. The live feed (/api/leaves) is merged into
+   LEAVE_DAYS at load time and covers all dates going forward.
 
-   This is a snapshot, not a live feed — Zoho has no publish-to-web the way
-   the Sheets sources here do, so refreshing this means importing a new
-   export by hand, the same way CLIENTS_FALLBACK or ADOPTION_FALLBACK get
-   refreshed. Only July 2026 is covered by the export this was built from. */
-const LEAVE_RAW = {"Amar Kumar Pandit":["2026-07-08","2026-07-24","2026-07-25"],"Anjali Verma":["2026-07-20","2026-07-30"],"Ankush Rana":["2026-07-01","2026-07-24","2026-07-25","2026-09-04","2026-09-08"],"Ashish Kumar":["2026-07-03","2026-07-06","2026-07-17"],"Ayush Garg":["2026-07-03","2026-07-04","2026-07-05","2026-07-06","2026-07-20"],"Divya Gupta":["2026-07-06","2026-07-31","2026-09-04"],"Gobind Monga":["2026-07-02"],"Kashish Goel":["2026-07-13","2026-07-27","2026-09-04","2026-09-08"],"Lokesh Kumar":["2026-07-10","2026-07-27","2026-09-04"],"Mansi Rana":["2026-07-08"],"Mehak Garg":["2026-07-23","2026-07-24"],"Mithilesh Kumar":["2026-07-06","2026-07-07","2026-07-16"],"Priya":["2026-07-17","2026-09-04"],"Rahul Sharma":["2026-07-31"],"Sagar Mishra":["2026-07-14"],"Shobhit Sehra":["2026-07-09","2026-07-16","2026-07-29"],"Sukhmeet Singh":["2026-07-17"],"Sumaiya Khan":["2026-07-07","2026-07-10","2026-07-17"]};
+   Both Pending and Approved applications count — if someone filed a leave
+   request for a day their timesheet is not expected. Cancelled leaves are
+   excluded (a cancelled leave is not a day off). */
+const LEAVE_RAW = {"Aanchal Dhiman":["2026-10-05"],"Akshat Wahi":["2026-10-01"],"Amar Kumar Pandit":["2026-07-08","2026-07-24","2026-07-25"],"Anjali Verma":["2026-07-20","2026-07-30"],"Ankush Rana":["2026-07-01","2026-07-24","2026-07-25","2026-09-04","2026-09-08","2026-09-29"],"Ashish Kumar":["2026-07-03","2026-07-06","2026-07-17"],"Ayush Garg":["2026-07-03","2026-07-04","2026-07-05","2026-07-06","2026-07-20","2026-10-05"],"Bhavey Saluja":["2026-09-30"],"Divya Gupta":["2026-07-06","2026-07-31","2026-09-04"],"Gobind Monga":["2026-07-02"],"Kashish Goel":["2026-07-13","2026-07-27","2026-09-04","2026-09-08"],"Lokesh Kumar":["2026-07-10","2026-07-27","2026-09-04"],"Mansi Rana":["2026-07-08"],"Mehak Garg":["2026-07-23","2026-07-24"],"Mithilesh Kumar":["2026-07-06","2026-07-07","2026-07-16"],"Priya":["2026-07-17","2026-09-04"],"Rahul Sharma":["2026-07-31"],"Sagar Mishra":["2026-07-14"],"Shobhit Sehra":["2026-07-09","2026-07-16","2026-07-29"],"Sneha Garg":["2026-10-01"],"Sukhmeet Singh":["2026-07-17"],"Sumaiya Khan":["2026-07-07","2026-07-10","2026-07-17"]};
 const LEAVE_DAYS = new Map(
   Object.entries(LEAVE_RAW).map(([name, days]) => [name.toLowerCase(), new Set(days)]));
 const onLeave = (name, day) => LEAVE_DAYS.get(String(name).toLowerCase())?.has(day) === true;
@@ -5417,6 +5413,13 @@ async function load(){
        file is the normal case for most months, not a load failure. */
     const archivePending = Promise.all([fetchArchive('internal'), fetchArchive('client')])
       .catch(() => [[], []]);
+    /* Live leave data from the Drive-PDF-backed Sheet. Fetched in parallel with
+       everything else and merged into LEAVE_DAYS just before the first render so
+       any day covered by the Sheet takes precedence over LEAVE_RAW. Fails soft —
+       the page falls back to the LEAVE_RAW snapshot compiled into this file. */
+    const leavesPending = fetch('/api/leaves', {cache:'no-store'})
+      .then(r => r.ok ? r.json() : {})
+      .catch(() => ({}));
     const [internal, client] = await trackers;
     tick();
     /* If both sources come back byte-identical, the function is ignoring ?src=
@@ -5667,6 +5670,15 @@ async function load(){
     }
     buildQbr();
     tick();
+
+    /* Merge live leave data into LEAVE_DAYS now, right before the first render
+       uses it. Any date in the Sheet supersedes — or extends — LEAVE_RAW. */
+    const liveLeavesData = await leavesPending;
+    for (const [name, dates] of Object.entries(liveLeavesData)) {
+      const key = name.toLowerCase();
+      if (!LEAVE_DAYS.has(key)) LEAVE_DAYS.set(key, new Set());
+      for (const d of dates) LEAVE_DAYS.get(key).add(d);
+    }
 
     /* Only now is COVER populated, so only now can the picker know which months
        have data behind them. Rendering it earlier offers months that produce a
