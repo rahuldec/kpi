@@ -21,10 +21,13 @@ const WORKSPACE_GID = '480944584143449';
 // enough for nicknames like "Ashu". Email is used for the TO list; if null here
 // it is derived from the Asana user's own email.
 const PODS = [
-  {
-    lead: 'Sultan Malik',
-    members: ['Sultan Malik', 'Lokesh Kumar', 'Aanchal Dhiman', 'Ashu'],
-  },
+  { lead: 'Mansi Rana',     members: ['Mansi Rana', 'Vansh Saini'] },
+  { lead: 'Sultan Malik',   members: ['Sultan Malik', 'Lokesh Kumar', 'Aanchal Dhiman', 'Ashu'] },
+  { lead: 'Sukhmeet Singh', members: ['Sukhmeet Singh', 'Gobind Monga', 'Sapna', 'Bhavey Saluja', 'Akshat Wahi'] },
+  { lead: 'Amit Kumar',     members: ['Amit Kumar', 'Priya'] },
+  { lead: 'Ankush Rana',    members: ['Ankush Rana', 'Tanvi Gupta'] },
+  { lead: 'Anshika',        members: ['Anshika', 'Divya'] },
+  { lead: 'Sumaiya Khan',   members: ['Sumaiya Khan', 'Khushi Jain'] },
 ];
 
 // ── Asana auth (same refresh-token flow as data.js) ───────────────────────────
