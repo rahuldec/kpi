@@ -191,21 +191,20 @@ function personBlock(name, tasks, todayIso) {
 
 function buildHtml(podLead, members, tasksByGid, todayIso, fullDate) {
   const totals = Object.values(tasksByGid).reduce((s, t) => s + t.length, 0);
-  const blocks = members
-    .filter(m => m)
+  const sorted = members.filter(m => m).sort((a, b) =>
+    a.name === podLead ? 1 : b.name === podLead ? -1 : 0);
+  const blocks = sorted
     .map(m => personBlock(m.name, tasksByGid[m.gid] || [], todayIso))
     .join('<hr class="divider">');
 
   return `<!doctype html><html><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Pod Task Overview</title><style>${STYLE}</style></head><body>
+<title>Pending Tasks</title><style>${STYLE}</style></head><body>
 <div class="wrap">
-  <h1>${escapeHtml(podLead)}'s Pod — Task Overview</h1>
+  <h1>Pending Tasks — ${escapeHtml(podLead.split(' ')[0])}'s team</h1>
   <p class="sub">${fullDate} &nbsp;·&nbsp; ${totals} open task${totals === 1 ? '' : 's'} across the team</p>
   <hr class="divider">
   ${blocks}
-  <hr class="divider">
-  <p class="footer">Pulled from all Asana projects in the workspace. Reply to this email if a task is stale or misfiled.</p>
 </div></body></html>`;
 }
 
@@ -219,7 +218,7 @@ async function sendEmail(to, cc, subject, html) {
       Authorization: process.env.ZEPTOMAIL_TOKEN || '',
     },
     body: JSON.stringify({
-      from: { address: process.env.ZEPTOMAIL_SENDER || '', name: 'CS KPI — Pod Digest' },
+      from: { address: process.env.ZEPTOMAIL_SENDER || '', name: 'KPI' },
       to:  to.map(a => ({ email_address: { address: a } })),
       cc: cc.map(a => ({ email_address: { address: a } })),
       subject,
@@ -282,7 +281,7 @@ module.exports = async (req, res) => {
         results.push({ pod: pod.lead, error: 'No email addresses found' }); continue;
       }
 
-      const subject = `Pod Task Overview — ${pod.lead.split(' ')[0]}'s team (${total} open)`;
+      const subject = `Pending Tasks — ${pod.lead.split(' ')[0]}'s team (${total} open)`;
       await sendEmail(to, testTo ? [] : ccList, subject, html);
       results.push({ pod: pod.lead, members: members.map(m => m.name), tasks: total, to });
     }
