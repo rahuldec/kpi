@@ -25,8 +25,8 @@ const PODS = [
   { lead: 'Sultan Malik',   members: ['Sultan Malik', 'Lokesh Kumar', 'Aanchal Dhiman', 'Ashu'] },
   { lead: 'Sukhmeet Singh', members: ['Sukhmeet Singh', 'Gobind Monga', 'Sapna', 'Bhavey Saluja', 'Akshat Wahi'] },
   { lead: 'Amit Kumar',     members: ['Amit Kumar', 'Priya'] },
-  { lead: 'Ankush Rana',    members: ['Ankush Rana', 'Tanvi Gupta'] },
-  { lead: 'Anshika',        members: ['Anshika', 'Divya'] },
+  { lead: 'Ankush Rana',    members: ['Ankush Rana', 'Divya Gupta', 'Tanvi Gupta'] },
+  { lead: 'Anshika',        members: ['Anshika'] },
   { lead: 'Sumaiya Khan',   members: ['Sumaiya Khan', 'Khushi Jain'] },
 ];
 
