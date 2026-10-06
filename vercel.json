@@ -6,6 +6,10 @@
       "schedule": "0 3 * * 2-6"
     },
     {
+      "path": "/api/manager-digest",
+      "schedule": "0 4 * * 2-6"
+    },
+    {
       "path": "/api/payment-recovery-digest",
       "schedule": "30 4 * * 1-6"
     },
