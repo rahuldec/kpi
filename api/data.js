@@ -250,8 +250,8 @@ async function getAsanaAccessToken() {
    included unless someone has explicitly added them to the project too, which
    is the same scope the Sheets export had. */
 async function grabAsanaProject(projectGid, token) {
-  const fields = 'name,due_on,assignee.name,assignee.email';
-  const rows = [['Due Date', 'Assignee', 'Assignee Email']];
+  const fields = 'name,due_on,created_at,assignee.name,assignee.email';
+  const rows = [['Due Date', 'Assignee', 'Assignee Email', 'Created At']];
   let offset = '';
   do {
     const url = `https://app.asana.com/api/1.0/projects/${projectGid}/tasks` +
@@ -261,7 +261,7 @@ async function grabAsanaProject(projectGid, token) {
     const json = await r.json();
     for (const t of json.data || []) {
       rows.push([t.due_on || '', (t.assignee && t.assignee.name) || '',
-                 (t.assignee && t.assignee.email) || '']);
+                 (t.assignee && t.assignee.email) || '', t.created_at || '']);
     }
     offset = (json.next_page && json.next_page.offset) || '';
   } while (offset);
