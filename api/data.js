@@ -192,6 +192,15 @@ const SOURCES = {
   pexPending: { asanaProject: process.env.ASANA_PEX_PROJECT_GID || '1210517770853851',
                  envVar: 'ASANA_PEX_PROJECT_GID',
                  asanaShape: 'pexPending' },
+  /* Timesheet content analysis — same internal/client projects but returns
+     task name and any hours/duration custom fields alongside the standard
+     tracker columns. Used for ad-hoc audits, not the live dashboard. */
+  timesheetInternal: { asanaProject: process.env.ASANA_INTERNAL_PROJECT_GID || '1214776273281376',
+                 envVar: 'ASANA_INTERNAL_PROJECT_GID',
+                 asanaShape: 'timesheetContent' },
+  timesheetClient:   { asanaProject: process.env.ASANA_CLIENT_PROJECT_GID || '1214674246739192',
+                 envVar: 'ASANA_CLIENT_PROJECT_GID',
+                 asanaShape: 'timesheetContent' },
   /* Same "Client Implementation" portfolio as `implementation` above, but
      task-level (overdue/due-soon rows, not per-project counts) — see
      grabAsanaImplementationFollowUp. Read for the implementation follow-up
@@ -443,6 +452,41 @@ async function grabAsanaPexPending(projectGid, token) {
         (t.assignee && t.assignee.name) || 'Unassigned',
         (module && module.display_value) || '',
         t.created_at || '',
+      ]);
+    }
+    offset = (json.next_page && json.next_page.offset) || '';
+  } while (offset);
+  return { ok: true, body: rows.map(r => r.map(csvEscape).join(',')).join('\n') };
+}
+
+/* Task names + custom fields for timesheet content analysis. Returns every
+   task in the project with its name, due date, assignee, filed-on date, and
+   any custom fields (hours, duration, category) the project carries. */
+async function grabAsanaTimesheetContent(projectGid, token) {
+  const fields = 'name,due_on,created_at,notes,assignee.name,custom_fields.name,custom_fields.display_value,custom_fields.number_value';
+  const rows = [['Task Name', 'Due Date', 'Assignee', 'Filed On', 'Notes', 'Hours', 'Category']];
+  let offset = '';
+  do {
+    const url = `https://app.asana.com/api/1.0/projects/${projectGid}/tasks` +
+                `?opt_fields=${fields}&limit=100` + (offset ? `&offset=${offset}` : '');
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!r.ok) return { ok: false, status: r.status };
+    const json = await r.json();
+    for (const t of json.data || []) {
+      const cf = t.custom_fields || [];
+      const hoursField = cf.find(f => /hour|duration|time/i.test(f.name || ''));
+      const categoryField = cf.find(f => /category|type/i.test(f.name || ''));
+      const hours = hoursField
+        ? (hoursField.number_value != null ? String(hoursField.number_value) : (hoursField.display_value || ''))
+        : '';
+      rows.push([
+        t.name || '',
+        t.due_on || '',
+        (t.assignee && t.assignee.name) || '',
+        t.created_at ? t.created_at.slice(0, 10) : '',
+        (t.notes || '').replace(/\n/g, ' ').slice(0, 200),
+        hours,
+        (categoryField && categoryField.display_value) || '',
       ]);
     }
     offset = (json.next_page && json.next_page.offset) || '';
@@ -825,6 +869,7 @@ module.exports = async (req, res) => {
             : source.asanaShape === 'qbr' ? await grabAsanaQbr(target, accessToken)
             : source.asanaShape === 'websiteTasks' ? await grabAsanaWebsiteTasks(target, accessToken)
             : source.asanaShape === 'pexPending' ? await grabAsanaPexPending(target, accessToken)
+            : source.asanaShape === 'timesheetContent' ? await grabAsanaTimesheetContent(target, accessToken)
             : await grabAsanaProject(target, accessToken);
       } catch (e) {
         return fail(`Could not reach Asana: ${e.message}`, 'Check the Asana API status.');
