@@ -1952,7 +1952,7 @@ const isExempt = (name, src) => EXEMPT[src].includes(name.toLowerCase());
    for days he was never filing in the first place. If he starts filing for
    real, buildRoster() below picks that up on its own and this becomes
    redundant (harmless to leave, but worth removing). */
-const MANUAL_ROSTER = ['Bhavey Saluja'];
+const MANUAL_ROSTER = ['Bhavey Saluja', 'Divya Gupta'];
 
 /* Not part of the CS team being measured at all — a name that turns up in a sheet
    because they were tagged on a task, not because they owe daily entries. Dropped
@@ -2256,7 +2256,7 @@ function buildRoster(){
      lists but who has never filed, not a way around the sheet gate above. */
   for (const name of MANUAL_ROSTER){
     const key = name.toLowerCase();
-    if (onTeam.has(key) && !ROSTER.has(key)) ROSTER.set(key, {name, first: iso(new Date())});
+    if (!ROSTER.has(key)) ROSTER.set(key, {name, first: iso(new Date())});
   }
 }
 
