@@ -1441,7 +1441,7 @@ function visitsForTeam(lead, months){
     for (const raw of v.p)
       for (const name of splitVisitors(raw)){
         const who = canonVisitor(name);
-        if (!who || !team.has(who)) continue;
+        if (!who || !team.has(who) || NO_VISITS.has(who)) continue;
         person++;
         meetings.add(i);
         byPerson.set(who, (byPerson.get(who) || 0) + 1);
@@ -1953,6 +1953,7 @@ const isExempt = (name, src) => EXEMPT[src].includes(name.toLowerCase());
    real, buildRoster() below picks that up on its own and this becomes
    redundant (harmless to leave, but worth removing). */
 const MANUAL_ROSTER = ['Bhavey Saluja', 'Divya Gupta', 'Ashu Panchal'];
+const NO_VISITS = new Set(['Sapna', 'Sumaiya Khan', 'Khushi Jain']);
 
 /* Not part of the CS team being measured at all — a name that turns up in a sheet
    because they were tagged on a task, not because they owe daily entries. Dropped
@@ -4247,6 +4248,7 @@ function renderVisits(){
     // reads as (0) rather than being silently left out.
     const counts = new Map(r.byPerson);
     const members = [r.lead, ...team]
+      .filter(name => !NO_VISITS.has(name))
       .map(name => ({ name, n: counts.get(name) || 0 }))
       .sort((a, b) => b.n - a.n);
     t += `<tr${r.person ? '' : ' class="flat"'}><td>${esc(r.lead)}</td>` +
@@ -4286,7 +4288,7 @@ function renderVisits(){
   const silent = [];
   for (const lead of leads)
     for (const who of [lead, ...(POD_TEAM.get(lead) || [])])
-      if (!people.has(who)) silent.push({who, lead});
+      if (!people.has(who) && !NO_VISITS.has(who)) silent.push({who, lead});
   $('visitgapcard').hidden = !silent.length;
   $('visitgapnote').textContent =
     `${silent.length} on a measured team with no visit in ${monthsLabel()}`;
