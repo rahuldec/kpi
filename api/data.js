@@ -111,7 +111,7 @@ const SOURCES = {
      is the correct behaviour for an unconfigured secret — an open visits feed
      would expose which clients were visited by whom and when. */
   visits:      { direct: process.env.MOM_API_URL ||
-                   'https://odmom.lovable.app/api/public/moms?limit=200',
+                   'https://odmom.lovable.app/api/public/moms?limit=500',
                  headers: () => ({ 'x-api-key': process.env.MOM_API_KEY || '' }),
                  json: true,
                  signature: body => {
