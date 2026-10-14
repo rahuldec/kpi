@@ -1504,7 +1504,7 @@ function parseVisits(rows){
     };
     if (m.employee_name) add(m.employee_name);
     for (const a of (m.attendees || []))
-      if (a && a.team === 'okie_dokie' && a.name) add(a.name);
+      if (a && a.name && (a.team === 'okie_dokie' || canonVisitor(a.name))) add(a.name);
     const d = String(m.meeting_date || '').slice(0, 10);
     if (people.size && d) out.push({d, p: [...people]});
   }
