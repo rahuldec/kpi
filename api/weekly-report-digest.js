@@ -50,9 +50,20 @@ const TRACKERS = ['internal', 'client'];
 const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const isWorkingDay = d => d.getDay() !== 0 && !HOLIDAYS.has(iso(d));
 
-const LEAVE_DAYS = new Map(
+let LEAVE_DAYS = new Map(
   Object.entries(LEAVE_RAW).map(([name, days]) => [name.toLowerCase(), new Set(days)]));
 const onLeave = (name, day) => LEAVE_DAYS.get(String(name).toLowerCase())?.has(day) === true;
+
+function mergeLiveLeaves(liveLeaves) {
+  const merged = {};
+  for (const [name, days] of Object.entries(LEAVE_RAW)) merged[name] = [...days];
+  for (const [name, days] of Object.entries(liveLeaves || {})) {
+    if (!merged[name]) merged[name] = [];
+    for (const d of days) if (!merged[name].includes(d)) merged[name].push(d);
+  }
+  LEAVE_DAYS = new Map(
+    Object.entries(merged).map(([name, days]) => [name.toLowerCase(), new Set(days)]));
+}
 
 const tc = s => s.split(/\s+/).map(w => w ? w[0].toUpperCase() + w.slice(1).toLowerCase() : w).join(' ');
 
@@ -567,6 +578,11 @@ module.exports = async (req, res) => {
     // instead of the custom domain.
     const baseUrl = process.env.DIGEST_BASE_URL || 'https://cskpi.odpay.in';
     const { window, start, end } = previousWeekWorkingDays();
+
+    // Fetch live leave data and merge with the compiled LEAVE_RAW snapshot.
+    const liveLeaves = await fetch(`${baseUrl}/api/leaves`, { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : {}).catch(() => ({}));
+    mergeLiveLeaves(liveLeaves);
 
     const byTracker = {};
     for (const src of TRACKERS) byTracker[src] = await fetchTracker(baseUrl, src);

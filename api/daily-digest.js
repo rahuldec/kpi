@@ -64,9 +64,20 @@ const TRACKER_LABEL = { internal: 'internal calls', client: 'client calls' };
 const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const isWorkingDay = d => d.getDay() !== 0 && !HOLIDAYS.has(iso(d));
 
-const LEAVE_DAYS = new Map(
+let LEAVE_DAYS = new Map(
   Object.entries(LEAVE_RAW).map(([name, days]) => [name.toLowerCase(), new Set(days)]));
 const onLeave = (name, day) => LEAVE_DAYS.get(String(name).toLowerCase())?.has(day) === true;
+
+function mergeLiveLeaves(liveLeaves) {
+  const merged = {};
+  for (const [name, days] of Object.entries(LEAVE_RAW)) merged[name] = [...days];
+  for (const [name, days] of Object.entries(liveLeaves || {})) {
+    if (!merged[name]) merged[name] = [];
+    for (const d of days) if (!merged[name].includes(d)) merged[name].push(d);
+  }
+  LEAVE_DAYS = new Map(
+    Object.entries(merged).map(([name, days]) => [name.toLowerCase(), new Set(days)]));
+}
 
 /* Walks back from today to the most recent day that was actually a working
    day — skips weekends and holidays so a Monday morning digest reports on
@@ -604,6 +615,13 @@ module.exports = async (req, res) => {
        of trusted from the incoming request. */
     const baseUrl = process.env.DIGEST_BASE_URL || 'https://cskpi.odpay.in';
     const day = lastWorkingDay();
+
+    // Fetch live leave data and merge with the compiled LEAVE_RAW snapshot.
+    // Falls back to LEAVE_RAW alone if the endpoint is unavailable or
+    // GOOGLE_SA_JSON is not yet configured.
+    const liveLeaves = await fetch(`${baseUrl}/api/leaves`, { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : {}).catch(() => ({}));
+    mergeLiveLeaves(liveLeaves);
 
     const byTracker = {};
     for (const src of TRACKERS) byTracker[src] = await fetchTracker(baseUrl, src);
