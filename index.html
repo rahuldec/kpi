@@ -212,14 +212,23 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
   background:var(--brand-soft);border-bottom:1px solid rgba(236,103,36,.18);
   display:flex;justify-content:space-between;align-items:flex-start;gap:20px}
 .mcard-people{display:flex;flex-wrap:wrap;gap:14px 22px;align-items:flex-start;flex:1;min-width:0}
-.mcard-summary{display:flex;flex-direction:column;gap:10px;flex-shrink:0;
-  padding:4px 0 4px 20px;border-left:1px solid rgba(236,103,36,.22);
-  align-self:center;min-width:140px}
-.mcard-summary-stat{display:flex;flex-direction:column;gap:2px;text-align:right}
-.mcard-summary-stat .ss-val{font-size:20px;font-weight:700;letter-spacing:-.03em;
+.mcard-summary{display:flex;flex-direction:row;gap:0;flex-shrink:0;
+  align-self:stretch;margin-left:auto;
+  background:rgba(236,103,36,.07);border-radius:14px;
+  overflow:hidden}
+.mcard-summary-stat{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:3px;text-align:center;padding:14px 20px;position:relative}
+.mcard-summary-stat+.mcard-summary-stat::before{
+  content:'';position:absolute;left:0;top:20%;height:60%;
+  width:1px;background:rgba(236,103,36,.18)}
+.mcard-summary-stat .ss-val{font-size:18px;font-weight:700;letter-spacing:-.04em;
   color:var(--ink);font-variant-numeric:tabular-nums;line-height:1}
-.mcard-summary-stat .ss-lbl{font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;
-  font-weight:600;color:var(--body)}
+.mcard-summary-stat .ss-lbl{font-size:9.5px;text-transform:uppercase;letter-spacing:.09em;
+  font-weight:600;color:var(--body);line-height:1;margin-top:1px}
+.mcard-summary-stat .ss-accent{width:18px;height:2.5px;border-radius:2px;margin-bottom:2px}
+.mcard-summary-stat.ss-total .ss-accent{background:var(--brand)}
+.mcard-summary-stat.ss-ret .ss-accent{background:#2E7D32}
+.mcard-summary-stat.ss-imp .ss-accent{background:#1565C0}
 .mcard-person{display:flex;flex-direction:column;align-items:center;gap:7px;width:80px;
   position:relative;cursor:default}
 /* Shared circle styles */
@@ -284,9 +293,8 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
 @media (max-width:900px){
   .meters{gap:14px}
   .mcard-head{padding:14px 16px 12px;flex-wrap:wrap;gap:14px}
-  .mcard-summary{border-left:0;padding-left:0;border-top:1px solid rgba(236,103,36,.22);
-    padding-top:12px;min-width:0;width:100%;flex-direction:row;gap:16px;align-items:flex-start}
-  .mcard-summary-stat{text-align:left}
+  .mcard-summary{margin-left:0;width:100%;border-radius:10px}
+  .mcard-summary-stat{flex:1;padding:10px 12px}
   .mcard-people{gap:10px 14px}
   .mcard-person{width:56px}
   .mcard-person-pic,.mcard-person-blank,.mcard-person-initials{width:54px;height:54px;font-size:16px}
@@ -4702,21 +4710,24 @@ function renderMeter(){
       `</div>` +
       /* Business summary on the right */ (() => {
         const b = bookOf(r.lead);
-        const retClients = b && b.retention ? b.retention.clients : null;
-        const impClients = b && b.implementation ? b.implementation.clients : null;
+        const retRev = b && b.retention ? b.retention.revenue : null;
+        const impRev = b && b.implementation ? b.implementation.revenue : null;
         return `<div class="mcard-summary">` +
-          `<div class="mcard-summary-stat">` +
+          `<div class="mcard-summary-stat ss-total">` +
+          `<span class="ss-accent"></span>` +
           `<span class="ss-val">${esc(inr(r.revenue))}</span>` +
           `<span class="ss-lbl">Business</span>` +
           `</div>` +
-          (retClients !== null
-            ? `<div class="mcard-summary-stat">` +
-              `<span class="ss-val">${retClients}</span>` +
+          (retRev !== null
+            ? `<div class="mcard-summary-stat ss-ret">` +
+              `<span class="ss-accent"></span>` +
+              `<span class="ss-val">${esc(inr(retRev))}</span>` +
               `<span class="ss-lbl">Retention</span>` +
               `</div>` : '') +
-          (impClients !== null
-            ? `<div class="mcard-summary-stat">` +
-              `<span class="ss-val">${impClients}</span>` +
+          (impRev !== null
+            ? `<div class="mcard-summary-stat ss-imp">` +
+              `<span class="ss-accent"></span>` +
+              `<span class="ss-val">${esc(inr(impRev))}</span>` +
               `<span class="ss-lbl">Implementation</span>` +
               `</div>` : '') +
           `</div>`;
