@@ -228,28 +228,27 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
 .mcard-person:hover .mcard-person-blank,
 .mcard-person:hover .mcard-person-initials{
   transform:scale(1.12);box-shadow:0 6px 20px rgba(0,0,0,.18)}
-/* Tooltip popup */
+/* Tooltip popup — below the photo */
 .mcard-person::after{
   content:attr(data-name);
-  position:absolute;bottom:calc(100% + 6px);left:50%;
-  transform:translateX(-50%) translateY(4px);
+  position:absolute;top:calc(100% + 6px);left:50%;
+  transform:translateX(-50%) translateY(-4px);
   background:var(--ink);color:#fff;
   padding:5px 11px;border-radius:8px;
   font-size:12px;font-weight:500;white-space:nowrap;
   opacity:0;pointer-events:none;
   transition:opacity .15s,transform .15s;z-index:10}
 .mcard-person::before{
-  content:'';position:absolute;bottom:calc(100% + 1px);left:50%;
-  transform:translateX(-50%) translateY(4px);
-  border:5px solid transparent;border-top-color:var(--ink);
+  content:'';position:absolute;top:calc(100% + 1px);left:50%;
+  transform:translateX(-50%) translateY(-4px);
+  border:5px solid transparent;border-bottom-color:var(--ink);
   opacity:0;pointer-events:none;transition:opacity .15s,transform .15s;z-index:10}
 .mcard-person:hover::after,.mcard-person:hover::before{
   opacity:1;transform:translateX(-50%) translateY(0)}
-.mcard-person:hover::before{transform:translateX(-50%) translateY(0)}
 /* Name label below circle */
-.mcard-person-name{font-size:11px;color:var(--faint);text-align:center;
+.mcard-person-name{font-size:12px;font-weight:600;color:var(--body);text-align:center;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;line-height:1.3}
-.mcard-person-name.rm{font-size:12px;font-weight:700;color:var(--ink)}
+.mcard-person-name.rm{font-size:13px;font-weight:700;color:var(--ink)}
 .mcard-body{display:grid;
   grid-template-columns:minmax(130px,1fr) minmax(170px,1.5fr) minmax(130px,1fr) minmax(130px,1fr) minmax(190px,1.2fr);
   align-items:start}
