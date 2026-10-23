@@ -1946,7 +1946,7 @@ function parsePhotos(csv) {
     const imgFormula = url.match(/^=IMAGE\("([^"]+)"/i);
     if (imgFormula) url = imgFormula[1];
     const driveFile = url.match(/\/file\/d\/([A-Za-z0-9_-]+)/);
-    if (driveFile) url = `https://drive.google.com/uc?export=view&id=${driveFile[1]}`;
+    if (driveFile) { map[name] = `/api/data?src=photo&id=${driveFile[1]}`; continue; }
     if (!url.startsWith('http')) continue;
     map[name] = url;
   }

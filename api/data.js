@@ -800,6 +800,29 @@ module.exports = async (req, res) => {
     res.status(502).json({ error, hint, source: src, sheetId: SHEET_ID, attempted });
 
   try {
+    /* Photo proxy: ?src=photo&id=<driveFileId>
+       The browser CSP blocks direct Google Drive image loads, so the client
+       converts Drive file-view links to /api/data?src=photo&id=... and the
+       server fetches and re-serves the image byte-for-byte. Cached at the edge
+       for 24 hours — employee photos change rarely. No authentication needed
+       because only publicly-shared Drive files appear in the ID Card sheet. */
+    if (src === 'photo') {
+      const id = (req.query && req.query.id) || '';
+      if (!/^[A-Za-z0-9_-]{10,}$/.test(id))
+        return res.status(400).json({ error: 'Invalid Drive file id' });
+      const driveUrl = `https://drive.google.com/uc?export=view&id=${id}`;
+      const upstream = await fetch(driveUrl, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; cskpi-photo-proxy/1.0)' },
+        redirect: 'follow',
+      });
+      if (!upstream.ok) return res.status(upstream.status).end();
+      const ct = upstream.headers.get('content-type') || 'image/jpeg';
+      const buf = Buffer.from(await upstream.arrayBuffer());
+      res.setHeader('Content-Type', ct);
+      res.setHeader('Cache-Control', 'public, s-maxage=86400, stale-while-revalidate=3600');
+      return res.status(200).send(buf);
+    }
+
     /* 0a. Tabs by name, one per RM per quarter. The client sends the RM names it
        knows from the client book; this tries the most recent quarter first and
        stops at the first one any tab answers for, so a half-finished Q2 does not
