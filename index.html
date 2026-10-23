@@ -209,9 +209,17 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
   box-shadow:0 2px 6px rgba(0,0,0,.06),0 10px 32px rgba(0,0,0,.10);
   display:flex;flex-direction:column;background:var(--card)}
 .mcard-head{padding:18px 20px 16px;
-  display:flex;flex-direction:row;align-items:center;
+  display:flex;flex-direction:row;align-items:flex-start;
   background:var(--brand-soft);gap:14px;border-bottom:1px solid rgba(236,103,36,.18)}
 .mcard-headtext{min-width:0;flex:1}
+.mcard-team{display:flex;flex-wrap:wrap;gap:10px 14px;margin-top:10px}
+.mcard-member{display:flex;flex-direction:column;align-items:center;gap:4px}
+.mcard-member-avatar{width:36px;height:36px;border-radius:50%;object-fit:cover;
+  border:1.5px solid rgba(236,103,36,.25);display:block}
+.mcard-member-blank{width:36px;height:36px;border-radius:50%;
+  background:var(--hair);border:1.5px solid var(--line);display:block}
+.mcard-member-name{font-size:10px;color:var(--faint);max-width:48px;
+  text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.2}
 .mcard-body{display:grid;
   grid-template-columns:minmax(130px,1fr) minmax(170px,1.5fr) minmax(130px,1fr) minmax(130px,1fr) minmax(150px,1.2fr);
   align-items:start}
@@ -4634,7 +4642,19 @@ function renderMeter(){
       avatar +
       `<div class="mcard-headtext">` +
       `<h4>${esc(r.lead)}</h4>` +
-      `<p class="who">${r.team.length ? esc(r.team.join(', ')) : 'no team recorded'}</p>` +
+      (r.team.length
+        ? `<div class="mcard-team">` +
+          r.team.map(name => {
+            const mp = PHOTOS[name];
+            const firstName = esc(name.trim().split(/\s+/)[0]);
+            const pic = mp
+              ? `<img class="mcard-member-avatar" src="${esc(mp)}" alt="${firstName}" loading="lazy" ` +
+                `onerror="this.className='mcard-member-blank'">`
+              : `<div class="mcard-member-blank"></div>`;
+            return `<div class="mcard-member">${pic}<span class="mcard-member-name">${firstName}</span></div>`;
+          }).join('') +
+          `</div>`
+        : `<p class="who" style="margin-top:4px">no team recorded</p>`) +
       `</div>` +
       `</div>` +
       `<div class="mcard-body">` +
