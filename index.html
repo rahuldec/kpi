@@ -408,9 +408,7 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
   font:400 18px/1 inherit;display:flex;align-items:center;justify-content:center;
   transition:color .15s ease,border-color .15s ease}
 .x:hover{color:var(--ink);border-color:var(--ink)}
-.sheetbody{overflow:auto;padding:6px 22px 0;-webkit-overflow-scrolling:touch;flex:1}
-.sheetfooter{flex:none;border-top:1px solid var(--line);padding:0 22px 18px;
-  background:var(--page)}
+.sheetbody{overflow:auto;padding:6px 22px 22px;-webkit-overflow-scrolling:touch}
 /* The panel's own styles are written for a strip under a card; inside the dialog
    it is the whole content, so it loses the frame and its sections get room. */
 .modal .how{margin:0;padding:0;border:0;background:none;font-size:13.5px}
@@ -1341,7 +1339,6 @@ tr.scoredetail .tk{flex:0 0 96px;color:var(--faint);font-weight:500}
         <button type="button" class="x" id="howclose" aria-label="Close">&times;</button>
       </div>
       <div class="sheetbody" id="howbody"></div>
-      <div class="sheetfooter" id="howfooter" hidden></div>
     </div>
   </div>
 
@@ -6045,15 +6042,8 @@ function openHow(i, sec, trigger){
   $('howwho').textContent = whoText;
   $('howwho').hidden = !whoText;
   const body = $('howbody');
-  body.innerHTML = `<div class="how">${src.innerHTML}</div>`;
   const fsrc = $('howf' + i);
-  const footer = $('howfooter');
-  if (fsrc && fsrc.innerHTML.trim()) {
-    footer.innerHTML = fsrc.innerHTML;
-    footer.hidden = false;
-  } else {
-    footer.hidden = true;
-  }
+  body.innerHTML = `<div class="how">${src.innerHTML}${fsrc ? fsrc.innerHTML : ''}</div>`;
   $('howmodal').hidden = false;
   document.documentElement.classList.add('modalopen');
   /* Focus goes back to whatever opened it, which is now sometimes a row button
@@ -6083,8 +6073,6 @@ function closeHow(){
   if ($('howmodal').hidden) return;
   $('howmodal').hidden = true;
   $('howbody').innerHTML = '';
-  $('howfooter').innerHTML = '';
-  $('howfooter').hidden = true;
   document.documentElement.classList.remove('modalopen');
   document.querySelectorAll('button.info[aria-expanded=true]')
     .forEach(b => b.setAttribute('aria-expanded', 'false'));
