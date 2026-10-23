@@ -4820,7 +4820,7 @@ function renderMeter(){
            r.adopt.applicable
              ? `${r.adopt.adopted}/${r.adopt.applicable} modules`
              : 'no client scored', adoptMet,
-           mi('adoption', 'module adoption')) +
+           '') +
       `</div>` +
       `<div class="mcard-col">` +
       dial('Client feedback', r.feed.satisfaction,
@@ -4828,7 +4828,7 @@ function renderMeter(){
              ? (FEED_ERROR ? 'not loaded' : 'no responses yet')
              : `${r.feed.sat.toFixed(1)}/5 from ${r.feed.heard} ` +
                `${r.feed.heard === 1 ? 'client' : 'clients'}`, feedMet,
-           mi('feedback', 'client feedback')) +
+           '') +
       `</div>` +
       `<div class="mcard-col">` +
       visitLine(r, mi('visits', 'client visits')) +
