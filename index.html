@@ -3691,7 +3691,7 @@ function clientTable(clients, shown){
       : `<span class="cbadge cbadge-none">No label</span>`;
   const row = c => `<tr><td class="cn">${esc(c.n)}</td>` +
     `<td class="ca">${esc(inr(c.r || 0))}</td>` +
-    `<td class="crm">${esc(c.h || '—')}</td>` +
+    `<td class="crm">${esc(c.h ? c.h.split(' ')[0] : '—')}</td>` +
     `<td class="ct">${badge(c.k)}</td></tr>`;
   const sep = `<tr class="ctable-sep"><td colspan="4"></td></tr>`;
   const thead = `<thead><tr><th>Client</th><th>Amount</th><th>RM</th><th style="text-align:right">Type</th></tr></thead>`;
