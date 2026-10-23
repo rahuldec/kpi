@@ -2056,8 +2056,16 @@ function parsePhotos(csv) {
     if (!name || !url) continue;
     const imgFormula = url.match(/^=IMAGE\("([^"]+)"/i);
     if (imgFormula) url = imgFormula[1];
-    const driveFile = url.match(/\/file\/d\/([A-Za-z0-9_-]+)/);
-    if (driveFile) { map[name] = `/api/data?src=photo&id=${driveFile[1]}`; continue; }
+    /* Catch all common Google Drive URL shapes:
+       /file/d/ID/…        (standard share link)
+       ?id=ID or &id=ID    (open?id= and uc?id= variants)
+       /d/ID/              (Docs-style)                              */
+    const driveFile = url.match(/\/file\/d\/([A-Za-z0-9_-]{10,})|[?&]id=([A-Za-z0-9_-]{10,})|\/d\/([A-Za-z0-9_-]{10,})\//);
+    if (driveFile) {
+      const id = driveFile[1] || driveFile[2] || driveFile[3];
+      map[name] = `/api/data?src=photo&id=${id}`;
+      continue;
+    }
     if (!url.startsWith('http')) continue;
     map[name] = url;
   }
