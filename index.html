@@ -408,7 +408,9 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
   font:400 18px/1 inherit;display:flex;align-items:center;justify-content:center;
   transition:color .15s ease,border-color .15s ease}
 .x:hover{color:var(--ink);border-color:var(--ink)}
-.sheetbody{overflow:auto;padding:6px 22px 22px;-webkit-overflow-scrolling:touch}
+.sheetbody{overflow:auto;padding:6px 22px 0;-webkit-overflow-scrolling:touch;flex:1}
+.sheetfooter{flex:none;border-top:1px solid var(--line);padding:0 22px 18px;
+  background:var(--page)}
 /* The panel's own styles are written for a strip under a card; inside the dialog
    it is the whole content, so it loses the frame and its sections get room. */
 .modal .how{margin:0;padding:0;border:0;background:none;font-size:13.5px}
@@ -558,9 +560,9 @@ html.modalopen{overflow:hidden}
 .how .ctable td{padding:7px 8px 7px 0;border-bottom:1px solid var(--hair);vertical-align:middle}
 .how .ctable tr:last-child td{border-bottom:none}
 .how .ctable .cn{font-weight:600;color:var(--ink)}
-.how .ctable .ca{font-variant-numeric:tabular-nums;color:var(--faint);
-  text-align:right;white-space:nowrap;padding-right:0}
-.how .ctable .crm{color:var(--body);font-size:12px;white-space:nowrap}
+.how .ctable .ca{font-variant-numeric:tabular-nums;color:var(--ink);font-weight:600;
+  text-align:right;white-space:nowrap;padding-right:12px}
+.how .ctable .crm{color:var(--body);font-size:12px;white-space:nowrap;font-weight:600;padding-left:0}
 .how .ctable .ct{text-align:right;white-space:nowrap;padding-right:0}
 .cbadge{display:inline-block;border-radius:4px;padding:1px 8px;
   font-size:11px;font-weight:600;letter-spacing:.02em}
@@ -1339,6 +1341,7 @@ tr.scoredetail .tk{flex:0 0 96px;color:var(--faint);font-weight:500}
         <button type="button" class="x" id="howclose" aria-label="Close">&times;</button>
       </div>
       <div class="sheetbody" id="howbody"></div>
+      <div class="sheetfooter" id="howfooter" hidden></div>
     </div>
   </div>
 
@@ -3743,9 +3746,7 @@ function howHtml(r){
     return `${Number(day)} ${MONTHS_SHORT[Number(m) - 1]}`;
   }).join(' · ');
 
-  let h = `<h5 data-sec="compliance">How compliance is worked out</h5>`;
-
-  h += bookDetail(r);
+  let h = mixDetail(r);
   h += visitDetail(r);
   h += escDetail(r);
   h += pexDetail(r);
@@ -3909,16 +3910,22 @@ function adoptDetail(r){
    the book is a snapshot with a date on it, and the target is not the same number
    for every team once the scaled option is on. */
 function bookDetail(r){
+  return mixDetail(r);
+}
+
+function footerHtml(r){
   const n = r.adopt.total;
   const gap = r.target - r.revenue;
-  return `<h5 data-sec="business">How business is worked out</h5>` +
+  return `<div class="how" style="margin:0;padding:14px 0 0;border:0;background:none">` +
+    `<h5 data-sec="compliance" style="margin-top:0;padding-top:0;border-top:0">How compliance is worked out</h5>` +
+    `<h5 data-sec="business">How business is worked out</h5>` +
     stats([
       ...(n ? [[n, n === 1 ? 'client' : 'clients']] : []),
       [inr(r.revenue), 'book'],
       [inr(Math.round(r.target)), 'target'],
       [inr(Math.round(Math.abs(gap))), gap > 0 ? 'short' : 'over'],
     ]) +
-    mixDetail(r);
+    `</div>`;
 }
 
 /* The book split by what the team is doing with each account. Deliberately not
@@ -4771,6 +4778,7 @@ function renderMeter(){
       `</div>` +
       `</div>` +
       `<div class="how" id="how${i}" hidden>${panel}</div>` +
+      `<div id="howf${i}" hidden>${footerHtml(r)}</div>` +
       `</div>`;
   }).join('');
   /* Every card was just rebuilt, so anything the dialog is showing describes a
@@ -6038,6 +6046,14 @@ function openHow(i, sec, trigger){
   $('howwho').hidden = !whoText;
   const body = $('howbody');
   body.innerHTML = `<div class="how">${src.innerHTML}</div>`;
+  const fsrc = $('howf' + i);
+  const footer = $('howfooter');
+  if (fsrc && fsrc.innerHTML.trim()) {
+    footer.innerHTML = fsrc.innerHTML;
+    footer.hidden = false;
+  } else {
+    footer.hidden = true;
+  }
   $('howmodal').hidden = false;
   document.documentElement.classList.add('modalopen');
   /* Focus goes back to whatever opened it, which is now sometimes a row button
@@ -6067,6 +6083,8 @@ function closeHow(){
   if ($('howmodal').hidden) return;
   $('howmodal').hidden = true;
   $('howbody').innerHTML = '';
+  $('howfooter').innerHTML = '';
+  $('howfooter').hidden = true;
   document.documentElement.classList.remove('modalopen');
   document.querySelectorAll('button.info[aria-expanded=true]')
     .forEach(b => b.setAttribute('aria-expanded', 'false'));
