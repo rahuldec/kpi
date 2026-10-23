@@ -3684,8 +3684,7 @@ function clientTable(clients, shown){
   const thead = `<thead><tr><th>Client</th><th>Amount</th><th style="text-align:right">Type</th></tr></thead>`;
   const table = list => `<table class="ctable">${thead}<tbody>${list.map(row).join('')}</tbody></table>`;
   if (clients.length <= shown + 2) return table(clients);
-  return table(clients.slice(0, shown)).replace('</table>', '') +
-    `</tbody></table>` +
+  return `<div class="cap">${table(clients.slice(0, shown))}</div>` +
     `<details><summary>Show all ${clients.length} clients</summary>${table(clients)}</details>`;
 }
 
