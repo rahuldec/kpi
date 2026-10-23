@@ -5657,7 +5657,7 @@ async function recordVisit(email){
     const {count} = await res.json();
     if (!count) return;
     const el = $('visitorCount');
-    el.textContent = `Seen by ${count} ${count === 1 ? 'person' : 'people'}`;
+    el.textContent = `${count} ${count === 1 ? 'login' : 'logins'}`;
     el.hidden = false;
   } catch (e) { /* KV not set up yet, or unreachable — not worth surfacing */ }
 }

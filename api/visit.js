@@ -1,17 +1,4 @@
-// Records a unique dashboard visitor (by Zoho login email) and returns the
-// running total. Backed by Vercel KV over its plain REST API rather than the
-// @vercel/kv SDK — this project has no npm dependencies today, and every
-// other api/*.js here already talks to its upstream with a bare fetch, so
-// this keeps that pattern instead of introducing the first one.
-//
-// Requires a KV store attached to this Vercel project: Vercel -> Storage ->
-// Create Database -> KV, then redeploy — that sets KV_REST_API_URL and
-// KV_REST_API_TOKEN automatically, no manual copying.
-//
-// A Redis set is the whole mechanism: SADD is a no-op for an email already in
-// it, so "unique visitor" falls out of the data structure rather than needing
-// its own dedup logic here, and SCARD is the count.
-const VISITORS_KEY = 'kpi:visitors';
+const SESSIONS_KEY = 'kpi:sessions';
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
@@ -37,8 +24,7 @@ module.exports = async (req, res) => {
   };
 
   try {
-    await call('sadd', VISITORS_KEY, email);
-    const count = await call('scard', VISITORS_KEY);
+    const count = await call('incr', SESSIONS_KEY);
     return res.status(200).json({ count });
   } catch (e) {
     return res.status(502).json({ error: `Could not reach KV: ${e.message}` });
