@@ -3803,13 +3803,13 @@ function mixDetail(r){
   const byName = (a, b2) => a.n.localeCompare(b2.n);
   const allClients = mine.slice().sort(byName);
   return head +
+    (allClients.length ? clientTable(allClients, 10) : '') +
     stats([
       [ret.clients, 'retention'],
       [inr(ret.revenue), 'retention book'],
       [imp.clients, 'implementation'],
       [inr(imp.revenue), 'implementation book'],
-    ]) +
-    (allClients.length ? clientTable(allClients, 10) : '');
+    ]);
 }
 
 /* The mix, as one row under the business dial — it describes the dial above it
