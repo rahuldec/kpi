@@ -144,6 +144,15 @@ const SOURCES = {
                  mismatch: 'It has no "RM" column as the first header — the link probably ' +
                            'points at the wrong tab. Re-publish with the Team tab selected ' +
                            'and update TEAM_CSV_URL.' },
+  /* Employee photos — "ID Card" tab in the same CS Team Plan workbook. One row
+     per person with at minimum a Name column and a Photo column (a direct image
+     URL or a Google Drive file link). Publish the tab via File -> Share ->
+     Publish to web, then set PHOTOS_CSV_URL in Vercel. Optional: the dashboard
+     renders initials avatars if this is unset or the tab is unreachable. */
+  photos:      { url: process.env.PHOTOS_CSV_URL || '',
+                 signature: () => true,
+                 envVar: 'PHOTOS_CSV_URL',
+                 optional: true },
   /* The "Client Implementation" Asana portfolio, now read directly too — but
      unlike the sources above, a portfolio's projects carry no All Tasks/
      Complete/Incomplete/Overdue counts of their own via the API; those are
@@ -926,13 +935,15 @@ module.exports = async (req, res) => {
        hunt below — that hunts inside the *tracker* spreadsheet and would hand
        back a timesheet export under the adoption name. Wrong data is worse than
        no data, so say plainly what is missing. */
-    if ('url' in source && !source.url)
+    if ('url' in source && !source.url) {
+      if (source.optional) return res.status(204).end();
       return fail(
         `No published URL is configured for ?src=${src}.`,
         'Publish the stacked tab (File -> Share -> Publish to web -> pick that tab, ' +
         'not Entire Document) and set the link as ADOPTION_CSV_URL in Vercel -> ' +
         'Settings -> Environment Variables. The page falls back to its built-in ' +
         'snapshot until then.');
+    }
 
     if (source.url) {
       /* The page varies its request to this function, so Vercel's edge never
