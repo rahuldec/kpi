@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 
 const root = path.resolve(__dirname, '..');
-const leaveRaw = require('../api/leave-raw');
+const leaveRaw = require('../lib/leave-raw');
 const htmlPath = path.join(root, 'index.html');
 
 const serialized = JSON.stringify(leaveRaw);

@@ -23,7 +23,7 @@ const HOLIDAYS = new Set([
   '2026-11-06', '2026-11-07', '2026-11-09', '2026-12-25',
 ]);
 
-const LEAVE_RAW = require('./leave-raw');
+const LEAVE_RAW = require('../lib/leave-raw');
 
 const HIDDEN = ['rahul sharma', 'aman sharma', 'amar kumar pandit'];
 
