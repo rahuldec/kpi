@@ -284,11 +284,44 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
 .mcard-col .dial .sub{margin-left:0;text-align:left;font-size:11.5px;white-space:normal;word-break:break-word}
 .mcard-col .dial .val{font-size:18px}
 .mcard-col .track{margin:2px 0 4px}
-/* Remove top-border from lines that now sit first in their column */
-.mcard-col .visitline,.mcard-col .escline{border-top:0;padding-top:0;margin-top:8px}
-.mcard-col .visitline:first-child,.mcard-col .escline:first-child{margin-top:0}
+/* ── Last column stat blocks (Visits · Escalations · Knowledge Gaps) ───── */
+.mcard-col .visitline,
+.mcard-col .escline{
+  display:flex;flex-direction:column;align-items:flex-start;
+  gap:2px;border-top:0;padding:12px 14px;margin:0 -16px;
+  border-radius:0;position:relative}
+.mcard-col .visitline:first-child,
+.mcard-col .escline:first-child{margin-top:0;padding-top:14px}
+.mcard-col .visitline+.escline,
+.mcard-col .escline+.escline{
+  border-top:1px solid var(--hair)}
+.mcard-col .visitline .lbl,
+.mcard-col .escline .lbl{
+  font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--faint);margin-bottom:2px;order:0}
+.mcard-col .visitline .n,
+.mcard-col .escline .n{
+  font-size:22px;font-weight:700;letter-spacing:-.03em;line-height:1;order:1}
+.mcard-col .visitline .sub,
+.mcard-col .escline .sub{
+  font-size:12px;color:var(--faint);margin:0;order:2;font-weight:400}
+/* state colors on the big number */
+.mcard-col .visitline .n{color:var(--ink)}
+.mcard-col .escline.cool .n{color:var(--ok);font-size:16px;font-weight:600;padding-top:2px}
+.mcard-col .escline.hot .n{color:var(--miss)}
+/* escwho / pex breakdown line */
+.mcard-col .visitline+p.escwho,
+.mcard-col .escline+p.escwho{
+  font-size:12px;color:var(--faint);margin:0 -16px;padding:0 14px 10px;line-height:1.4}
+.mcard-col .escline.hot+p.escwho{color:var(--miss);font-weight:500}
+/* info button floats top-right inside the block */
+.mcard-col .visitline .mi,
+.mcard-col .escline .mi{position:absolute;top:10px;right:14px}
+/* override global escwho indent for card context */
+.mcard-col p.escwho,.mcard-col p.escwho.cool{margin-left:0;padding:0 14px 10px;
+  font-size:12px;line-height:1.4}
 /* pexLine reuses .escline class */
-.mcard-col .escline+.escline{margin-top:4px}
+.mcard-col .escline+.escline{margin-top:0}
 /* Responsive: stack to vertical block on narrow viewports */
 @media (max-width:900px){
   .meters{gap:14px}
