@@ -468,6 +468,7 @@ html.modalopen{overflow:hidden}
 .cbadge-imp{background:#FEF0E0;color:#8A4500}
 .cbadge-none{background:var(--page);color:var(--faint);
   border:1px solid var(--hair)}
+.how .ctable-sep td{padding:0;height:0;border-bottom:2px solid var(--hair)}
 
 /* A long list is capped and opens on request. Forty-eight client names is a
    reference table, not something anyone reads on the way past — and it buried
@@ -3673,6 +3674,12 @@ function moneyList(clients, shown, label){
 }
 
 function clientTable(clients, shown){
+  const byName = (a, b) => a.n.localeCompare(b.n);
+  const imp  = clients.filter(c => c.k === 'implementation').sort(byName);
+  const ret  = clients.filter(c => c.k === 'retention').sort(byName);
+  const none = clients.filter(c => c.k !== 'implementation' && c.k !== 'retention').sort(byName);
+  const ordered = [...imp, ...ret, ...none];
+
   const badge = k => k === 'retention'
     ? `<span class="cbadge cbadge-ret">Retention</span>`
     : k === 'implementation'
@@ -3681,11 +3688,25 @@ function clientTable(clients, shown){
   const row = c => `<tr><td class="cn">${esc(c.n)}</td>` +
     `<td class="ca">${esc(inr(c.r || 0))}</td>` +
     `<td class="ct">${badge(c.k)}</td></tr>`;
+  const sep = `<tr class="ctable-sep"><td colspan="3"></td></tr>`;
   const thead = `<thead><tr><th>Client</th><th>Amount</th><th style="text-align:right">Type</th></tr></thead>`;
-  const table = list => `<table class="ctable">${thead}<tbody>${list.map(row).join('')}</tbody></table>`;
-  if (clients.length <= shown + 2) return table(clients);
-  return `<div class="cap">${table(clients.slice(0, shown))}</div>` +
-    `<details><summary>Show all ${clients.length} clients</summary>${table(clients)}</details>`;
+
+  const table = list => {
+    const i = list.filter(c => c.k === 'implementation');
+    const r = list.filter(c => c.k === 'retention');
+    const n = list.filter(c => c.k !== 'implementation' && c.k !== 'retention');
+    const rows = [];
+    if (i.length) rows.push(...i.map(row));
+    if (i.length && (r.length || n.length)) rows.push(sep);
+    if (r.length) rows.push(...r.map(row));
+    if (r.length && n.length) rows.push(sep);
+    if (n.length) rows.push(...n.map(row));
+    return `<table class="ctable">${thead}<tbody>${rows.join('')}</tbody></table>`;
+  };
+
+  if (clients.length <= shown + 2) return table(ordered);
+  return `<div class="cap">${table(ordered.slice(0, shown))}</div>` +
+    `<details><summary>Show all ${clients.length} clients</summary>${table(ordered)}</details>`;
 }
 
 /* The number a section's sentence is about, said first and big. The sentence
@@ -3898,10 +3919,6 @@ function implDetail(r){
      clear, and the clear one still deserves its own name rather than being
      implied by the client heading above (which, here, is about the other,
      overdue project). */
-  const onTrackNames = r.impl.flatMap(x => x.projects.filter(p => !p.overdue).map(p => p.name));
-  if (onTrackNames.length)
-    h += `<p class="${overdue.length ? 'dates none' : 'none'}">No overdue tasks on ` +
-         `${esc(onTrackNames.join(', '))}.</p>`;
   return h;
 }
 
