@@ -204,22 +204,27 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
    averaged into a single figure: compliance is this month's behaviour, business
    is the standing book, and a team can be strong on one and weak on the other.
    Collapsing them would hide exactly the case worth looking at. */
-.meters{display:flex;flex-direction:column;gap:12px}
-.mcard{border:1px solid var(--line);border-radius:14px;overflow:hidden;
-  box-shadow:0 1px 4px rgba(0,0,0,.07),0 8px 28px rgba(0,0,0,.09);
-  display:grid;grid-template-columns:210px minmax(130px,1fr) minmax(165px,1.5fr) minmax(130px,1fr) minmax(130px,1fr) minmax(150px,1.2fr);align-items:start}
-.mcard-head{padding:20px 14px 18px;align-self:stretch;
-  display:flex;flex-direction:column;align-items:center;text-align:center;
-  background:var(--brand-soft);gap:2px}
+.meters{display:flex;flex-direction:column;gap:16px}
+.mcard{border:1px solid var(--line);border-radius:16px;overflow:hidden;
+  box-shadow:0 2px 6px rgba(0,0,0,.06),0 10px 32px rgba(0,0,0,.10);
+  display:flex;flex-direction:column;background:var(--card)}
+.mcard-head{padding:18px 20px 16px;
+  display:flex;flex-direction:row;align-items:center;
+  background:var(--brand-soft);gap:14px;border-bottom:1px solid rgba(236,103,36,.18)}
+.mcard-headtext{min-width:0;flex:1}
+.mcard-body{display:grid;
+  grid-template-columns:minmax(130px,1fr) minmax(170px,1.5fr) minmax(130px,1fr) minmax(130px,1fr) minmax(150px,1.2fr);
+  align-items:start}
 .mcard-col{padding:14px 16px;border-left:1px solid var(--hair);min-width:0}
-.mcard h4{font-size:14.5px;font-weight:600;letter-spacing:-.012em;color:var(--ink);margin:0 0 2px}
-.mcard .who{font-size:11.5px;color:var(--faint);margin:0;line-height:1.55;word-break:break-word}
+.mcard-col:first-child{border-left:0}
+.mcard h4{font-size:15px;font-weight:700;letter-spacing:-.012em;color:var(--ink);margin:0 0 3px}
+.mcard .who{font-size:11.5px;color:var(--faint);margin:0;line-height:1.5;word-break:break-word}
 /* Employee photo / initials avatar */
-.mcard-avatar{width:62px;height:62px;border-radius:50%;object-fit:cover;
-  border:2.5px solid rgba(236,103,36,.25);margin-bottom:10px;display:block;flex-shrink:0}
-.mcard-initials{width:62px;height:62px;border-radius:50%;background:var(--brand);color:#fff;
+.mcard-avatar{width:72px;height:72px;border-radius:50%;object-fit:cover;
+  border:3px solid rgba(236,103,36,.3);flex-shrink:0}
+.mcard-initials{width:72px;height:72px;border-radius:50%;background:var(--brand);color:#fff;
   display:flex;align-items:center;justify-content:center;
-  font-size:20px;font-weight:700;letter-spacing:-.02em;flex-shrink:0;margin-bottom:10px}
+  font-size:24px;font-weight:700;letter-spacing:-.02em;flex-shrink:0}
 /* In column mode dials stack label→value→sub vertically */
 .mcard-col .dial{flex-direction:column;flex-wrap:nowrap;gap:0;align-items:flex-start;margin:0 0 6px}
 .mcard-col .dial .lbl{width:auto;margin-bottom:1px}
@@ -234,12 +239,11 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
 /* Responsive: stack to vertical block on narrow viewports */
 @media (max-width:900px){
   .meters{gap:14px}
-  .mcard{display:block;padding:16px 17px 15px}
-  .mcard-head{flex-direction:row;align-items:center;text-align:left;background:transparent;
-    padding:0;border:0;gap:12px;margin-bottom:14px}
-  .mcard-avatar,.mcard-initials{margin-bottom:0;width:48px;height:48px;font-size:16px;flex-shrink:0}
-  .mcard-col{border:0;padding:0}
-  .mcard .who{margin:0}
+  .mcard-head{padding:14px 16px 12px}
+  .mcard-avatar,.mcard-initials{width:52px;height:52px;font-size:18px}
+  .mcard-body{display:block}
+  .mcard-col{border-left:0;border-top:1px solid var(--hair);padding:12px 16px}
+  .mcard-col:first-child{border-top:0}
   .mcard-col .dial{flex-direction:row;flex-wrap:wrap;gap:2px 9px;align-items:baseline;margin:0 0 4px}
   .mcard-col .dial .lbl{width:88px;flex:none}
   .mcard-col .dial .sub{margin-left:auto;text-align:right;font-size:12.5px;white-space:normal}
@@ -4628,9 +4632,12 @@ function renderMeter(){
       `title="How this is worked out">i</button>` +
       `<div class="mcard-head">` +
       avatar +
+      `<div class="mcard-headtext">` +
       `<h4>${esc(r.lead)}</h4>` +
       `<p class="who">${r.team.length ? esc(r.team.join(', ')) : 'no team recorded'}</p>` +
       `</div>` +
+      `</div>` +
+      `<div class="mcard-body">` +
       `<div class="mcard-col">` +
       dial('Compliance', r.compliance,
            r.expected ? `${r.filed}/${r.expected} entries` : 'nothing expected', compMet,
@@ -4665,6 +4672,7 @@ function renderMeter(){
       visitLine(r, mi('visits', 'client visits')) +
       escLine(r, mi('escalations', 'escalations')) +
       pexLine(r, mi('pex', 'knowledge gaps')) +
+      `</div>` +
       `</div>` +
       `<div class="how" id="how${i}" hidden>${panel}</div>` +
       `</div>`;
