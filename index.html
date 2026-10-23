@@ -461,6 +461,7 @@ html.modalopen{overflow:hidden}
 .how .ctable .cn{font-weight:600;color:var(--ink)}
 .how .ctable .ca{font-variant-numeric:tabular-nums;color:var(--faint);
   text-align:right;white-space:nowrap;padding-right:0}
+.how .ctable .crm{color:var(--body);font-size:12px;white-space:nowrap}
 .how .ctable .ct{text-align:right;white-space:nowrap;padding-right:0}
 .cbadge{display:inline-block;border-radius:4px;padding:1px 8px;
   font-size:11px;font-weight:600;letter-spacing:.02em}
@@ -3615,13 +3616,7 @@ function howHtml(r){
     return `${Number(day)} ${MONTHS_SHORT[Number(m) - 1]}`;
   }).join(' · ');
 
-  let h = `<h5 data-sec="compliance">How compliance is worked out</h5>` +
-    stats([
-      [r.expected, 'expected'],
-      [r.filed, 'filed'],
-      [r.expected - r.filed, 'missed'],
-      [`${r.expected ? Math.round(r.filed / r.expected * 100) : 0}%`, 'compliance'],
-    ]);
+  let h = `<h5 data-sec="compliance">How compliance is worked out</h5>`;
 
   h += bookDetail(r);
   h += visitDetail(r);
@@ -3647,6 +3642,13 @@ function howHtml(r){
       h += `<p class="dates none">Nothing missed.</p>`;
   }
   h += `</div>`;
+
+  h += stats([
+    [r.expected, 'expected'],
+    [r.filed, 'filed'],
+    [r.expected - r.filed, 'missed'],
+    [`${r.expected ? Math.round(r.filed / r.expected * 100) : 0}%`, 'compliance'],
+  ]);
 
   h += implDetail(r);
   h += adoptDetail(r);
@@ -3689,9 +3691,10 @@ function clientTable(clients, shown){
       : `<span class="cbadge cbadge-none">No label</span>`;
   const row = c => `<tr><td class="cn">${esc(c.n)}</td>` +
     `<td class="ca">${esc(inr(c.r || 0))}</td>` +
+    `<td class="crm">${esc(c.h || '—')}</td>` +
     `<td class="ct">${badge(c.k)}</td></tr>`;
-  const sep = `<tr class="ctable-sep"><td colspan="3"></td></tr>`;
-  const thead = `<thead><tr><th>Client</th><th>Amount</th><th style="text-align:right">Type</th></tr></thead>`;
+  const sep = `<tr class="ctable-sep"><td colspan="4"></td></tr>`;
+  const thead = `<thead><tr><th>Client</th><th>Amount</th><th>RM</th><th style="text-align:right">Type</th></tr></thead>`;
 
   const table = list => {
     const i = list.filter(c => c.k === 'implementation');
