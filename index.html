@@ -744,6 +744,44 @@ table.board th.num,table.board th.num button{justify-content:flex-end}
 .check{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--body);cursor:pointer}
 .check input{accent-color:var(--brand);width:16px;height:16px;cursor:pointer}
 
+/* ── KPI Matrix employee search ─────────────────────────────────────────── */
+.msearch-wrap{display:flex;align-items:center;gap:14px;margin-bottom:18px}
+.msearch-box{position:relative;flex:1;max-width:420px}
+.msearch-icon{position:absolute;left:14px;top:50%;transform:translateY(-50%);
+  width:17px;height:17px;color:var(--faint);pointer-events:none;flex-shrink:0}
+#meterSearch{
+  width:100%;font:inherit;font-size:15px;letter-spacing:-.01em;color:var(--ink);
+  background:var(--card);border:1.5px solid var(--line);border-radius:24px;
+  padding:11px 44px 11px 42px;
+  box-shadow:0 1px 4px rgba(0,0,0,.05),0 4px 16px rgba(0,0,0,.04);
+  transition:border-color .18s,box-shadow .18s;outline:none;
+  -webkit-appearance:none;appearance:none}
+#meterSearch::-webkit-search-decoration,
+#meterSearch::-webkit-search-cancel-button{-webkit-appearance:none}
+#meterSearch::placeholder{color:var(--faint)}
+#meterSearch:focus{border-color:var(--brand);
+  box-shadow:0 0 0 3.5px rgba(236,103,36,.14),0 1px 4px rgba(0,0,0,.05)}
+.msearch-clear{
+  position:absolute;right:12px;top:50%;transform:translateY(-50%);
+  width:20px;height:20px;padding:0;border:0;background:none;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  opacity:.55;transition:opacity .15s}
+.msearch-clear:hover{opacity:.85}
+.msearch-clear svg{width:16px;height:16px;display:block}
+.msearch-count{
+  font-size:13px;font-weight:500;color:var(--faint);white-space:nowrap;
+  letter-spacing:-.01em}
+.msearch-count b{color:var(--ink);font-weight:600}
+/* Cards hidden by search */
+.mcard.search-hidden{display:none}
+/* No-results placeholder */
+.msearch-empty{
+  text-align:center;padding:60px 24px;color:var(--faint);font-size:15px;
+  display:none}
+.msearch-empty b{display:block;font-size:22px;font-weight:700;color:var(--ink);
+  letter-spacing:-.02em;margin-bottom:6px}
+#meters:empty+.msearch-empty,.msearch-empty.visible{display:block}
+
 /* segmented control, Apple-style: recessed track, raised active pill */
 .presets{display:inline-flex;background:var(--page);border-radius:11px;padding:2px}
 .presets button{
@@ -1168,6 +1206,22 @@ tr.scoredetail .tk{flex:0 0 96px;color:var(--faint);font-weight:500}
   </section>
 
   <section id="meter" hidden>
+    <div class="msearch-wrap">
+      <div class="msearch-box">
+        <svg class="msearch-icon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <circle cx="8.5" cy="8.5" r="5.25" stroke="currentColor" stroke-width="1.6"/>
+          <path d="M12.5 12.5L16.5 16.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        </svg>
+        <input type="search" id="meterSearch" placeholder="Search by name…" autocomplete="off" spellcheck="false">
+        <button type="button" class="msearch-clear" id="meterSearchClear" aria-label="Clear" hidden>
+          <svg viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="8" cy="8" r="8" opacity=".35"/>
+            <path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <span class="msearch-count" id="meterSearchCount" hidden></span>
+    </div>
     <div class="card">
       <div class="meters" id="meters"></div>
     </div>
@@ -4782,6 +4836,9 @@ function renderMeter(){
      card that no longer exists. Close it rather than leave stale arithmetic up. */
   closeHow();
   OPEN_CARD = null;
+  /* Re-apply any active search so newly-rendered cards respect the filter */
+  const ms = $('meterSearch');
+  if (ms && ms.value.trim()) ms.dispatchEvent(new Event('input'));
 
 }
 
@@ -6229,5 +6286,58 @@ async function bootApp(){
   }
 }
 bootApp();
+
+/* ── KPI Matrix employee search ──────────────────────────────────────── */
+(function(){
+  const input = $('meterSearch');
+  const clearBtn = $('meterSearchClear');
+  const countEl = $('meterSearchCount');
+  if (!input) return;
+
+  /* No-results placeholder node — inserted once, toggled by class */
+  const empty = document.createElement('div');
+  empty.className = 'msearch-empty';
+  empty.innerHTML = '<b>No one found</b>Try a different name or first name';
+  $('meters').after(empty);
+
+  function runSearch(){
+    const raw = input.value;
+    const q = raw.trim().toLowerCase();
+    clearBtn.hidden = !raw.length;
+    const cards = document.querySelectorAll('#meters .mcard');
+    let matched = 0;
+    cards.forEach(card => {
+      if (!q){ card.classList.remove('search-hidden'); matched++; return; }
+      /* Match against RM (data-lead) and every person name on the card */
+      const lead = (card.dataset.lead || '').toLowerCase();
+      const names = [...card.querySelectorAll('.mcard-person-name')]
+        .map(el => el.textContent.trim().toLowerCase());
+      const hit = lead.includes(q) || names.some(n => n.includes(q));
+      card.classList.toggle('search-hidden', !hit);
+      if (hit) matched++;
+    });
+    const total = cards.length;
+    if (q){
+      countEl.hidden = false;
+      countEl.innerHTML = matched
+        ? `<b>${matched}</b> of ${total} team${total !== 1 ? 's' : ''}`
+        : '';
+      empty.classList.toggle('visible', matched === 0);
+    } else {
+      countEl.hidden = true;
+      empty.classList.remove('visible');
+    }
+  }
+
+  input.addEventListener('input', runSearch);
+  clearBtn.addEventListener('click', () => {
+    input.value = '';
+    runSearch();
+    input.focus();
+  });
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Escape'){ input.value = ''; runSearch(); }
+  });
+})();
 
 </script>
