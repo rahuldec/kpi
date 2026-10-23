@@ -450,6 +450,24 @@ html.modalopen{overflow:hidden}
 .modal .how .mchip{background:#FAF8F6}
 .how .mchip b{font-weight:600;color:var(--ink)}
 .how .mchip i{font-style:normal;color:var(--faint);font-variant-numeric:tabular-nums}
+/* Client table — retention/implementation split */
+.how .ctable{width:100%;border-collapse:collapse;font-size:12.5px;margin:8px 0 4px}
+.how .ctable th{text-align:left;padding:5px 8px 5px 0;font-size:10.5px;font-weight:600;
+  letter-spacing:.06em;text-transform:uppercase;color:var(--faint);
+  border-bottom:2px solid var(--hair)}
+.how .ctable th:last-child{text-align:right}
+.how .ctable td{padding:7px 8px 7px 0;border-bottom:1px solid var(--hair);vertical-align:middle}
+.how .ctable tr:last-child td{border-bottom:none}
+.how .ctable .cn{font-weight:600;color:var(--ink)}
+.how .ctable .ca{font-variant-numeric:tabular-nums;color:var(--faint);
+  text-align:right;white-space:nowrap;padding-right:0}
+.how .ctable .ct{text-align:right;white-space:nowrap;padding-right:0}
+.cbadge{display:inline-block;border-radius:4px;padding:1px 8px;
+  font-size:11px;font-weight:600;letter-spacing:.02em}
+.cbadge-ret{background:#E6F4EC;color:#1A6B38}
+.cbadge-imp{background:#FEF0E0;color:#8A4500}
+.cbadge-none{background:var(--page);color:var(--faint);
+  border:1px solid var(--hair)}
 
 /* A long list is capped and opens on request. Forty-eight client names is a
    reference table, not something anyone reads on the way past — and it buried
@@ -3654,6 +3672,23 @@ function moneyList(clients, shown, label){
          `<details><summary>Show all ${clients.length} ${label}</summary>${grid(clients)}</details>`;
 }
 
+function clientTable(clients, shown){
+  const badge = k => k === 'retention'
+    ? `<span class="cbadge cbadge-ret">Retention</span>`
+    : k === 'implementation'
+      ? `<span class="cbadge cbadge-imp">Implementation</span>`
+      : `<span class="cbadge cbadge-none">No label</span>`;
+  const row = c => `<tr><td class="cn">${esc(c.n)}</td>` +
+    `<td class="ca">${esc(inr(c.r || 0))}</td>` +
+    `<td class="ct">${badge(c.k)}</td></tr>`;
+  const thead = `<thead><tr><th>Client</th><th>Amount</th><th style="text-align:right">Type</th></tr></thead>`;
+  const table = list => `<table class="ctable">${thead}<tbody>${list.map(row).join('')}</tbody></table>`;
+  if (clients.length <= shown + 2) return table(clients);
+  return table(clients.slice(0, shown)).replace('</table>', '') +
+    `</tbody></table>` +
+    `<details><summary>Show all ${clients.length} clients</summary>${table(clients)}</details>`;
+}
+
 /* The number a section's sentence is about, said first and big. The sentence
    below still carries the rule and every caveat — this doesn't replace it, it
    gives a reader who only wants the figure somewhere to land without parsing a
@@ -3767,9 +3802,7 @@ function mixDetail(r){
      no equivalent "worst first" reading of who happens to be retention. */
   const mine = CLIENTS.filter(c => c.o === r.lead);
   const byName = (a, b2) => a.n.localeCompare(b2.n);
-  const retNames = mine.filter(c => c.k === 'retention').sort(byName);
-  const impNames = mine.filter(c => c.k === 'implementation').sort(byName);
-  const unlabelled = mine.filter(c => c.k !== 'retention' && c.k !== 'implementation').sort(byName);
+  const allClients = mine.slice().sort(byName);
   return head +
     stats([
       [ret.clients, 'retention'],
@@ -3777,9 +3810,7 @@ function mixDetail(r){
       [imp.clients, 'implementation'],
       [inr(imp.revenue), 'implementation book'],
     ]) +
-    (retNames.length ? `<p class="who2">Retention</p>` + moneyList(retNames, 6, 'clients') : '') +
-    (impNames.length ? `<p class="who2">Implementation</p>` + moneyList(impNames, 6, 'clients') : '') +
-    (unlabelled.length ? `<p class="who2">No label</p>` + moneyList(unlabelled, 6, 'clients') : '');
+    (allClients.length ? clientTable(allClients, 10) : '');
 }
 
 /* The mix, as one row under the business dial — it describes the dial above it
