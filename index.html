@@ -204,11 +204,40 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
    averaged into a single figure: compliance is this month's behaviour, business
    is the standing book, and a team can be strong on one and weak on the other.
    Collapsing them would hide exactly the case worth looking at. */
-.meters{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
-.mcard{border:1px solid var(--line);border-radius:13px;padding:16px 17px 15px;
-  box-shadow:0 2px 6px rgba(0,0,0,.08),0 12px 32px rgba(0,0,0,.08)}
-.mcard h4{font-size:16px;font-weight:600;letter-spacing:-.012em;color:var(--ink);margin:0 0 2px}
-.mcard .who{font-size:12.5px;color:var(--faint);margin:0 0 14px;line-height:1.45}
+.meters{display:flex;flex-direction:column;gap:10px}
+.mcard{border:1px solid var(--line);border-radius:13px;overflow:hidden;
+  box-shadow:0 2px 6px rgba(0,0,0,.08),0 12px 32px rgba(0,0,0,.08);
+  display:grid;grid-template-columns:170px 1fr 1.5fr 1fr 1fr 1.2fr;align-items:start}
+.mcard-head{padding:16px 18px 14px;align-self:stretch;
+  display:flex;flex-direction:column;justify-content:flex-start}
+.mcard-col{padding:14px 16px;border-left:1px solid var(--hair);min-width:0}
+.mcard h4{font-size:15px;font-weight:600;letter-spacing:-.012em;color:var(--ink);margin:0 0 2px}
+.mcard .who{font-size:12px;color:var(--faint);margin:0;line-height:1.45}
+/* In column mode dials stack label→value→sub vertically */
+.mcard-col .dial{flex-direction:column;flex-wrap:nowrap;gap:1px;align-items:flex-start;margin:0 0 5px}
+.mcard-col .dial .lbl{width:auto}
+.mcard-col .dial .sub{margin-left:0;text-align:left;font-size:11.5px}
+.mcard-col .dial .val{font-size:18px}
+.mcard-col .track{margin:0 0 0}
+/* Remove top-border from lines that now sit first in their column */
+.mcard-col .visitline,.mcard-col .escline{border-top:0;padding-top:0;margin-top:8px}
+.mcard-col .visitline:first-child,.mcard-col .escline:first-child{margin-top:0}
+/* pexLine reuses .escline class */
+.mcard-col .escline+.escline{margin-top:4px}
+/* Responsive: revert to original vertical grid on narrow viewports */
+@media (max-width:900px){
+  .meters{gap:14px}
+  .mcard{display:block;padding:16px 17px 15px}
+  .mcard-head{padding:0;border:0}
+  .mcard-col{border:0;padding:0}
+  .mcard .who{margin:0 0 14px}
+  .mcard-col .dial{flex-direction:row;flex-wrap:wrap;gap:2px 9px;align-items:baseline;margin:0 0 4px}
+  .mcard-col .dial .lbl{width:88px;flex:none}
+  .mcard-col .dial .sub{margin-left:auto;text-align:right;font-size:12.5px}
+  .mcard-col .dial .val{font-size:19px}
+  .mcard-col .track{margin:0 0 14px}
+  .mcard-col .visitline,.mcard-col .escline{border-top:1px solid var(--hair);padding-top:12px;margin-top:0}
+}
 /* Every row on a card is label · (i) · figure · detail, and the detail is the
    part that gives way. Adding a control to each row cost about 20px of width,
    which is enough to break "4.0/5 from 2 clients" in a 300px column — so the row
@@ -251,7 +280,7 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
    card off screen, and the comparison it was meant to protect was lost anyway.
    A dialog holds one team's detail at readable width and leaves the grid intact
    underneath. Changed 5 Aug at the user's request. */
-.mcard{position:relative}
+.mcard{position:relative} /* keeps .info absolute-positioned within card */
 .info{
   position:absolute;top:13px;right:13px;width:22px;height:22px;padding:0;
   font:600 12px/1 ui-serif,Georgia,serif;color:var(--faint);cursor:pointer;
@@ -4554,34 +4583,45 @@ function renderMeter(){
     return `<div class="mcard">` +
       `<button type="button" class="info" data-card="${i}" aria-expanded="false" ` +
       `title="How this is worked out">i</button>` +
+      `<div class="mcard-head">` +
       `<h4>${esc(r.lead)}</h4>` +
       `<p class="who">${r.team.length ? esc(r.team.join(', ')) : 'no team recorded'}</p>` +
+      `</div>` +
+      `<div class="mcard-col">` +
       dial('Compliance', r.compliance,
            r.expected ? `${r.filed}/${r.expected} entries` : 'nothing expected', compMet,
            mi('compliance', 'compliance')) +
+      `</div>` +
+      `<div class="mcard-col">` +
       dial('Business', r.business,
            `${inr(r.revenue)} of ${inr(Math.round(r.target))}`, bizMet,
            mi('business', 'business')) +
       mixLine(r, mi('mix', 'the retention and implementation split')) +
-      /* Grouped with Business and Mix rather than sitting after Escalations —
-         overdue implementation is a business-relationship signal about the
-         same clients Mix just described, not a "something's currently wrong"
-         line in the same family as Escalations. */
+      /* Grouped with Business and Mix — overdue implementation is a
+         business-relationship signal, not a "something's currently wrong"
+         flag in the same family as Escalations. */
       implLine(r, mi('implementation', 'implementation')) +
+      `</div>` +
+      `<div class="mcard-col">` +
       dial('Module adoption', r.adopt.adoption,
            r.adopt.applicable
              ? `${r.adopt.adopted}/${r.adopt.applicable} modules`
              : 'no client scored', adoptMet,
            mi('adoption', 'module adoption')) +
+      `</div>` +
+      `<div class="mcard-col">` +
       dial('Client feedback', r.feed.satisfaction,
            r.feed.sat === null
              ? (FEED_ERROR ? 'not loaded' : 'no responses yet')
              : `${r.feed.sat.toFixed(1)}/5 from ${r.feed.heard} ` +
                `${r.feed.heard === 1 ? 'client' : 'clients'}`, feedMet,
            mi('feedback', 'client feedback')) +
+      `</div>` +
+      `<div class="mcard-col">` +
       visitLine(r, mi('visits', 'client visits')) +
       escLine(r, mi('escalations', 'escalations')) +
       pexLine(r, mi('pex', 'knowledge gaps')) +
+      `</div>` +
       `<div class="how" id="how${i}" hidden>${panel}</div>` +
       `</div>`;
   }).join('');
