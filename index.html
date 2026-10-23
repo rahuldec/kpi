@@ -559,7 +559,7 @@ html.modalopen{overflow:hidden}
 .how .ctable tr:last-child td{border-bottom:none}
 .how .ctable .cn{font-weight:600;color:var(--ink)}
 .how .ctable .ca{font-variant-numeric:tabular-nums;color:var(--ink);font-weight:600;
-  text-align:right;white-space:nowrap;padding-right:12px}
+  text-align:center;white-space:nowrap;padding-right:12px}
 .how .ctable .crm{color:var(--body);font-size:12px;white-space:nowrap;font-weight:600;padding-left:0}
 .how .ctable .ct{text-align:right;white-space:nowrap;padding-right:0}
 .cbadge{display:inline-block;border-radius:4px;padding:1px 8px;
@@ -3819,7 +3819,7 @@ function clientTable(clients, shown){
     `<td class="crm">${esc(c.h ? c.h.split(' ')[0] : '—')}</td>` +
     `<td class="ct">${badge(c.k)}</td></tr>`;
   const sep = `<tr class="ctable-sep"><td colspan="4"></td></tr>`;
-  const thead = `<thead><tr><th>Client</th><th>Amount</th><th>RM</th><th style="text-align:right">Type</th></tr></thead>`;
+  const thead = `<thead><tr><th>Client</th><th style="text-align:center">Amount</th><th>RM</th><th style="text-align:right">Type</th></tr></thead>`;
 
   const table = list => {
     const i = list.filter(c => c.k === 'implementation');
@@ -3960,7 +3960,7 @@ function mixDetail(r){
   const byName = (a, b2) => a.n.localeCompare(b2.n);
   const allClients = mine.slice().sort(byName);
   return head +
-    (allClients.length ? clientTable(allClients, 10) : '') +
+    (allClients.length ? clientTable(allClients, Infinity) : '') +
     stats([
       [ret.clients, 'retention'],
       [inr(ret.revenue), 'retention book'],
