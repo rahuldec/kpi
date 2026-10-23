@@ -3624,9 +3624,6 @@ function howHtml(r){
     ]);
 
   h += bookDetail(r);
-  h += implDetail(r);
-  h += adoptDetail(r);
-  h += feedDetail(r);
   h += visitDetail(r);
   h += escDetail(r);
   h += pexDetail(r);
@@ -3649,7 +3646,12 @@ function howHtml(r){
     if (!any && TRACKERS.every(t => m.per[t]))
       h += `<p class="dates none">Nothing missed.</p>`;
   }
-  return h + `</div>`;
+  h += `</div>`;
+
+  h += implDetail(r);
+  h += adoptDetail(r);
+  h += feedDetail(r);
+  return h;
 }
 
 /* The adoption dial, shown working. Three things belong here and only one of
