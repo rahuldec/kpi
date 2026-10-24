@@ -6505,7 +6505,7 @@ if (typeof requestAnimationFrame === 'function'){
 setDefaultRange();
 
 /* Sign-in gate: client-based Zoho OAuth (implicit flow) via lib/zoho-auth.js.
-   Auth is skipped when clientId is empty, hostname is kpi.test, or ?noauth. */
+   Auth is skipped when clientId is empty or hostname is kpi.test (local dev only). */
 async function bootApp(){
   const gate = $('loginGate');
   const shell = $('appShell');
