@@ -3705,13 +3705,11 @@ function prForTeam(lead){
 
 function prLine(r, info){
   if (PR_ERROR)
-    return `<div class="prline cool"><span class="lbl">Recovery</span>${info || ''}<span class="n">—</span></div>` +
-           `<p class="prwho cool">not loaded</p>`;
+    return `<div class="prline cool"><span class="lbl">Recovery</span>${info || ''}<span class="n">—</span></div>`;
   const pr = r.pr;
   if (!pr.count)
     return `<div class="prline cool"><span class="lbl">Recovery</span>${info || ''}<span class="n">None</span></div>`;
-  return `<div class="prline hot"><span class="lbl">Recovery</span>${info || ''}<span class="n">${inr(pr.total)}</span></div>` +
-         `<p class="prwho">${pr.count} overdue ${pr.count === 1 ? 'account' : 'accounts'}</p>`;
+  return `<div class="prline hot"><span class="lbl">Recovery</span>${info || ''}<span class="n">${inr(pr.total)}</span></div>`;
 }
 
 function prDetail(r){
@@ -5084,6 +5082,7 @@ function renderMeter(){
       dial('Compliance', r.compliance,
            r.expected ? `${r.filed}/${r.expected} entries` : 'nothing expected', compMet,
            mi('compliance', 'compliance')) +
+      prLine(r, mi('recovery', 'payment recovery')) +
       `</div>` +
       `<div class="mcard-col">` +
       dial('Business', r.business,
@@ -5094,7 +5093,6 @@ function renderMeter(){
          business-relationship signal, not a "something's currently wrong"
          flag in the same family as Escalations. */
       implLine(r, mi('implementation', 'implementation')) +
-      prLine(r, mi('recovery', 'payment recovery')) +
       `</div>` +
       `<div class="mcard-col">` +
       visitLine(r, mi('visits', 'client visits')) +
