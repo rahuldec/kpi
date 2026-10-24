@@ -4438,8 +4438,7 @@ function visitDetail(r){
   if (r.rawVisits && r.rawVisits.length){
     const PREVIEW = 5;
     const total = r.rawVisits.length;
-    const uid = `vt-${r.lead.replace(/\s+/g,'_')}`;
-    h += `<div class="vtable" id="${esc(uid)}">` +
+    h += `<div class="vtable">` +
          `<div class="vt-head"><span>Date</span><span>Person</span><span>Client</span></div>`;
     for (let i = 0; i < total; i++){
       const m = r.rawVisits[i];
@@ -4453,7 +4452,7 @@ function visitDetail(r){
     h += `</div>`;
     if (total > PREVIEW)
       h += `<button type="button" class="vt-more" onclick="(function(b){` +
-           `var t=document.getElementById('${esc(uid)}');` +
+           `var t=b.previousElementSibling;` +
            `var exp=t.classList.toggle('vt-expanded');` +
            `b.textContent=exp?'Show less':'Show all (${total})';` +
            `})(this)">Show all (${total})</button>`;
