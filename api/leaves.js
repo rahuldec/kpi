@@ -52,43 +52,72 @@ async function driveDownload(fileId) {
   return Buffer.from(await r.arrayBuffer());
 }
 
-// ---- Minimal PDF text extraction (no npm, handles FlateDecode streams) ------
+// ---- Minimal PDF text extraction (handles both ASCII and CID-encoded PDFs) --
 
 function extractPdfText(buf) {
-  // PDF files contain one or more stream/endstream blocks. Text-based PDFs
-  // (like Zoho People exports) embed text inside FlateDecode-compressed streams
-  // using PDF text operators (BT/ET, Tj, TJ). We decompress each stream with
-  // Node's built-in zlib and collect all string operands.
   const raw = buf.toString('binary');
+
+  // Build a combined CID→Unicode map from all ToUnicode CMap streams.
+  // wkhtmltopdf-generated PDFs use CID fonts where each glyph is addressed
+  // by a 2-byte CID index (<hex4>Tj) rather than a plain ASCII string.
+  const cidMap = new Map();
+  const cmapRe = /begincmap([\s\S]*?)endcmap/g;
+  let cm;
+  while ((cm = cmapRe.exec(raw)) !== null) {
+    const block = cm[1];
+    // bfrange with array: <startCID> <endCID> [<u1> <u2> …]
+    const rangeArrRe = /<([0-9A-Fa-f]+)>\s+<([0-9A-Fa-f]+)>\s+\[([^\]]+)\]/g;
+    let rm;
+    while ((rm = rangeArrRe.exec(block)) !== null) {
+      const start = parseInt(rm[1], 16);
+      const unis = [...rm[3].matchAll(/<([0-9A-Fa-f]+)>/g)].map(x => x[1]);
+      unis.forEach((h, i) => cidMap.set(start + i, String.fromCodePoint(parseInt(h, 16))));
+    }
+    // bfchar: <CID> <Unicode>
+    const bfcharRe = /<([0-9A-Fa-f]+)>\s+<([0-9A-Fa-f]+)>/g;
+    let bm;
+    while ((bm = bfcharRe.exec(block)) !== null) {
+      const cid = parseInt(bm[1], 16);
+      if (!cidMap.has(cid)) cidMap.set(cid, String.fromCodePoint(parseInt(bm[2], 16)));
+    }
+  }
+
+  const decodeHex = hex => {
+    let s = '';
+    for (let i = 0; i < hex.length; i += 4)
+      s += cidMap.get(parseInt(hex.slice(i, i + 4), 16)) || '';
+    return s;
+  };
+
   const parts = [];
-
-  // Match stream contents between "stream\n…\nendstream".
-  const re = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
-  let m;
-  while ((m = re.exec(raw)) !== null) {
-    let data = Buffer.from(m[1], 'binary');
-
-    // Try FlateDecode (zlib); if it fails the stream is uncompressed.
+  const streamRe = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
+  let sm;
+  while ((sm = streamRe.exec(raw)) !== null) {
+    let data = Buffer.from(sm[1], 'binary');
     try { data = zlib.inflateSync(data); } catch (_) {}
-
     const content = data.toString('latin1');
 
-    // (text)Tj — single string
+    // CID-encoded: <hex4…>Tj
+    const hexTjRe = /<([0-9A-Fa-f]{4,})>\s*Tj/g;
+    let hm;
+    while ((hm = hexTjRe.exec(content)) !== null) {
+      const t = decodeHex(hm[1]);
+      if (t) parts.push(t);
+    }
+    // Plain ASCII: (string)Tj and [(string)]TJ
     const tjRe = /\(([^)\\]*(?:\\.[^)\\]*)*)\)\s*Tj/g;
     let tm;
     while ((tm = tjRe.exec(content)) !== null) parts.push(unescapePdf(tm[1]));
-
-    // [(text1)(text2)…]TJ — array of strings (and kerning numbers we ignore)
     const tjARe = /\[([^\]]*)\]\s*TJ/g;
     while ((tm = tjARe.exec(content)) !== null) {
       const inner = tm[1];
       const sRe = /\(([^)\\]*(?:\\.[^)\\]*)*)\)/g;
-      let sm;
-      while ((sm = sRe.exec(inner)) !== null) parts.push(unescapePdf(sm[1]));
+      let pm;
+      while ((pm = sRe.exec(inner)) !== null) parts.push(unescapePdf(pm[1]));
     }
   }
 
-  return parts.join(' ');
+  return parts.join('');
 }
 
 function unescapePdf(s) {
@@ -100,24 +129,24 @@ function unescapePdf(s) {
 // ---- Zoho "Day Report" PDF parser -------------------------------------------
 
 function parseLeavePDF(text) {
-  // The PDFs contain a date header ("Date : 2026-10-16") and a table where
-  // each data row starts with an employee ID (OD followed by digits).
-  const dateMatch = text.match(/Date\s*[:\-]\s*(\d{4}-\d{2}-\d{2})/);
+  // The date appears as YYYY-MM-DD somewhere near the top of the joined text.
+  const dateMatch = text.match(/(\d{4}-\d{2}-\d{2})/);
   if (!dateMatch) return [];
   const date = dateMatch[1];
 
   const entries = [];
-
-  // Each text-token stream joins everything with spaces, so we work on the
-  // full joined text rather than individual lines.
-  // Pattern: OD<digits> <Name parts> <email@okiedokiepay.com>
-  const rowRe = /OD\d+\s+([\w\s]+?)\s+[\w.+-]+@okiedokiepay\.com/g;
-  let m;
-  while ((m = rowRe.exec(text)) !== null) {
-    const name = m[1].trim();
-    // Skip rows whose surrounding context marks them as Cancelled.
-    const ctx = text.slice(Math.max(0, m.index - 10), m.index + m[0].length + 20);
-    if (/\bCancelled\b/i.test(ctx)) continue;
+  // In CID-decoded text, rows are delimited by "OD<digits>" employee IDs.
+  // Each segment contains: <name><email@okiedokiepay.com><leave details><status>
+  const segments = text.split(/OD\d+/);
+  for (let i = 1; i < segments.length; i++) {
+    const seg = segments[i];
+    const emailMatch = seg.match(/([\w.+-]+@okiedokiepay\.com)/);
+    if (!emailMatch) continue;
+    // Name is everything before the email (trim leading/trailing spaces).
+    const name = seg.slice(0, emailMatch.index).trim();
+    // After the email, check for Cancelled status.
+    const after = seg.slice(emailMatch.index + emailMatch[0].length);
+    if (/Cancelled/i.test(after)) continue;
     if (name) entries.push({ name, date });
   }
 
