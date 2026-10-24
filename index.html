@@ -1697,10 +1697,10 @@ function parsePex(text){
   return out;
 }
 
-/* Payment-recovery CSV owner field — typically matches the roster spelling,
-   but may omit the third component of a three-part name ("Amit Kumar" vs
-   "Amit Kumar Pandit"). Try exact match first, then prefix match (CSV name
-   is the start of a longer roster name), then first-name-unique fallback. */
+/* Payment-recovery CSV owner field — try exact match first, then a
+   first-name-unique fallback for single-name entries like "Priya".
+   No prefix match: "Amit Kumar" and "Amit Kumar Pandit" are different
+   people and must never be conflated. */
 function canonPexName(raw){
   const n = String(raw).trim();
   if (!n) return null;
@@ -1708,8 +1708,6 @@ function canonPexName(raw){
   const keys = [...POD_OF.keys()];
   const exact = keys.find(r => r.toLowerCase() === nl);
   if (exact) return exact;
-  const prefix = keys.find(r => r.toLowerCase().startsWith(nl + ' '));
-  if (prefix) return prefix;
   const first = nl.split(/\s+/)[0];
   const hits = keys.filter(r => r.toLowerCase().split(/\s+/)[0] === first);
   return hits.length === 1 ? hits[0] : null;
