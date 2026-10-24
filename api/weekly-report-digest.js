@@ -58,8 +58,10 @@ function mergeLiveLeaves(liveLeaves) {
   const merged = {};
   for (const [name, days] of Object.entries(LEAVE_RAW)) merged[name] = [...days];
   for (const [name, days] of Object.entries(liveLeaves || {})) {
-    if (!merged[name]) merged[name] = [];
-    for (const d of days) if (!merged[name].includes(d)) merged[name].push(d);
+    const target = merged[name] ? name
+      : (Object.keys(merged).find(k => k.startsWith(name + ' ')) || name);
+    if (!merged[target]) merged[target] = [];
+    for (const d of days) if (!merged[target].includes(d)) merged[target].push(d);
   }
   LEAVE_DAYS = new Map(
     Object.entries(merged).map(([name, days]) => [name.toLowerCase(), new Set(days)]));

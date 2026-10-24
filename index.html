@@ -6242,8 +6242,16 @@ async function load(){
     const liveLeavesData = await leavesPending;
     for (const [name, dates] of Object.entries(liveLeavesData)) {
       const key = name.toLowerCase();
-      if (!LEAVE_DAYS.has(key)) LEAVE_DAYS.set(key, new Set());
-      for (const d of dates) LEAVE_DAYS.get(key).add(d);
+      // Exact match first; then prefix match for 3-part names where the email
+      // only has 2 parts (e.g. "Amar Kumar" → "Amar Kumar Pandit").
+      let target = key;
+      if (!LEAVE_DAYS.has(key)) {
+        for (const [k] of LEAVE_DAYS) {
+          if (k.startsWith(key + ' ')) { target = k; break; }
+        }
+      }
+      if (!LEAVE_DAYS.has(target)) LEAVE_DAYS.set(target, new Set());
+      for (const d of dates) LEAVE_DAYS.get(target).add(d);
     }
 
     /* Only now is COVER populated, so only now can the picker know which months

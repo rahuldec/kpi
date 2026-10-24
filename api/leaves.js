@@ -136,21 +136,43 @@ function parseLeavePDF(text) {
 
   const entries = [];
   // In CID-decoded text, rows are delimited by "OD<digits>" employee IDs.
-  // Each segment contains: <name><email@okiedokiepay.com><leave details><status>
+  // Each segment: <Firstname Lastname><firstname>.<lastname>@okiedokiepay.com<...>
+  // Name and email are concatenated with no separator — "Sukhmeet Singhsukhmeet.singh@..."
+  // Strategy: find the email's last part (after final '.'), locate its Title Case
+  // version in the segment text, then the name ends there.
   const segments = text.split(/OD\d+/);
   for (let i = 1; i < segments.length; i++) {
     const seg = segments[i];
-    const emailMatch = seg.match(/([\w.+-]+@okiedokiepay\.com)/);
-    if (!emailMatch) continue;
-    // Derive full name from the email local-part — more reliable than the
-    // PDF text because CID font encoding can drop last-name glyphs.
-    // "sukhmeet.singh" → "Sukhmeet Singh"
-    const local = emailMatch[1].split('@')[0];
-    const name = local.split('.').map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join(' ');
-    // After the email, check for Cancelled status.
-    const after = seg.slice(emailMatch.index + emailMatch[0].length);
+    const atIdx = seg.indexOf('@okiedokiepay.com');
+    if (atIdx === -1) continue;
+    const after = seg.slice(atIdx + '@okiedokiepay.com'.length);
     if (/Cancelled/i.test(after)) continue;
-    if (name) entries.push({ name, date });
+
+    const dotIdx = seg.lastIndexOf('.', atIdx - 1);
+    let name = '';
+
+    if (dotIdx !== -1) {
+      // Email last part e.g. "singh" → look for "Singh" in segment (the name's last word)
+      const emailLast = seg.slice(dotIdx + 1, atIdx);
+      const titleLast = emailLast.charAt(0).toUpperCase() + emailLast.slice(1);
+      const titleIdx = seg.indexOf(titleLast);
+      if (titleIdx !== -1 && titleIdx < dotIdx) {
+        name = seg.slice(0, titleIdx + titleLast.length).trim();
+      }
+    }
+
+    // Fallback: derive from email parts (handles single-word emails or edge cases)
+    if (!name || name.length < 2) {
+      const local = seg.slice(0, atIdx);
+      // Find where the all-lowercase email local starts (stop scanning back at uppercase)
+      let start = atIdx;
+      while (start > 0 && /[a-z0-9._+-]/.test(local[start - 1])) start--;
+      const emailLocal = seg.slice(start, atIdx);
+      name = emailLocal.split('.').filter(Boolean)
+        .map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join(' ');
+    }
+
+    if (name && name.length >= 2) entries.push({ name, date });
   }
 
   return entries;
