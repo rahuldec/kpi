@@ -5951,7 +5951,7 @@ async function loadLoginLog(){
   const wrap = $('loginLogWrap');
   if (!wrap) return;
   try {
-    const res = await fetch(`/api/login-log?email=${encodeURIComponent(VIEWER.email)}`, {cache:'no-store'});
+    const res = await fetch(`/api/visit?log=1&email=${encodeURIComponent(VIEWER.email)}`, {cache:'no-store'});
     if (!res.ok) {
       const body = await res.json().catch(()=>({}));
       wrap.innerHTML = `<p class="sum">Error ${res.status}: ${esc(body.error || res.statusText)}</p>`;

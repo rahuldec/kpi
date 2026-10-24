@@ -1,6 +1,7 @@
-const SESSIONS_KEY = 'kpi:sessions';
-const LOG_KEY      = 'kpi:login-log';
-const LOG_MAX      = 1000;
+const SESSIONS_KEY  = 'kpi:sessions';
+const LOG_KEY       = 'kpi:login-log';
+const LOG_MAX       = 1000;
+const ADMIN_EMAIL   = 'rahul.sharma@okiedokiepay.com';
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
@@ -13,8 +14,8 @@ module.exports = async (req, res) => {
       hint:  'Attach a KV store: Vercel → Storage → Create Database → KV, then redeploy.',
     });
 
-  const p    = req.query || new URL(req.url, 'http://x').searchParams;
-  const get  = k => String(p[k] || p.get?.(k) || '').trim();
+  const p     = req.query || new URL(req.url, 'http://x').searchParams;
+  const get   = k => String(p[k] || p.get?.(k) || '').trim();
   const email = get('email').toLowerCase();
   const name  = get('name');
 
@@ -28,8 +29,23 @@ module.exports = async (req, res) => {
     return j.result;
   };
 
-  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || '';
+  /* ?log=1 — admin-only: return login log instead of recording a visit */
+  if (get('log') === '1') {
+    if (email !== ADMIN_EMAIL)
+      return res.status(403).json({ error: 'Not authorised.' });
+    try {
+      const raw = await kv('lrange', LOG_KEY, '0', '999');
+      const entries = (raw || [])
+        .map(s => { try { return JSON.parse(s); } catch { return null; } })
+        .filter(Boolean);
+      return res.status(200).json({ entries });
+    } catch (e) {
+      return res.status(502).json({ error: e.message });
+    }
+  }
 
+  /* Default: record a login visit */
+  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || '';
   try {
     const [count] = await Promise.all([
       kv('incr', SESSIONS_KEY),
