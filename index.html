@@ -563,6 +563,15 @@ html.modalopen{overflow:hidden}
 .how .vchip-yes{background:rgba(46,125,50,.09);color:var(--ok);border:1px solid rgba(46,125,50,.2)}
 .how .vchip-no{background:var(--page);color:var(--faint);border:1px solid var(--hair)}
 .modal .how .vchip-no{background:#FAF8F6}
+/* Visit detail sub-rows (done/pending per meeting) */
+.how .vd-section{display:flex;align-items:flex-start;gap:6px;margin-top:5px;flex-wrap:wrap}
+.how .vd-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--faint);flex:none;padding-top:3px;min-width:44px}
+.how .vd-items{display:flex;flex-wrap:wrap;gap:4px}
+.how .vd-chip{display:inline-block;padding:2px 9px;border-radius:20px;
+  font-size:11.5px;font-weight:500;white-space:normal;line-height:1.4}
+.how .vd-done{background:rgba(46,125,50,.08);color:var(--ok);border:1px solid rgba(46,125,50,.18)}
+.how .vd-pend{background:rgba(168,42,28,.06);color:var(--miss);border:1px solid rgba(168,42,28,.15)}
 /* Date chips inside missed rows */
 .how .dchips{display:flex;flex-wrap:wrap;gap:4px;min-width:0}
 .how .dchip{display:inline-block;padding:2px 9px;border-radius:20px;
@@ -1630,6 +1639,7 @@ const VISITS_FALLBACK_ASOF = '2026-08-08';
 const VISITS_FALLBACK = [{"d":"2026-08-08","p":["Sultan Malik","Anjali"]},{"d":"2026-08-07","p":["Bhavey Saluja"]},{"d":"2026-08-07","p":["Sukhmeet Singh"]},{"d":"2026-08-06","p":["Ayush Garg"]},{"d":"2026-08-06","p":["Bhavey Saluja"]},{"d":"2026-08-06","p":["Lalit Garg","Rahul Sharma"]},{"d":"2026-08-05","p":["Ankush","Tinku"]},{"d":"2026-08-05","p":["Anjali Verma"]},{"d":"2026-08-05","p":["Priya"]},{"d":"2026-08-05","p":["Bhavey Saluja"]},{"d":"2026-08-05","p":["Lokesh"]},{"d":"2026-08-05","p":["Gobind Monga"]},{"d":"2026-08-04","p":["Bhavey Saluja"]},{"d":"2026-08-04","p":["Lokesh Kumar"]},{"d":"2026-08-03","p":["Gobind Monga","Bhavey Saluja"]},{"d":"2026-08-01","p":["Sukhmeet Singh"]},{"d":"2026-08-01","p":["Mansi Rana","Bhavey Saluja"]},{"d":"2026-08-01","p":["Sultan Malik"]},{"d":"2026-07-31","p":["Sukhmeet Singh"]},{"d":"2026-07-31","p":["Sultan Malik","Vishwas Sehra"]},{"d":"2026-07-30","p":["Sukhmeet Singh"]},{"d":"2026-07-30","p":["Bhavey Saluja"]},{"d":"2026-07-29","p":["Sultan Malik"]},{"d":"2026-07-29","p":["Priya"]},{"d":"2026-07-29","p":["Amit Kumar","Lokesh Kumar"]},{"d":"2026-07-29","p":["Bhavey Saluja"]},{"d":"2026-07-28","p":["Gobind Monga"]},{"d":"2026-07-28","p":["Bhavey Saluja"]},{"d":"2026-07-28","p":["Amar kumar","Sultan malik"]},{"d":"2026-07-27","p":["Bhavey Saluja"]},{"d":"2026-07-27","p":["Sukhmeet Singh"]},{"d":"2026-07-27","p":["Sultan Malik","Anjali Verma","Amar Kumar","Ashish"]},{"d":"2026-07-24","p":["Gobind Monga","Bhavey Saluja"]},{"d":"2026-07-23","p":["Anjali Verma"]},{"d":"2026-07-23","p":["Ayush Garg","Gaurav Singla","Sultan Malik"]},{"d":"2026-07-23","p":["Bhavey Saluja"]},{"d":"2026-07-22","p":["Priya"]},{"d":"2026-07-22","p":["Sultan Malik"]},{"d":"2026-07-22","p":["Bhavey Saluja"]},{"d":"2026-07-22","p":["Sultan Malik"]},{"d":"2026-07-21","p":["Gobind Monga"]},{"d":"2026-07-21","p":["Mansi Rana"]},{"d":"2026-07-21","p":["Bhavey Saluja"]},{"d":"2026-07-21","p":["Mansi Rana"]},{"d":"2026-07-20","p":["Bhavey Saluja"]},{"d":"2026-07-17","p":["Sultan Malik"]},{"d":"2026-07-17","p":["Gobind Monga"]},{"d":"2026-07-17","p":["Bhavey Saluja"]},{"d":"2026-07-16","p":["Bhavey Saluja"]},{"d":"2026-07-16","p":["Mansi Rana","Sultan Malik"]},{"d":"2026-07-15","p":["Sukhmeet Singh"]},{"d":"2026-07-15","p":["Gobind Monga","Bhavey Saluja"]},{"d":"2026-07-15","p":["Kashish","Tanvi"]},{"d":"2026-07-15","p":["Kashish","Tanvi"]},{"d":"2026-07-15","p":["Gobind Monga","Bhavey Saluja"]},{"d":"2026-07-14","p":["Sultan Malik"]},{"d":"2026-07-14","p":["Bhavey Saluja"]},{"d":"2026-07-13","p":["Sukhmeet Singh"]},{"d":"2026-07-13","p":["Bhavey Saluja"]},{"d":"2026-07-13","p":["Priya"]},{"d":"2026-07-10","p":["Anjali Verma"]},{"d":"2026-07-10","p":["Bhavey Saluja"]},{"d":"2026-07-09","p":["Bhavey Saluja"]},{"d":"2026-07-09","p":["Sukhmeet Singh"]},{"d":"2026-07-08","p":["Sultan Malik"]},{"d":"2026-07-08","p":["Lokesh Kumar"]},{"d":"2026-07-08","p":["Bhavey Saluja"]},{"d":"2026-07-07","p":["Anjali Verma"]},{"d":"2026-07-06","p":["Anjali Verma"]},{"d":"2026-07-04","p":["Gobind Monga"]},{"d":"2026-07-03","p":["Sultan Malik","Jatin Goel","Ashish Kumar"]},{"d":"2026-07-01","p":["Rahul Sharma","Gobind Monga"]},{"d":"2026-06-30","p":["Sultan Malik","Gobind Monga"]},{"d":"2026-06-29","p":["Sultan Malik"]},{"d":"2026-06-03","p":["Rahul Sharma","Amar Kumar Pandit","Rahul","Amar"]}];
 
 let VISITS = VISITS_FALLBACK;
+let VISITS_RAW = [];
 let VISITS_ASOF = VISITS_FALLBACK_ASOF;
 let VISITS_LIVE = false;
 let VISITS_ERROR = null;
@@ -1791,6 +1801,28 @@ function buildVisits(){
         const who = canonVisitor(name);
         if (!who && !seen.has(name)){ seen.add(name); VISIT_UNPLACED.push(name); }
       }
+}
+
+function visitsRawForTeam(lead){
+  if (!VISITS_RAW.length) return [];
+  const team = new Set([lead, ...(POD_TEAM.get(lead) || [])]);
+  const isTeamMember = raw => {
+    if (!raw) return false;
+    for (const name of splitVisitors(raw)){
+      const who = canonVisitor(name);
+      if (who && team.has(who) && !NO_VISITS.has(who)) return true;
+    }
+    return false;
+  };
+  return VISITS_RAW
+    .filter(m => {
+      if (!m || m.meeting_type !== 'offline') return false;
+      if (isTeamMember(m.employee_name)) return true;
+      for (const a of (m.attendees || []))
+        if (a && a.name && a.team === 'okie_dokie' && isTeamMember(a.name)) return true;
+      return false;
+    })
+    .sort((a, b) => (b.meeting_date || '').localeCompare(a.meeting_date || ''));
 }
 
 
@@ -3941,11 +3973,12 @@ function meterRows(){
     const adopt = adoptForTeam(e.lead);
     const feed = feedForTeam(e.lead);
     const visits = visitsForTeam(e.lead, MONTHS);
+    const rawVisits = visitsRawForTeam(e.lead);
     const impl = implForTeam(e.lead);
     const pex = pexForTeam(e.lead);
     const pr = prForTeam(e.lead);
     return {
-      ...e, revenue, target, esc, adopt, feed, visits, impl, pex, pr,
+      ...e, revenue, target, esc, adopt, feed, visits, rawVisits, impl, pex, pr,
       escOpen: esc.filter(x => x.open.length),
       compliance: e.expected ? e.filed / e.expected : null,
       business: target ? revenue / target : 0
@@ -4359,26 +4392,48 @@ function visitDetail(r){
 
   if (!v.person) return h + `<p class="none">Nobody on this team filed one.</p>`;
 
-  const allMembers = [r.lead, ...r.team];
-  const byMap = new Map(v.byPerson);
-  h += `<div class="visit-grid">`;
-  for (const who of allMembers){
-    const n = byMap.get(who);
-    if (n){
-      h += `<div class="vg-row">` +
-           `<span class="vg-name">${esc(who)}</span>` +
-           `<span class="vchip vchip-yes">${n} ${n === 1 ? 'visit' : 'visits'}</span>` +
+  const fmtDate = d => {
+    if (!d) return '';
+    const dt = new Date(d + 'T00:00:00');
+    return dt.toLocaleDateString('en-IN', {day:'numeric', month:'short', year:'numeric'});
+  };
+
+  if (r.rawVisits && r.rawVisits.length){
+    h += `<div class="esc-grid">`;
+    for (const m of r.rawVisits){
+      const who = m.employee_name ? m.employee_name.split(/[,&]|and\s/i)[0].trim() : '';
+      const done = (m.work_completed || []).map(w => w.task || w.module).filter(Boolean);
+      const pending = (m.pending_points || []).map(p => p.requirement).filter(Boolean);
+      h += `<div class="esc-row">` +
+           `<div class="esc-client">${esc(m.client_name || 'Unknown Client')}</div>` +
+           `<div class="esc-meta">` +
+           (fmtDate(m.meeting_date) ? `<span class="dchip ok">${esc(fmtDate(m.meeting_date))}</span>` : '') +
+           (who ? `<span class="esc-owner">${esc(who)}</span>` : '') +
+           (m.location ? `<span class="esc-owner">📍 ${esc(m.location)}</span>` : '') +
            `</div>`;
-    } else {
+      if (done.length)
+        h += `<div class="vd-section"><span class="vd-lbl">Done</span><span class="vd-items">${done.map(t => `<span class="vd-chip vd-done">${esc(t)}</span>`).join('')}</span></div>`;
+      if (pending.length)
+        h += `<div class="vd-section"><span class="vd-lbl">Pending</span><span class="vd-items">${pending.map(t => `<span class="vd-chip vd-pend">${esc(t)}</span>`).join('')}</span></div>`;
+      h += `</div>`;
+    }
+    h += `</div>`;
+  } else {
+    const allMembers = [r.lead, ...r.team];
+    const byMap = new Map(v.byPerson);
+    h += `<div class="visit-grid">`;
+    for (const who of allMembers){
+      const n = byMap.get(who);
       h += `<div class="vg-row">` +
-           `<span class="vg-name vg-dim">${esc(who)}</span>` +
-           `<span class="vchip vchip-no">No visits</span>` +
+           `<span class="${n ? 'vg-name' : 'vg-name vg-dim'}">${esc(who)}</span>` +
+           `<span class="vchip ${n ? 'vchip-yes' : 'vchip-no'}">${n ? `${n} ${n === 1 ? 'visit' : 'visits'}` : 'No visits'}</span>` +
            `</div>`;
     }
+    h += `</div>`;
   }
-  h += `</div>`;
+
   h += `<div class="comp-tiles" style="margin-top:10px">` +
-    `<div class="comp-tile"><span class="ct-val" style="color:var(--ok)">${v.person}</span><span class="ct-lbl">Person visits</span></div>` +
+    `<div class="comp-tile ct-ok"><span class="ct-val">${v.person}</span><span class="ct-lbl">Person visits</span></div>` +
     `<div class="comp-tile"><span class="ct-val">${v.meetings}</span><span class="ct-lbl">${v.meetings === 1 ? 'Meeting' : 'Meetings'}</span></div>` +
   `</div>`;
   return h;
@@ -6069,11 +6124,13 @@ async function load(){
     try {
       const raw = await fetchRaw('visits');
       const parsed = JSON.parse(raw);
+      VISITS_RAW = Array.isArray(parsed.data) ? parsed.data : [];
       VISITS = parseVisits(parsed.data);
       VISITS_ASOF = iso(new Date());
       VISITS_LIVE = true;
       VISITS_ERROR = null;
     } catch (e) {
+      VISITS_RAW = [];
       VISITS = VISITS_FALLBACK;
       VISITS_ASOF = VISITS_FALLBACK_ASOF;
       VISITS_LIVE = false;
