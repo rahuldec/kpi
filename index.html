@@ -4124,18 +4124,7 @@ function bookDetail(r){
 }
 
 function footerHtml(r){
-  const n = r.adopt.total;
-  const gap = r.target - r.revenue;
-  return `<div class="how" style="margin:0;padding:14px 0 0;border:0;background:none">` +
-    `<h5 data-sec="compliance" style="margin-top:0;padding-top:0;border-top:0">How compliance is worked out</h5>` +
-    `<h5 data-sec="business">How business is worked out</h5>` +
-    `<div class="comp-tiles">` +
-      (n ? `<div class="comp-tile"><span class="ct-val">${n}</span><span class="ct-lbl">${n === 1 ? 'Client' : 'Clients'}</span></div>` : '') +
-      `<div class="comp-tile"><span class="ct-val" style="font-size:18px">${inr(r.revenue)}</span><span class="ct-lbl">Book</span></div>` +
-      `<div class="comp-tile"><span class="ct-val" style="font-size:18px;color:var(--faint)">${inr(Math.round(r.target))}</span><span class="ct-lbl">Target</span></div>` +
-      `<div class="comp-tile ${gap >= 0 ? 'ct-ok' : 'ct-bad'}"><span class="ct-val" style="font-size:18px">${inr(Math.round(Math.abs(gap)))}</span><span class="ct-lbl">${gap >= 0 ? 'Over target' : 'Short'}</span></div>` +
-    `</div>` +
-    `</div>`;
+  return '';
 }
 
 /* The book split by what the team is doing with each account. Deliberately not
@@ -4290,10 +4279,7 @@ function feedDetail(r){
            `<p class="sum">The feedback sheet did not load, so no figure here describes ` +
            `this team's clients: ${esc(FEED_ERROR)}</p>`;
 
-  if (!f.heard)
-    return `<h5 data-sec="feedback">How client feedback is worked out</h5>` +
-           `<p class="sum">None of this team's ${f.total} clients has answered the feedback ` +
-           `form, so there is no score — not a score of zero. Silence is not dissatisfaction.</p>`;
+  if (!f.heard) return '';
 
   let h = `<h5 data-sec="feedback">How client feedback is worked out</h5>` +
     stats([
