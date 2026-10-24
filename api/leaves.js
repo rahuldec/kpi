@@ -142,8 +142,11 @@ function parseLeavePDF(text) {
     const seg = segments[i];
     const emailMatch = seg.match(/([\w.+-]+@okiedokiepay\.com)/);
     if (!emailMatch) continue;
-    // Name is everything before the email (trim leading/trailing spaces).
-    const name = seg.slice(0, emailMatch.index).trim();
+    // Derive full name from the email local-part — more reliable than the
+    // PDF text because CID font encoding can drop last-name glyphs.
+    // "sukhmeet.singh" → "Sukhmeet Singh"
+    const local = emailMatch[1].split('@')[0];
+    const name = local.split('.').map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join(' ');
     // After the email, check for Cancelled status.
     const after = seg.slice(emailMatch.index + emailMatch[0].length);
     if (/Cancelled/i.test(after)) continue;
