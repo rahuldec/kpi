@@ -536,6 +536,23 @@ html.modalopen{overflow:hidden}
 .how .missed .who2 + .dates,.how .asks .who2 + .dates{border-top:0}
 .how .missed .who2:not(:first-child),.how .asks .who2:not(:first-child){
   border-top:1px solid var(--hair);margin-top:2px}
+/* Date chips inside missed rows */
+.how .dchips{display:flex;flex-wrap:wrap;gap:4px;min-width:0}
+.how .dchip{display:inline-block;padding:2px 9px;border-radius:20px;
+  font-size:12px;font-weight:600;letter-spacing:.01em;white-space:nowrap;
+  background:rgba(168,42,28,.08);color:var(--miss);border:1px solid rgba(168,42,28,.15)}
+.how .dchip.ok{background:rgba(46,125,50,.08);color:var(--ok);border-color:rgba(46,125,50,.18)}
+/* Compliance stat tiles */
+.how .comp-tiles{display:flex;gap:8px;margin:12px 0 4px;flex-wrap:wrap}
+.how .comp-tile{flex:1 1 60px;display:flex;flex-direction:column;align-items:center;gap:2px;
+  background:var(--page);border:1px solid var(--hair);border-radius:10px;padding:10px 8px 8px}
+.modal .how .comp-tile{background:#FAF8F6}
+.how .comp-tile .ct-val{font-size:22px;font-weight:700;letter-spacing:-.02em;
+  font-variant-numeric:tabular-nums;color:var(--ink);line-height:1}
+.how .comp-tile .ct-lbl{font-size:10px;font-weight:600;text-transform:uppercase;
+  letter-spacing:.07em;color:var(--faint);margin-top:1px}
+.how .comp-tile.ct-bad .ct-val{color:var(--miss)}
+.how .comp-tile.ct-ok .ct-val{color:var(--ok)}
 
 /* Escalations on a team card. Not a dial: a count of live problems has no
    denominator, and a progress bar would invite reading "2 of 5" into it.
@@ -3918,10 +3935,11 @@ let OPEN_CARD = null;
    produced the dial, so the explanation cannot disagree with the number it is
    explaining. */
 function howHtml(r){
-  const dayList = ds => ds.map(d => {
+  const chipDate = d => {
     const [, m, day] = d.split('-');
-    return `${Number(day)} ${MONTHS_SHORT[Number(m) - 1]}`;
-  }).join(' · ');
+    return `<span class="dchip">${Number(day)} ${MONTHS_SHORT[Number(m) - 1]}</span>`;
+  };
+  const chipList = ds => `<span class="dchips">${ds.map(chipDate).join('')}</span>`;
 
   let h = mixDetail(r);
   h += prDetail(r);
@@ -3942,19 +3960,22 @@ function howHtml(r){
       if (!per.gaps.length) continue;
       any = true;
       h += `<p class="dates"><span class="tk">${esc(SOURCES[t].noun)}</span>` +
-           `<span>${esc(dayList(per.gaps))}</span></p>`;
+           chipList(per.gaps) + `</p>`;
     }
     if (!any && TRACKERS.every(t => m.per[t]))
-      h += `<p class="dates none">Nothing missed.</p>`;
+      h += `<p class="dates none"><span class="tk"></span><span class="dchip ok">All clear</span></p>`;
   }
   h += `</div>`;
 
-  h += stats([
-    [r.expected, 'expected'],
-    [r.filed, 'filed'],
-    [r.expected - r.filed, 'missed'],
-    [`${r.expected ? Math.round(r.filed / r.expected * 100) : 0}%`, 'compliance'],
-  ]);
+  const missed = r.expected - r.filed;
+  const compPct = r.expected ? Math.round(r.filed / r.expected * 100) : 0;
+  const compColor = compPct >= 90 ? 'var(--ok)' : compPct >= 75 ? 'var(--warn)' : 'var(--miss)';
+  h += `<div class="comp-tiles">` +
+    `<div class="comp-tile"><span class="ct-val">${r.expected}</span><span class="ct-lbl">Expected</span></div>` +
+    `<div class="comp-tile"><span class="ct-val">${r.filed}</span><span class="ct-lbl">Filed</span></div>` +
+    `<div class="comp-tile ${missed ? 'ct-bad' : 'ct-ok'}"><span class="ct-val">${missed}</span><span class="ct-lbl">Missed</span></div>` +
+    `<div class="comp-tile ct-pct"><span class="ct-val" style="color:${compColor}">${compPct}%</span><span class="ct-lbl">Compliance</span></div>` +
+  `</div>`;
 
   h += implDetail(r);
   h += adoptDetail(r);
