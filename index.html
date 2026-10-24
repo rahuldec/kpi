@@ -1697,14 +1697,22 @@ function parsePex(text){
   return out;
 }
 
-/* Asana's own assignee field, not free text like the MOM portal's visitor
-   names — it already matches the roster's spelling exactly whenever the
-   person is on the roster at all, so an exact case-insensitive match against
-   POD_OF is enough; no first-name fallback the way canonVisitor needs one. */
+/* Payment-recovery CSV owner field — typically matches the roster spelling,
+   but may omit the third component of a three-part name ("Amit Kumar" vs
+   "Amit Kumar Pandit"). Try exact match first, then prefix match (CSV name
+   is the start of a longer roster name), then first-name-unique fallback. */
 function canonPexName(raw){
-  const n = String(raw).trim().toLowerCase();
+  const n = String(raw).trim();
   if (!n) return null;
-  return [...POD_OF.keys()].find(r => r.toLowerCase() === n) || null;
+  const nl = n.toLowerCase();
+  const keys = [...POD_OF.keys()];
+  const exact = keys.find(r => r.toLowerCase() === nl);
+  if (exact) return exact;
+  const prefix = keys.find(r => r.toLowerCase().startsWith(nl + ' '));
+  if (prefix) return prefix;
+  const first = nl.split(/\s+/)[0];
+  const hits = keys.filter(r => r.toLowerCase().split(/\s+/)[0] === first);
+  return hits.length === 1 ? hits[0] : null;
 }
 
 function pexForTeam(lead){
@@ -3643,16 +3651,37 @@ let IMPLEMENTATION = [], IMPL_BY_CLIENT = new Map(), IMPL_UNMATCHED = [], IMPL_E
 let PAYMENT_RECOVERY = [], PR_BY_RM = new Map(), PR_ERROR = null;
 
 function parsePaymentRecoveryCSV(text){
-  const lines = text.split('\n').filter(l => l.trim());
-  if (!lines.length) return [];
-  const head = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').trim().toLowerCase());
+  /* RFC 4180-compliant parser — handles quoted fields with embedded newlines
+     and commas, which the naive split(',') approach cannot. */
+  function parseCSV(src) {
+    const rows = [];
+    let cur = [], field = '', inQuote = false, i = 0;
+    while (i < src.length) {
+      const ch = src[i];
+      if (inQuote) {
+        if (ch === '"' && src[i + 1] === '"') { field += '"'; i += 2; continue; }
+        if (ch === '"') { inQuote = false; i++; continue; }
+        field += ch; i++; continue;
+      }
+      if (ch === '"') { inQuote = true; i++; continue; }
+      if (ch === ',') { cur.push(field); field = ''; i++; continue; }
+      if (ch === '\r' && src[i + 1] === '\n') { cur.push(field); rows.push(cur); cur = []; field = ''; i += 2; continue; }
+      if (ch === '\n') { cur.push(field); rows.push(cur); cur = []; field = ''; i++; continue; }
+      field += ch; i++;
+    }
+    if (field || cur.length) { cur.push(field); rows.push(cur); }
+    return rows;
+  }
+  const rows = parseCSV(text).filter(r => r.some(c => c.trim()));
+  if (!rows.length) return [];
+  const head = rows[0].map(h => h.trim().toLowerCase());
   const ix = {client: head.indexOf('client'), owner: head.indexOf('owner'), amount: head.indexOf('amount')};
   if (ix.client < 0 || ix.owner < 0) return [];
   const out = [];
-  for (let i = 1; i < lines.length; i++){
-    const cols = lines[i].split(',').map(c => c.replace(/^"|"$/g, '').trim());
-    const client = cols[ix.client] || ''; if (!client) continue;
-    const owner = cols[ix.owner] || 'Unassigned';
+  for (let i = 1; i < rows.length; i++){
+    const cols = rows[i];
+    const client = (cols[ix.client] || '').trim(); if (!client) continue;
+    const owner = (cols[ix.owner] || '').trim() || 'Unassigned';
     const raw = (cols[ix.amount] || '').replace(/[^0-9.]/g, '');
     out.push({client, owner, amount: raw ? Number(raw) : null});
   }
