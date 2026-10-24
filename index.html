@@ -475,6 +475,27 @@ html.modalopen{overflow:hidden}
 /* The sentence now backs up the stat row rather than carrying the numbers
    alone, so it reads quieter than a heading and louder than a footnote. */
 .how h5 + .stats + .sum,.how .stats + .sum{font-size:12.5px;line-height:1.6}
+/* Mix split — two tiles side by side, one per type */
+.how .mix-tiles{display:flex;gap:10px;margin:10px 0 14px;flex-wrap:wrap}
+.how .mix-tile{flex:1 1 140px;border-radius:12px;padding:14px 16px 12px;min-width:130px}
+.how .mix-tile.ret{background:var(--brand-soft);border:1px solid rgba(236,103,36,.18)}
+.how .mix-tile.imp{background:#FFF8E8;border:1px solid rgba(184,134,11,.2)}
+@media(prefers-color-scheme:dark){
+  :root:not([data-theme="light"]) .how .mix-tile.ret{background:rgba(236,103,36,.12);border-color:rgba(236,103,36,.25)}
+  :root:not([data-theme="light"]) .how .mix-tile.imp{background:rgba(184,134,11,.10);border-color:rgba(184,134,11,.25)}
+}
+:root[data-theme="dark"] .how .mix-tile.ret{background:rgba(236,103,36,.12);border-color:rgba(236,103,36,.25)}
+:root[data-theme="dark"] .how .mix-tile.imp{background:rgba(184,134,11,.10);border-color:rgba(184,134,11,.25)}
+.how .mix-tile .mt-label{font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
+  margin-bottom:10px}
+.how .mix-tile.ret .mt-label{color:var(--brand)}
+.how .mix-tile.imp .mt-label{color:var(--warn)}
+.how .mix-tile .mt-row{display:flex;align-items:baseline;gap:8px;margin-bottom:4px}
+.how .mix-tile .mt-count{font-size:26px;font-weight:700;letter-spacing:-.02em;
+  font-variant-numeric:tabular-nums;color:var(--ink);line-height:1}
+.how .mix-tile .mt-unit{font-size:12px;color:var(--faint);font-weight:500}
+.how .mix-tile .mt-amount{font-size:14px;font-weight:600;letter-spacing:-.01em;
+  font-variant-numeric:tabular-nums;color:var(--body)}
 .how .who2{font-weight:600;color:var(--ink);margin:11px 0 3px;font-size:13px}
 .how .who2:first-of-type{margin-top:0}
 .how .none{color:var(--body)}
@@ -3586,8 +3607,15 @@ function prDetail(r){
   const pr = r.pr;
   if (!pr.count) return h + `<p class="none">No overdue accounts for this team.</p>`;
   const sorted = pr.accounts.slice().sort((a, b) => (b.amount || 0) - (a.amount || 0));
-  h += moneyList(sorted.map(a => ({n: a.client, r: a.amount || 0})), 6, 'accounts');
-  h += stats([[pr.count, pr.count === 1 ? 'account' : 'accounts'], [inr(pr.total), 'total owed']]);
+  h += `<table class="ctable pr-table">` +
+    `<thead><tr><th>Client</th><th class="ct">Amount</th></tr></thead><tbody>`;
+  for (const a of sorted)
+    h += `<tr><td class="cn">${esc(a.client)}</td>` +
+         `<td class="ct ca">${a.amount ? inr(a.amount) : '—'}</td></tr>`;
+  h += `<tr class="ctable-sep"><td colspan="2"></td></tr>` +
+       `<tr><td style="font-weight:600;color:var(--ink)">Total</td>` +
+       `<td class="ct ca" style="color:var(--miss)">${inr(pr.total)}</td></tr>` +
+       `</tbody></table>`;
   return h;
 }
 
@@ -4112,14 +4140,21 @@ function mixDetail(r){
   const mine = CLIENTS.filter(c => c.o === r.lead);
   const byName = (a, b2) => a.n.localeCompare(b2.n);
   const allClients = mine.slice().sort(byName);
+  const mixTiles = `<div class="mix-tiles">` +
+    `<div class="mix-tile ret">` +
+      `<div class="mt-label">Retention</div>` +
+      `<div class="mt-row"><span class="mt-count">${ret.clients}</span><span class="mt-unit">${ret.clients === 1 ? 'client' : 'clients'}</span></div>` +
+      `<div class="mt-amount">${inr(ret.revenue)}</div>` +
+    `</div>` +
+    `<div class="mix-tile imp">` +
+      `<div class="mt-label">Implementation</div>` +
+      `<div class="mt-row"><span class="mt-count">${imp.clients}</span><span class="mt-unit">${imp.clients === 1 ? 'client' : 'clients'}</span></div>` +
+      `<div class="mt-amount">${inr(imp.revenue)}</div>` +
+    `</div>` +
+  `</div>`;
   return head +
     (allClients.length ? clientTable(allClients, Infinity) : '') +
-    stats([
-      [ret.clients, 'retention'],
-      [inr(ret.revenue), 'retention book'],
-      [imp.clients, 'implementation'],
-      [inr(imp.revenue), 'implementation book'],
-    ]);
+    mixTiles;
 }
 
 /* The mix, as one row under the business dial — it describes the dial above it
