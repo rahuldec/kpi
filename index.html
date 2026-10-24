@@ -386,14 +386,13 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
 .mcard{position:relative} /* keeps .info absolute-positioned within card */
 .info{
   position:absolute;top:13px;right:13px;width:22px;height:22px;padding:0;
-  color:var(--brand);cursor:pointer;
-  background:none;border:1px solid var(--brand);border-radius:50%;
+  font:600 12px/1 ui-serif,Georgia,serif;color:#fff;cursor:pointer;
+  background:var(--brand);border:1px solid var(--brand);border-radius:50%;
   display:flex;align-items:center;justify-content:center;
-  transition:color .15s ease,border-color .15s ease,background .15s ease;
-  opacity:.7;
+  transition:opacity .15s ease;
 }
-.info:hover{opacity:1}
-.info[aria-expanded=true]{color:#fff;background:var(--brand);border-color:var(--brand);opacity:1}
+.info:hover{opacity:.85}
+.info[aria-expanded=true]{opacity:1}
 
 /* An (i) per parameter, not only per card. The header button opens the panel at
    the top; these open it at the section that explains that one row, which is
@@ -407,12 +406,12 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
    text of every .lbl, which the tests read to identify a dial. */
 .mi{
   width:15px;height:15px;flex:none;padding:0;align-self:center;margin:0 -2px;
-  color:var(--brand);cursor:pointer;
-  background:none;border:1px solid var(--brand);border-radius:50%;
-  display:inline-flex;align-items:center;justify-content:center;opacity:.6;
-  transition:color .15s ease,border-color .15s ease,opacity .15s ease;
+  font:600 9.5px/1 ui-serif,Georgia,serif;color:#fff;cursor:pointer;
+  background:var(--brand);border:1px solid var(--brand);border-radius:50%;
+  display:inline-flex;align-items:center;justify-content:center;
+  transition:opacity .15s ease;
 }
-.mi:hover,.mi:focus-visible{opacity:1}
+.mi:hover,.mi:focus-visible{opacity:.8}
 
 /* ── the (i) dialog ─ */
 .modal{position:fixed;inset:0;z-index:60;display:flex;align-items:center;
