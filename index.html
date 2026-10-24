@@ -386,13 +386,14 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
 .mcard{position:relative} /* keeps .info absolute-positioned within card */
 .info{
   position:absolute;top:13px;right:13px;width:22px;height:22px;padding:0;
-  font:600 12px/1 ui-serif,Georgia,serif;color:var(--faint);cursor:pointer;
-  background:none;border:1px solid var(--line);border-radius:50%;
+  color:var(--brand);cursor:pointer;
+  background:none;border:1px solid var(--brand);border-radius:50%;
   display:flex;align-items:center;justify-content:center;
-  transition:color .15s ease,border-color .15s ease;
+  transition:color .15s ease,border-color .15s ease,background .15s ease;
+  opacity:.7;
 }
-.info:hover{color:var(--brand);border-color:var(--brand)}
-.info[aria-expanded=true]{color:#fff;background:var(--brand);border-color:var(--brand)}
+.info:hover{opacity:1}
+.info[aria-expanded=true]{color:#fff;background:var(--brand);border-color:var(--brand);opacity:1}
 
 /* An (i) per parameter, not only per card. The header button opens the panel at
    the top; these open it at the section that explains that one row, which is
@@ -406,12 +407,12 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
    text of every .lbl, which the tests read to identify a dial. */
 .mi{
   width:15px;height:15px;flex:none;padding:0;align-self:center;margin:0 -2px;
-  font:600 9.5px/1 ui-serif,Georgia,serif;color:var(--faint);cursor:pointer;
-  background:none;border:1px solid var(--line);border-radius:50%;
-  display:inline-flex;align-items:center;justify-content:center;opacity:.5;
+  color:var(--brand);cursor:pointer;
+  background:none;border:1px solid var(--brand);border-radius:50%;
+  display:inline-flex;align-items:center;justify-content:center;opacity:.6;
   transition:color .15s ease,border-color .15s ease,opacity .15s ease;
 }
-.mi:hover,.mi:focus-visible{color:var(--brand);border-color:var(--brand);opacity:1}
+.mi:hover,.mi:focus-visible{opacity:1}
 
 /* ── the (i) dialog ─ */
 .modal{position:fixed;inset:0;z-index:60;display:flex;align-items:center;
@@ -4927,7 +4928,7 @@ function renderMeter(){
     const mi = (sec, label) => panel.includes(`data-sec="${sec}"`)
       ? `<button type="button" class="mi" data-card="${i}" data-sec="${esc(sec)}" ` +
         `title="How ${esc(label)} is worked out" ` +
-        `aria-label="How ${esc(label)} is worked out for ${esc(r.lead)}">i</button>`
+        `aria-label="How ${esc(label)} is worked out for ${esc(r.lead)}"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>`
       : '';
 
     const inits = r.lead.trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase();
@@ -4938,7 +4939,7 @@ function renderMeter(){
       : `<div class="mcard-initials">${inits}</div>`;
     return `<div class="mcard" data-lead="${esc(r.lead)}">` +
       `<button type="button" class="info" data-card="${i}" aria-expanded="false" ` +
-      `title="How this is worked out">i</button>` +
+      `title="How this is worked out"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>` +
       `<div class="mcard-head">` +
       `<div class="mcard-people">` +
       /* RM first */ (() => {
