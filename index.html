@@ -536,6 +536,21 @@ html.modalopen{overflow:hidden}
 .how .missed .who2 + .dates,.how .asks .who2 + .dates{border-top:0}
 .how .missed .who2:not(:first-child),.how .asks .who2:not(:first-child){
   border-top:1px solid var(--hair);margin-top:2px}
+/* Visit grid — one row per person */
+.how .visit-grid{background:var(--page);border:1px solid var(--hair);border-radius:12px;
+  padding:4px 14px;margin:8px 0 0}
+.modal .how .visit-grid{background:#FAF8F6}
+.how .vg-row{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:9px 0;border-bottom:1px solid var(--hair)}
+.how .vg-row:last-child{border-bottom:none}
+.how .vg-name{font-size:13px;font-weight:600;color:var(--ink);flex:1;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.how .vg-dim{color:var(--faint);font-weight:500}
+.how .vchip{display:inline-block;padding:3px 11px;border-radius:20px;
+  font-size:12px;font-weight:600;letter-spacing:.01em;white-space:nowrap;flex-shrink:0}
+.how .vchip-yes{background:rgba(46,125,50,.09);color:var(--ok);border:1px solid rgba(46,125,50,.2)}
+.how .vchip-no{background:var(--page);color:var(--faint);border:1px solid var(--hair)}
+.modal .how .vchip-no{background:#FAF8F6}
 /* Date chips inside missed rows */
 .how .dchips{display:flex;flex-wrap:wrap;gap:4px;min-width:0}
 .how .dchip{display:inline-block;padding:2px 9px;border-radius:20px;
@@ -4330,18 +4345,33 @@ function visitDetail(r){
   const v = r.visits;
   let h = `<h5 data-sec="visits">Client visits</h5>`;
   if (VISITS_ERROR)
-    return h + `<p class="sum">The visit feed did not load: ${esc(VISITS_ERROR)}</p>`;
+    return h + `<p class="sum">The visit feed did not load (MOM Portal): ${esc(VISITS_ERROR)}</p>`;
 
   if (!v.person) return h + `<p class="none">Nobody on this team filed one.</p>`;
 
-  h += `<div class="vlist">`;
-  for (const [who, n] of v.byPerson)
-    h += `<p class="dates"><span class="tk">${esc(who)}</span>` +
-         `<span>${n} ${n === 1 ? 'visit' : 'visits'}</span></p>`;
-  const silent = [r.lead, ...r.team].filter(p => !v.byPerson.some(x => x[0] === p));
-  if (silent.length)
-    h += `<p class="dates none">No visit filed: ${esc(silent.join(', '))}.</p>`;
-  return h + `</div>`;
+  const allMembers = [r.lead, ...r.team];
+  const byMap = new Map(v.byPerson);
+  h += `<div class="visit-grid">`;
+  for (const who of allMembers){
+    const n = byMap.get(who);
+    if (n){
+      h += `<div class="vg-row">` +
+           `<span class="vg-name">${esc(who)}</span>` +
+           `<span class="vchip vchip-yes">${n} ${n === 1 ? 'visit' : 'visits'}</span>` +
+           `</div>`;
+    } else {
+      h += `<div class="vg-row">` +
+           `<span class="vg-name vg-dim">${esc(who)}</span>` +
+           `<span class="vchip vchip-no">No visits</span>` +
+           `</div>`;
+    }
+  }
+  h += `</div>`;
+  h += `<div class="comp-tiles" style="margin-top:10px">` +
+    `<div class="comp-tile"><span class="ct-val" style="color:var(--ok)">${v.person}</span><span class="ct-lbl">Person visits</span></div>` +
+    `<div class="comp-tile"><span class="ct-val">${v.meetings}</span><span class="ct-lbl">${v.meetings === 1 ? 'Meeting' : 'Meetings'}</span></div>` +
+  `</div>`;
+  return h;
 }
 
 function pexLine(r, info){
