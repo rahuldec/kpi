@@ -3668,7 +3668,8 @@ function buildPaymentRecovery(){
 }
 
 function prForTeam(lead){
-  const accounts = PR_BY_RM.get(lead) || [];
+  const team = [lead, ...(POD_TEAM.get(lead) || [])];
+  const accounts = team.flatMap(m => PR_BY_RM.get(m) || []);
   const total = accounts.reduce((s, a) => s + (a.amount || 0), 0);
   return {accounts, total, count: accounts.length};
 }
