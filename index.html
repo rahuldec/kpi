@@ -575,6 +575,8 @@ html.modalopen{overflow:hidden}
 .how .vt-date{font-size:12px;font-weight:600;color:var(--ok);white-space:nowrap}
 .how .vt-who{font-size:12.5px;font-weight:500;color:var(--ink)}
 .how .vt-client{font-size:12.5px;color:var(--faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.how .vtable .vt-extra{display:none}
+.how .vtable.vt-expanded .vt-extra{display:grid}
 .how .vt-more{display:block;width:100%;margin-top:6px;padding:8px;background:none;
   border:1px solid var(--hair);border-radius:8px;font-size:12px;font-weight:600;
   color:var(--brand);cursor:pointer;text-align:center;transition:background .15s}
@@ -2643,7 +2645,7 @@ const isWorkingDay=d=>d.getDay()!==0&&!HOLIDAYS.has(iso(d));
    Both Pending and Approved applications count — if someone filed a leave
    request for a day their timesheet is not expected. Cancelled leaves are
    excluded (a cancelled leave is not a day off). */
-const LEAVE_RAW = {"Aanchal Dhiman":["2026-10-05","2026-10-16"],"Akshat Wahi":["2026-10-01"],"Amar Kumar Pandit":["2026-07-08","2026-07-24","2026-07-25"],"Anjali Verma":["2026-07-20","2026-07-30"],"Ankush Rana":["2026-07-01","2026-07-24","2026-07-25","2026-09-04","2026-09-08","2026-09-29"],"Ashish Kumar":["2026-07-03","2026-07-06","2026-07-17"],"Ayush Garg":["2026-07-03","2026-07-04","2026-07-05","2026-07-06","2026-07-20","2026-10-05"],"Bhavey Saluja":["2026-09-30"],"Divya Gupta":["2026-07-06","2026-07-31","2026-09-04"],"Gobind Monga":["2026-07-02"],"Kashish Goel":["2026-07-13","2026-07-27","2026-09-04","2026-09-08"],"Lokesh Kumar":["2026-07-10","2026-07-27","2026-09-04"],"Mansi Rana":["2026-07-08"],"Mehak Garg":["2026-07-23","2026-07-24"],"Mithilesh Kumar":["2026-07-06","2026-07-07","2026-07-16"],"Priya":["2026-07-17","2026-09-04"],"Rahul Sharma":["2026-07-31"],"Sagar Mishra":["2026-07-14"],"Shobhit Sehra":["2026-07-09","2026-07-16","2026-07-29"],"Sneha Garg":["2026-10-01"],"Sukhmeet Singh":["2026-07-17"],"Sultan Malik":["2026-10-16"],"Sumaiya Khan":["2026-07-07","2026-07-10","2026-07-17"],"Tanvi Gupta":["2026-09-24","2026-09-25","2026-09-26","2026-09-28"]};
+const LEAVE_RAW = {"Aanchal Dhiman":["2026-10-05","2026-10-16"],"Akshat Wahi":["2026-10-01"],"Amar Kumar Pandit":["2026-07-08","2026-07-24","2026-07-25"],"Anjali Verma":["2026-07-20","2026-07-30"],"Ankush Rana":["2026-07-01","2026-07-24","2026-07-25","2026-09-04","2026-09-08","2026-09-29"],"Ashish Kumar":["2026-07-03","2026-07-06","2026-07-17"],"Ayush Garg":["2026-07-03","2026-07-04","2026-07-05","2026-07-06","2026-07-20","2026-10-05"],"Bhavey Saluja":["2026-09-30"],"Divya Gupta":["2026-07-06","2026-07-31","2026-09-04"],"Gobind Monga":["2026-07-02"],"Kashish Goel":["2026-07-13","2026-07-27","2026-09-04","2026-09-08"],"Lokesh Kumar":["2026-07-10","2026-07-27","2026-09-04"],"Mansi Rana":["2026-07-08"],"Mehak Garg":["2026-07-23","2026-07-24"],"Mithilesh Kumar":["2026-07-06","2026-07-07","2026-07-16"],"Priya":["2026-07-17","2026-09-04"],"Rahul Sharma":["2026-07-31"],"Sagar Mishra":["2026-07-14"],"Shobhit Sehra":["2026-07-09","2026-07-16","2026-07-29"],"Sneha Garg":["2026-10-01"],"Sukhmeet Singh":["2026-07-17","2026-10-21","2026-10-22","2026-10-23"],"Sultan Malik":["2026-10-16"],"Sumaiya Khan":["2026-07-07","2026-07-10","2026-07-17"],"Tanvi Gupta":["2026-09-24","2026-09-25","2026-09-26","2026-09-28"]};
 const LEAVE_DAYS = new Map(
   Object.entries(LEAVE_RAW).map(([name, days]) => [name.toLowerCase(), new Set(days)]));
 const onLeave = (name, day) => LEAVE_DAYS.get(String(name).toLowerCase())?.has(day) === true;
@@ -4415,7 +4417,7 @@ function visitDetail(r){
     for (let i = 0; i < total; i++){
       const m = r.rawVisits[i];
       const who = m.employee_name ? m.employee_name.split(/[,&]|\band\b/i)[0].trim() : '—';
-      h += `<div class="vt-row${i >= PREVIEW ? ' vt-extra' : ''}" ${i >= PREVIEW ? 'hidden' : ''}>` +
+      h += `<div class="vt-row${i >= PREVIEW ? ' vt-extra' : ''}">` +
            `<span class="vt-date">${esc(fmtDate(m.meeting_date) || '—')}</span>` +
            `<span class="vt-who">${esc(who)}</span>` +
            `<span class="vt-client">${esc(m.client_name || '—')}</span>` +
@@ -4425,11 +4427,8 @@ function visitDetail(r){
     if (total > PREVIEW)
       h += `<button type="button" class="vt-more" onclick="(function(b){` +
            `var t=document.getElementById('${esc(uid)}');` +
-           `var rows=t.querySelectorAll('.vt-extra');` +
-           `var hidden=[].filter.call(rows,function(r){return r.hidden});` +
-           `hidden.forEach(function(r){r.hidden=false});` +
-           `b.textContent=hidden.length?'Show less':'Show all (${total})';` +
-           `if(!hidden.length)rows.forEach(function(r){r.hidden=true});` +
+           `var exp=t.classList.toggle('vt-expanded');` +
+           `b.textContent=exp?'Show less':'Show all (${total})';` +
            `})(this)">Show all (${total})</button>`;
   } else {
     const allMembers = [r.lead, ...r.team];
