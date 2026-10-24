@@ -575,6 +575,10 @@ html.modalopen{overflow:hidden}
 .how .vt-date{font-size:12px;font-weight:600;color:var(--ok);white-space:nowrap}
 .how .vt-who{font-size:12.5px;font-weight:500;color:var(--ink)}
 .how .vt-client{font-size:12.5px;color:var(--faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.how .vt-more{display:block;width:100%;margin-top:6px;padding:8px;background:none;
+  border:1px solid var(--hair);border-radius:8px;font-size:12px;font-weight:600;
+  color:var(--brand);cursor:pointer;text-align:center;transition:background .15s}
+.how .vt-more:hover{background:var(--hair)}
 /* Date chips inside missed rows */
 .how .dchips{display:flex;flex-wrap:wrap;gap:4px;min-width:0}
 .how .dchip{display:inline-block;padding:2px 9px;border-radius:20px;
@@ -4402,17 +4406,30 @@ function visitDetail(r){
   };
 
   if (r.rawVisits && r.rawVisits.length){
-    h += `<div class="vtable">` +
+    const PREVIEW = 5;
+    const total = r.rawVisits.length;
+    const uid = `vt-${r.lead.replace(/\s+/g,'_')}`;
+    h += `<div class="vtable" id="${esc(uid)}">` +
          `<div class="vt-head"><span>Date</span><span>Person</span><span>Client</span></div>`;
-    for (const m of r.rawVisits){
+    for (let i = 0; i < total; i++){
+      const m = r.rawVisits[i];
       const who = m.employee_name ? m.employee_name.split(/[,&]|\band\b/i)[0].trim() : '—';
-      h += `<div class="vt-row">` +
+      h += `<div class="vt-row${i >= PREVIEW ? ' vt-extra' : ''}" ${i >= PREVIEW ? 'hidden' : ''}>` +
            `<span class="vt-date">${esc(fmtDate(m.meeting_date) || '—')}</span>` +
            `<span class="vt-who">${esc(who)}</span>` +
            `<span class="vt-client">${esc(m.client_name || '—')}</span>` +
            `</div>`;
     }
     h += `</div>`;
+    if (total > PREVIEW)
+      h += `<button type="button" class="vt-more" onclick="(function(b){` +
+           `var t=document.getElementById('${esc(uid)}');` +
+           `var rows=t.querySelectorAll('.vt-extra');` +
+           `var hidden=[].filter.call(rows,function(r){return r.hidden});` +
+           `hidden.forEach(function(r){r.hidden=false});` +
+           `b.textContent=hidden.length?'Show less':'Show all (${total})';` +
+           `if(!hidden.length)rows.forEach(function(r){r.hidden=true});` +
+           `})(this)">Show all (${total})</button>`;
   } else {
     const allMembers = [r.lead, ...r.team];
     const byMap = new Map(v.byPerson);
