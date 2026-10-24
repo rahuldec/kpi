@@ -4090,21 +4090,17 @@ function longList(items, shown, label){
 function adoptDetail(r){
   const a = r.adopt;
   if (!a.total) return '';
+  const adoptPct = a.applicable ? Math.round(a.adopted / a.applicable * 100) : 0;
+  const targetPct = Math.round(ADOPTION_TARGET * 100);
+  const adoptColor = adoptPct >= targetPct ? 'var(--ok)' : adoptPct >= targetPct * 0.8 ? 'var(--warn)' : 'var(--miss)';
   let h = `<h5 data-sec="adoption">How module adoption is worked out</h5>` +
-    stats([
-      [`${a.scored}/${a.total}`, 'scored'],
-      /* a.revTotal is summed straight from CLIENTS here, independently of
-         bookDetail()'s own revenue figure a few sections up — printing both
-         is what caught BOOK going stale once already (see README, "the
-         business dial and the adoption card agree on the book"). Losing this
-         line when the card's own coverLine went would quietly lose that
-         cross-check along with it. */
-      [inr(a.revTotal), 'book'],
-      [a.adopted, 'adopted'],
-      [a.applicable, 'applicable'],
-      [`${a.applicable ? Math.round(a.adopted / a.applicable * 100) : 0}%`, 'adoption'],
-      [`${Math.round(ADOPTION_TARGET * 100)}%`, 'target'],
-    ]);
+    `<div class="comp-tiles">` +
+      `<div class="comp-tile"><span class="ct-val">${a.scored}<span style="font-size:14px;color:var(--faint);font-weight:500">/${a.total}</span></span><span class="ct-lbl">Scored</span></div>` +
+      `<div class="comp-tile"><span class="ct-val" style="font-size:18px">${inr(a.revTotal)}</span><span class="ct-lbl">Book</span></div>` +
+      `<div class="comp-tile"><span class="ct-val">${a.adopted}<span style="font-size:14px;color:var(--faint);font-weight:500">/${a.applicable}</span></span><span class="ct-lbl">Modules adopted</span></div>` +
+      `<div class="comp-tile"><span class="ct-val" style="color:${adoptColor}">${adoptPct}%</span><span class="ct-lbl">Adoption</span></div>` +
+      `<div class="comp-tile"><span class="ct-val" style="color:var(--faint);font-size:18px">${targetPct}%</span><span class="ct-lbl">Target</span></div>` +
+    `</div>`;
 
   if (a.missing.length){
     const rev = a.missing.reduce((n, c) => n + (c.r || 0), 0);
@@ -4133,12 +4129,12 @@ function footerHtml(r){
   return `<div class="how" style="margin:0;padding:14px 0 0;border:0;background:none">` +
     `<h5 data-sec="compliance" style="margin-top:0;padding-top:0;border-top:0">How compliance is worked out</h5>` +
     `<h5 data-sec="business">How business is worked out</h5>` +
-    stats([
-      ...(n ? [[n, n === 1 ? 'client' : 'clients']] : []),
-      [inr(r.revenue), 'book'],
-      [inr(Math.round(r.target)), 'target'],
-      [inr(Math.round(Math.abs(gap))), gap > 0 ? 'short' : 'over'],
-    ]) +
+    `<div class="comp-tiles">` +
+      (n ? `<div class="comp-tile"><span class="ct-val">${n}</span><span class="ct-lbl">${n === 1 ? 'Client' : 'Clients'}</span></div>` : '') +
+      `<div class="comp-tile"><span class="ct-val" style="font-size:18px">${inr(r.revenue)}</span><span class="ct-lbl">Book</span></div>` +
+      `<div class="comp-tile"><span class="ct-val" style="font-size:18px;color:var(--faint)">${inr(Math.round(r.target))}</span><span class="ct-lbl">Target</span></div>` +
+      `<div class="comp-tile ${gap >= 0 ? 'ct-ok' : 'ct-bad'}"><span class="ct-val" style="font-size:18px">${inr(Math.round(Math.abs(gap)))}</span><span class="ct-lbl">${gap >= 0 ? 'Over target' : 'Short'}</span></div>` +
+    `</div>` +
     `</div>`;
 }
 
