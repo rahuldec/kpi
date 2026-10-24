@@ -5952,7 +5952,11 @@ async function loadLoginLog(){
   if (!wrap) return;
   try {
     const res = await fetch(`/api/login-log?email=${encodeURIComponent(VIEWER.email)}`, {cache:'no-store'});
-    if (!res.ok) { wrap.innerHTML = '<p class="sum">Could not load logs.</p>'; return; }
+    if (!res.ok) {
+      const body = await res.json().catch(()=>({}));
+      wrap.innerHTML = `<p class="sum">Error ${res.status}: ${esc(body.error || res.statusText)}</p>`;
+      return;
+    }
     const {entries} = await res.json();
     if (!entries.length) { wrap.innerHTML = '<p class="sum">No logins recorded yet.</p>'; return; }
     const fmt = ts => {
