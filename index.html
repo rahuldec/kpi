@@ -529,7 +529,7 @@ html.modalopen{overflow:hidden}
    but kept as its own class rather than sharing .escline outright, so a
    card-scoped querySelector('.escline') elsewhere in the suite can never
    silently pick up implementation's row instead of escalations'. */
-.visitline,.escline,.implline,.mixline{
+.visitline,.escline,.implline,.prline,.mixline{
   display:flex;align-items:baseline;gap:2px 9px;margin:2px 0 0;flex-wrap:wrap;
   padding-top:12px;border-top:1px solid var(--hair);
 }
@@ -546,8 +546,8 @@ html.modalopen{overflow:hidden}
    follows the line); .implline itself once something IS overdue — the project
    roster moved into the (i) panel on 17 Aug 2026, so the card prints only the
    headline div with nothing after it. */
-.covwho + .dial,.mixbar + .dial,.implwho + .dial,.implline + .dial{padding-top:14px;border-top:1px solid var(--hair)}
-.visitline .lbl,.escline .lbl,.implline .lbl,.mixline .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.07em;
+.covwho + .dial,.mixbar + .dial,.implwho + .dial,.implline + .dial,.prwho + .dial,.prline + .dial{padding-top:14px;border-top:1px solid var(--hair)}
+.visitline .lbl,.escline .lbl,.implline .lbl,.prline .lbl,.mixline .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.07em;
   color:var(--body);font-weight:600;width:88px;flex:none}
 /* "Implementation" is one unbreakable word, wider than the 88px column every
    other one-line label here fits inside — at 88px it overflows straight
@@ -559,13 +559,13 @@ html.modalopen{overflow:hidden}
    lines the way it did when other text beside it was allowed to squeeze it.
    Below about 300px of card the row wraps instead; the value stays beside its
    label at every width, which is the thing being read. */
-.visitline .n,.escline .n,.implline .n,.mixline .n{font-size:15px;font-weight:600;letter-spacing:-.012em;
+.visitline .n,.escline .n,.implline .n,.prline .n,.mixline .n{font-size:15px;font-weight:600;letter-spacing:-.012em;
   white-space:nowrap}
 /* Two phrases joined by a separator rather than one indivisible figure, so this
    is the one value on a card that may break — between them, never inside them. */
 .mixline .n{white-space:normal;font-size:14px}
-.escline.hot .n,.implline.hot .n{color:var(--miss)}
-.escline.cool .n,.implline.cool .n,.visitline .n,.mixline.cool .n{color:var(--faint);font-weight:500}
+.escline.hot .n,.implline.hot .n,.prline.hot .n{color:var(--miss)}
+.escline.cool .n,.implline.cool .n,.prline.cool .n,.visitline .n,.mixline.cool .n{color:var(--faint);font-weight:500}
 .how .gaps{font-size:12.5px;line-height:1.7;color:var(--ink);margin:6px 0 0}
 .how .gaps.none{color:var(--faint);font-size:12px;margin-top:8px}
 /* A figure attached to a name, not a column of its own. */
@@ -642,8 +642,8 @@ html.modalopen{overflow:hidden}
 .how .vlist{margin-top:4px}
 .board tr.flat td{color:var(--faint)}
 
-.escwho,.covwho,.implwho{font-size:12.5px;line-height:1.45;color:var(--miss);margin:5px 0 0 97px}
-.escwho.cool,.covwho.cool,.implwho.cool{color:var(--faint)}
+.escwho,.covwho,.implwho,.prwho{font-size:12.5px;line-height:1.45;color:var(--miss);margin:5px 0 0 97px}
+.escwho.cool,.covwho.cool,.implwho.cool,.prwho.cool{color:var(--faint)}
 
 /* ── client book ─
    A pod's members sit under the lead's name rather than in their own column:
@@ -3534,6 +3534,62 @@ const IMPL_ALIAS = {
 const iNorm = eNorm;   // same normaliser escalations already uses
 
 let IMPLEMENTATION = [], IMPL_BY_CLIENT = new Map(), IMPL_UNMATCHED = [], IMPL_ERROR = null;
+let PAYMENT_RECOVERY = [], PR_BY_RM = new Map(), PR_ERROR = null;
+
+function parsePaymentRecoveryCSV(text){
+  const lines = text.split('\n').filter(l => l.trim());
+  if (!lines.length) return [];
+  const head = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').trim().toLowerCase());
+  const ix = {client: head.indexOf('client'), owner: head.indexOf('owner'), amount: head.indexOf('amount')};
+  if (ix.client < 0 || ix.owner < 0) return [];
+  const out = [];
+  for (let i = 1; i < lines.length; i++){
+    const cols = lines[i].split(',').map(c => c.replace(/^"|"$/g, '').trim());
+    const client = cols[ix.client] || ''; if (!client) continue;
+    const owner = cols[ix.owner] || 'Unassigned';
+    const raw = (cols[ix.amount] || '').replace(/[^0-9.]/g, '');
+    out.push({client, owner, amount: raw ? Number(raw) : null});
+  }
+  return out;
+}
+
+function buildPaymentRecovery(){
+  PR_BY_RM = new Map();
+  for (const a of PAYMENT_RECOVERY){
+    const lead = canonPexName(a.owner);
+    if (!lead) continue;
+    if (!PR_BY_RM.has(lead)) PR_BY_RM.set(lead, []);
+    PR_BY_RM.get(lead).push(a);
+  }
+}
+
+function prForTeam(lead){
+  const accounts = PR_BY_RM.get(lead) || [];
+  const total = accounts.reduce((s, a) => s + (a.amount || 0), 0);
+  return {accounts, total, count: accounts.length};
+}
+
+function prLine(r, info){
+  if (PR_ERROR)
+    return `<div class="prline cool"><span class="lbl">Recovery</span>${info || ''}<span class="n">—</span></div>` +
+           `<p class="prwho cool">not loaded</p>`;
+  const pr = r.pr;
+  if (!pr.count)
+    return `<div class="prline cool"><span class="lbl">Recovery</span>${info || ''}<span class="n">None</span></div>`;
+  return `<div class="prline hot"><span class="lbl">Recovery</span>${info || ''}<span class="n">${inr(pr.total)}</span></div>` +
+         `<p class="prwho">${pr.count} overdue ${pr.count === 1 ? 'account' : 'accounts'}</p>`;
+}
+
+function prDetail(r){
+  let h = `<h5 data-sec="recovery">Payment recovery</h5>`;
+  if (PR_ERROR) return h + `<p class="sum">The payment recovery feed did not load: ${esc(PR_ERROR)}</p>`;
+  const pr = r.pr;
+  if (!pr.count) return h + `<p class="none">No overdue accounts for this team.</p>`;
+  const sorted = pr.accounts.slice().sort((a, b) => (b.amount || 0) - (a.amount || 0));
+  h += moneyList(sorted.map(a => ({n: a.client, r: a.amount || 0})), 6, 'accounts');
+  h += stats([[pr.count, pr.count === 1 ? 'account' : 'accounts'], [inr(pr.total), 'total owed']]);
+  return h;
+}
 
 function buildImplementation(){
   IMPL_BY_CLIENT = new Map(); IMPL_UNMATCHED = [];
@@ -3815,8 +3871,9 @@ function meterRows(){
     const visits = visitsForTeam(e.lead, MONTHS);
     const impl = implForTeam(e.lead);
     const pex = pexForTeam(e.lead);
+    const pr = prForTeam(e.lead);
     return {
-      ...e, revenue, target, esc, adopt, feed, visits, impl, pex,
+      ...e, revenue, target, esc, adopt, feed, visits, impl, pex, pr,
       escOpen: esc.filter(x => x.open.length),
       compliance: e.expected ? e.filed / e.expected : null,
       business: target ? revenue / target : 0
@@ -3871,6 +3928,7 @@ function howHtml(r){
   ]);
 
   h += implDetail(r);
+  h += prDetail(r);
   h += adoptDetail(r);
   h += feedDetail(r);
   return h;
@@ -4847,6 +4905,7 @@ function renderMeter(){
          business-relationship signal, not a "something's currently wrong"
          flag in the same family as Escalations. */
       implLine(r, mi('implementation', 'implementation')) +
+      prLine(r, mi('recovery', 'payment recovery')) +
       `</div>` +
       `<div class="mcard-col">` +
       visitLine(r, mi('visits', 'client visits')) +
@@ -5975,6 +6034,15 @@ async function load(){
     }
     tick();
     buildImplementation();
+
+    try {
+      PAYMENT_RECOVERY = parsePaymentRecoveryCSV(await fetchRaw('paymentRecovery'));
+      PR_ERROR = null;
+    } catch (e) {
+      PAYMENT_RECOVERY = [];
+      PR_ERROR = (e && e.message) || String(e);
+    }
+    buildPaymentRecovery();
 
     /* PEX knowledge gaps join on the roster (POD_OF) alone, not the client
        book, so unlike escalations/implementation it doesn't wait on anything
