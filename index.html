@@ -3924,6 +3924,7 @@ function howHtml(r){
   }).join(' · ');
 
   let h = mixDetail(r);
+  h += prDetail(r);
   h += visitDetail(r);
   h += escDetail(r);
   h += pexDetail(r);
@@ -3956,7 +3957,6 @@ function howHtml(r){
   ]);
 
   h += implDetail(r);
-  h += prDetail(r);
   h += adoptDetail(r);
   h += feedDetail(r);
   return h;
