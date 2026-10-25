@@ -6137,15 +6137,15 @@ async function load(){
     if (booting){
       gate.hidden = true;
       shell.hidden = false;
+      if (VIEWER.email && !ZohoAuth.isTestMode()){
+        recordVisit(VIEWER.email, VIEWER.name);
+        if (VIEWER.email === 'rahul.sharma@okiedokiepay.com'){
+          $('loginLogSection').hidden = false;
+          loadLoginLog();
+        }
+      }
       if (VIEWER.name && !ZohoAuth.isTestMode()){
         $('authUser').hidden = false;
-        if (VIEWER.email){
-          recordVisit(VIEWER.email, VIEWER.name);
-          if (VIEWER.email === 'rahul.sharma@okiedokiepay.com'){
-            $('loginLogSection').hidden = false;
-            loadLoginLog();
-          }
-        }
       }
       if (loginErr) loginErr.hidden = true;
       loading();
