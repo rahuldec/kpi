@@ -89,7 +89,28 @@ body{
 .page-footer #authUser{display:flex;align-items:center;gap:0;font-size:12px;color:var(--faint)}
 .page-footer #authUser button{font:inherit;font-size:12px;color:var(--faint);background:none;border:0;padding:0;cursor:pointer;text-decoration:underline}
 #loginLogSection{margin-top:48px}
-#loginLogSection .log-heading{font-size:15px;font-weight:600;margin:0 0 12px;color:var(--ink)}
+#loginLogSection .log-heading{
+  font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--faint);margin:0 0 14px;display:flex;align-items:center;gap:8px}
+#loginLogSection .log-heading .log-count{
+  background:var(--hair);color:var(--body);
+  font-size:10.5px;font-weight:700;
+  padding:1px 7px;border-radius:20px;letter-spacing:0}
+.log-card{background:var(--card);border:1px solid var(--hair);border-radius:16px;overflow:hidden;
+  box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.log-table{width:100%;border-collapse:collapse;font-size:13px}
+.log-table thead tr{background:var(--tile)}
+.log-table th{padding:10px 16px;font-size:10.5px;font-weight:700;letter-spacing:.07em;
+  text-transform:uppercase;color:var(--faint);text-align:left;border-bottom:1px solid var(--hair)}
+.log-table td{padding:11px 16px;border-bottom:1px solid var(--hair);vertical-align:middle;color:var(--body)}
+.log-table tbody tr:last-child td{border-bottom:0}
+.log-table tbody tr:hover{background:var(--tile)}
+.log-user{display:flex;align-items:center;gap:9px;color:var(--ink);font-weight:500}
+.log-avatar{width:26px;height:26px;border-radius:50%;background:var(--brand);color:#fff;
+  display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;
+  font-size:10px;font-weight:700;letter-spacing:.01em}
+.log-date{font-variant-numeric:tabular-nums;white-space:nowrap;font-size:12.5px}
+.log-email{font-size:12px;color:var(--faint)}
 .viewscope{
   font-size:13px;color:var(--body);background:var(--brand-soft);
   border-radius:8px;padding:8px 12px;margin:0 0 16px;text-align:right;
@@ -5962,16 +5983,21 @@ async function loadLoginLog(){
     const fmt = ts => {
       const d = new Date(ts);
       return d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) +
-             ' ' + d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+             ' · ' + d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
     };
+    const initials = name => (name||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase();
+    $('loginLogSection').querySelector('.log-heading').innerHTML =
+      `Login log <span class="log-count">${entries.length}</span>`;
     wrap.innerHTML =
-      `<table class="ctable"><thead><tr><th>When</th><th>User</th><th>Email</th></tr></thead><tbody>` +
+      `<div class="log-card"><table class="log-table">` +
+      `<thead><tr><th>When</th><th>User</th><th>Email</th></tr></thead><tbody>` +
       entries.map(e =>
-        `<tr><td class="vt-date">${esc(fmt(e.ts))}</td>` +
-        `<td>${esc(e.name || '—')}</td>` +
-        `<td class="dim">${esc(e.email)}</td></tr>`
+        `<tr>` +
+        `<td class="log-date">${esc(fmt(e.ts))}</td>` +
+        `<td><span class="log-user"><span class="log-avatar">${esc(initials(e.name||e.email))}</span>${esc(e.name||'—')}</span></td>` +
+        `<td class="log-email">${esc(e.email)}</td></tr>`
       ).join('') +
-      `</tbody></table>`;
+      `</tbody></table></div>`;
   } catch(e) { wrap.innerHTML = '<p class="sum">Error loading logs.</p>'; }
 }
 
