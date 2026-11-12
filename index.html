@@ -5098,8 +5098,14 @@ function renderMeter(){
           ? `<img class="mcard-person-pic" src="${esc(mp)}" alt="${firstName}" loading="lazy" ` +
             `onerror="this.className='mcard-person-blank'">`
           : `<div class="mcard-person-blank"></div>`;
-        const mb = bookOf(name);
-        const bizLine = mb && mb.revenue ? `<span class="mcard-person-biz">${esc(inr(mb.revenue))}</span>` : '';
+        /* Team members own no accounts themselves — they appear as RM (c.h).
+           Match on first name since the sheet stores first names in that column. */
+        const memberFirst = name.trim().split(/\s+/)[0].toLowerCase();
+        const memberRev = CLIENTS.reduce((s, c) => {
+          const h = (c.h || '').trim().split(/\s+/)[0].toLowerCase();
+          return h === memberFirst ? s + (c.r || 0) : s;
+        }, 0);
+        const bizLine = memberRev ? `<span class="mcard-person-biz">${esc(inr(memberRev))}</span>` : '';
         return `<div class="mcard-person" data-name="${esc(name)}">${pic}<span class="mcard-person-name">${firstName}</span>${bizLine}</div>`;
       }).join('') +
       `</div>` +
