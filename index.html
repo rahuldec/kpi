@@ -2786,7 +2786,8 @@ function parseBook(text){
                standing one up. Matched loosely because the header has been
                spelled both ways; a book without the column parses as before. */
             kind: h.findIndex(x => x.includes('retention')),
-            handler: rmLast > rmFirst ? rmLast : -1};
+            handler: rmLast > rmFirst ? rmLast : -1,
+            sales: find(h, 'sales')};
       break;
     }
   }
@@ -2817,6 +2818,8 @@ function parseBook(text){
     if (k) row.k = k;
     const handler = dash(cell(r, ix.handler));
     if (handler) row.h = handler;
+    const sales = dash(cell(r, ix.sales));
+    if (sales) row.s = sales;
     out.push(row);
   }
   // Highest billing first; the unfilled ones sink rather than reading as zero.
@@ -4140,9 +4143,10 @@ function clientTable(clients, shown){
   const row = c => `<tr><td class="cn">${esc(c.n)}</td>` +
     `<td class="ca">${esc(inr(c.r || 0))}</td>` +
     `<td class="crm">${esc(c.h ? c.h.split(' ')[0] : '—')}</td>` +
+    `<td class="crm">${esc(c.s || '—')}</td>` +
     `<td class="ct">${badge(c.k)}</td></tr>`;
-  const sep = `<tr class="ctable-sep"><td colspan="4"></td></tr>`;
-  const thead = `<thead><tr><th>Client</th><th style="text-align:center">Amount</th><th>RM</th><th style="text-align:right">Type</th></tr></thead>`;
+  const sep = `<tr class="ctable-sep"><td colspan="5"></td></tr>`;
+  const thead = `<thead><tr><th>Client</th><th style="text-align:center">Amount</th><th>RM</th><th>Sales</th><th style="text-align:right">Type</th></tr></thead>`;
 
   const table = list => {
     const i = list.filter(c => c.k === 'implementation');
@@ -5152,6 +5156,7 @@ const CSORT_COLS = {
   n: {label: 'Client',     get: c => c.n.toLowerCase(),                 dir: 'asc'},
   o: {label: 'Owner',      get: c => c.o ? c.o.toLowerCase() : null,    dir: 'asc'},
   h: {label: 'Handled by', get: c => c.h ? c.h.toLowerCase() : null,    dir: 'asc'},
+  s: {label: 'Sales',      get: c => c.s ? c.s.toLowerCase() : null,    dir: 'asc'},
   t: {label: 'Type',       get: c => c.t ? c.t.toLowerCase() : null,    dir: 'asc'},
   /* Size is a band, not a word. Alphabetical would put Large above Small above
      Medium, which is neither order anyone means. */
@@ -5349,7 +5354,7 @@ function renderClientList(){
            `title="Sort by ${esc(CSORT_COLS[col].label.toLowerCase())}">` +
            `${esc(CSORT_COLS[col].label)}<i aria-hidden="true">${arrow}</i></button></th>`;
   };
-  let t = '<thead><tr>' + cth('n') + cth('o') + cth('h') + cth('t') + cth('c') +
+  let t = '<thead><tr>' + cth('n') + cth('o') + cth('h') + cth('s') + cth('t') + cth('c') +
           cth('r', 'num') + cth('e', 'num') + '</tr></thead><tbody>';
   for (const c of shown){
     const all = escFor(c.n), open = all.filter(e => !e.closed);
@@ -5366,11 +5371,12 @@ function renderClientList(){
     t += `<tr${open.length ? ' class="flagged"' : ''}>` +
          `<td>${esc(c.n)}</td><td>${esc(c.o || '—')}</td>` +
          `<td class="dim">${esc(c.h || '—')}</td>` +
+         `<td class="dim">${esc(c.s || '—')}</td>` +
          `<td>${esc(c.t || '—')}</td><td>${esc(c.c || '—')}</td>` +
          `<td class="num">${c.r == null ? '—' : esc(inr(c.r))}</td>` +
          `<td class="num">${badge}</td></tr>`;
   }
-  if (!shown.length) t += `<tr><td colspan="7">No clients match that filter.</td></tr>`;
+  if (!shown.length) t += `<tr><td colspan="8">No clients match that filter.</td></tr>`;
   $('clientlist').innerHTML = t + '</tbody>';
 }
 
