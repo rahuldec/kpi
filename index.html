@@ -763,24 +763,14 @@ html.modalopen{overflow:hidden}
 /* Sales person cards */
 .sales-heading{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
   color:var(--faint);margin:28px 0 14px;padding:0}
-.sales-cards{display:flex;flex-direction:column;gap:14px}
-.scard{border:1px solid var(--line);border-radius:16px;overflow:hidden;
-  background:var(--card);box-shadow:0 2px 6px rgba(0,0,0,.04),0 6px 20px rgba(0,0,0,.07)}
-.scard-head{padding:14px 20px 13px;background:var(--tile);
-  border-bottom:1px solid var(--line);
-  display:flex;justify-content:space-between;align-items:center;gap:12px}
-.scard-name{font-size:14px;font-weight:700;color:var(--ink);letter-spacing:-.01em}
-.scard-meta{font-size:12px;color:var(--faint);display:flex;gap:12px;flex-shrink:0}
-.scard-meta span{white-space:nowrap}
-.scard-body{padding:0}
-.scard-row{display:flex;align-items:center;gap:0;padding:10px 20px;
+.sales-cards{display:flex;flex-direction:column;gap:16px}
+.sclient-row{display:flex;align-items:center;gap:0;padding:9px 0;
   border-bottom:1px solid var(--hair);font-size:13px}
-.scard-row:last-child{border-bottom:0}
-.scard-row:hover{background:var(--tile)}
-.scard-cn{flex:1;min-width:0;color:var(--ink);font-weight:500;
+.sclient-row:last-child{border-bottom:0}
+.sclient-name{flex:1;min-width:0;color:var(--ink);font-weight:500;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.scard-rm{width:110px;flex-shrink:0;color:var(--faint);font-size:12px}
-.scard-amt{width:88px;flex-shrink:0;text-align:right;
+.sclient-rm{width:100px;flex-shrink:0;color:var(--faint);font-size:12px}
+.sclient-amt{width:72px;flex-shrink:0;text-align:right;
   font-variant-numeric:tabular-nums;font-weight:600;color:var(--body)}
 /* A plain flex row sitting 18px above the table read as a second header, not
    a toolbar — "Owner" and "Type" here, "OWNER" and "TYPE" as column labels
@@ -5187,12 +5177,6 @@ function renderSalesCards(){
   if (!groups.size) { sec.hidden = true; return; }
   sec.hidden = false;
 
-  const inr = v => {
-    if (!v) return '—';
-    const lac = v / 100000;
-    return lac >= 1 ? `₹${lac % 1 === 0 ? lac : lac.toFixed(1)}L` : `₹${(v/1000).toFixed(0)}K`;
-  };
-
   /* Sort groups by total billing desc */
   const sorted = [...groups.entries()].sort((a, b) => {
     const ta = a[1].reduce((s, c) => s + (c.r || 0), 0);
@@ -5203,22 +5187,41 @@ function renderSalesCards(){
   $('salesCards').innerHTML = sorted.map(([name, clients]) => {
     const total = clients.reduce((s, c) => s + (c.r || 0), 0);
     const sorted_c = [...clients].sort((a, b) => (b.r || 0) - (a.r || 0));
-    const rows = sorted_c.map(c =>
-      `<div class="scard-row">` +
-      `<span class="scard-cn">${esc(c.n)}</span>` +
-      `<span class="scard-rm">${esc(c.h ? c.h.split(' ')[0] : '—')}</span>` +
-      `<span class="scard-amt">${inr(c.r)}</span>` +
+    const inits = name.trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase();
+    const firstName = esc(name.trim().split(/\s+/)[0]);
+
+    const clientRows = sorted_c.map(c =>
+      `<div class="sclient-row">` +
+      `<span class="sclient-name">${esc(c.n)}</span>` +
+      `<span class="sclient-rm">${esc(c.h ? c.h.split(' ')[0] : '—')}</span>` +
+      `<span class="sclient-amt">${inr(c.r)}</span>` +
       `</div>`
     ).join('');
-    return `<div class="scard">` +
-      `<div class="scard-head">` +
-      `<span class="scard-name">${esc(name)}</span>` +
-      `<span class="scard-meta">` +
-      `<span>${clients.length} client${clients.length !== 1 ? 's' : ''}</span>` +
-      `<span>${inr(total)}</span>` +
-      `</span>` +
+
+    return `<div class="mcard">` +
+      `<div class="mcard-head">` +
+      `<div class="mcard-people">` +
+      `<div class="mcard-person">` +
+      `<div class="mcard-person-initials">${inits}</div>` +
+      `<span class="mcard-person-name rm">${firstName}</span>` +
       `</div>` +
-      `<div class="scard-body">${rows}</div>` +
+      `</div>` +
+      `<div class="mcard-summary">` +
+      `<div class="mcard-summary-stat ss-total">` +
+      `<span class="ss-accent"></span>` +
+      `<span class="ss-val">${esc(inr(total))}</span>` +
+      `<span class="ss-lbl">Business</span>` +
+      `</div>` +
+      `<div class="mcard-summary-stat ss-ret">` +
+      `<span class="ss-accent"></span>` +
+      `<span class="ss-val">${clients.length}</span>` +
+      `<span class="ss-lbl">Clients</span>` +
+      `</div>` +
+      `</div>` +
+      `</div>` +
+      `<div class="mcard-body" style="grid-template-columns:1fr">` +
+      `<div class="mcard-col">${clientRows}</div>` +
+      `</div>` +
       `</div>`;
   }).join('');
 }
