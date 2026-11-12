@@ -5199,7 +5199,7 @@ function renderSalesCards(){
       `<div class="sclient-row">` +
       `<span class="sclient-name">${esc(c.n)}</span>` +
       `<span class="sclient-rm">${esc(c.h ? c.h.split(' ')[0] : '—')}</span>` +
-      `<span class="sclient-amt">${inr(c.r)}</span>` +
+      `<span class="sclient-amt">${c.r != null ? inr(c.r) : '—'}</span>` +
       `</div>`
     ).join('');
 
