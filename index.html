@@ -5087,8 +5087,12 @@ function renderMeter(){
           : `<div class="mcard-person-initials">${inits}</div>`;
         const rmFirstName = esc(r.lead.trim().split(/\s+/)[0]);
         const rmFullName = esc(r.lead);
-        const rmBiz = bookOf(r.lead);
-        const rmBizLine = rmBiz && rmBiz.revenue ? `<span class="mcard-person-biz">${esc(inr(rmBiz.revenue))}</span>` : '';
+        const rmFirst = r.lead.trim().split(/\s+/)[0].toLowerCase();
+        const rmRev = CLIENTS.reduce((s, c) => {
+          const h = (c.h || '').trim().split(/\s+/)[0].toLowerCase();
+          return h === rmFirst ? s + (c.r || 0) : s;
+        }, 0);
+        const rmBizLine = rmRev ? `<span class="mcard-person-biz">${esc(inr(rmRev))}</span>` : '';
         return `<div class="mcard-person" data-name="${rmFullName}">${rmPic}<span class="mcard-person-name rm">${rmFirstName}</span>${rmBizLine}</div>`;
       })() +
       /* Team members, same size */ r.team.map(name => {
