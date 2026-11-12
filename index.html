@@ -284,6 +284,8 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
 .mcard-person-name{font-size:12px;font-weight:600;color:var(--body);text-align:center;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;line-height:1.3}
 .mcard-person-name.rm{font-size:13px;font-weight:700;color:var(--ink)}
+.mcard-person-biz{font-size:10.5px;font-weight:600;color:var(--faint);text-align:center;
+  font-variant-numeric:tabular-nums;width:100%;line-height:1;margin-top:1px}
 .mcard-body{display:grid;
   grid-template-columns:minmax(130px,1fr) minmax(170px,1.5fr) minmax(190px,1.2fr);
   align-items:start}
@@ -5085,7 +5087,9 @@ function renderMeter(){
           : `<div class="mcard-person-initials">${inits}</div>`;
         const rmFirstName = esc(r.lead.trim().split(/\s+/)[0]);
         const rmFullName = esc(r.lead);
-        return `<div class="mcard-person" data-name="${rmFullName}">${rmPic}<span class="mcard-person-name rm">${rmFirstName}</span></div>`;
+        const rmBiz = bookOf(r.lead);
+        const rmBizLine = rmBiz && rmBiz.revenue ? `<span class="mcard-person-biz">${esc(inr(rmBiz.revenue))}</span>` : '';
+        return `<div class="mcard-person" data-name="${rmFullName}">${rmPic}<span class="mcard-person-name rm">${rmFirstName}</span>${rmBizLine}</div>`;
       })() +
       /* Team members, same size */ r.team.map(name => {
         const mp = PHOTOS[name];
@@ -5094,7 +5098,9 @@ function renderMeter(){
           ? `<img class="mcard-person-pic" src="${esc(mp)}" alt="${firstName}" loading="lazy" ` +
             `onerror="this.className='mcard-person-blank'">`
           : `<div class="mcard-person-blank"></div>`;
-        return `<div class="mcard-person" data-name="${esc(name)}">${pic}<span class="mcard-person-name">${firstName}</span></div>`;
+        const mb = bookOf(name);
+        const bizLine = mb && mb.revenue ? `<span class="mcard-person-biz">${esc(inr(mb.revenue))}</span>` : '';
+        return `<div class="mcard-person" data-name="${esc(name)}">${pic}<span class="mcard-person-name">${firstName}</span>${bizLine}</div>`;
       }).join('') +
       `</div>` +
       /* Business summary on the right */ (() => {
