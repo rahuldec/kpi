@@ -5098,10 +5098,8 @@ function renderMeter(){
         const rmFirstName = esc(r.lead.trim().split(/\s+/)[0]);
         const rmFullName = esc(r.lead);
         const rmFirst = r.lead.trim().split(/\s+/)[0].toLowerCase();
-        const rmRev = CLIENTS.reduce((s, c) => {
-          const h = (c.h || '').trim().split(/\s+/)[0].toLowerCase();
-          return h === rmFirst ? s + (c.r || 0) : s;
-        }, 0);
+        let rmRev = 0;
+        try { rmRev = CLIENTS.reduce((s, c) => { const h=(c.h||'').trim().split(/\s+/)[0].toLowerCase(); return h===rmFirst ? s+(+c.r||0) : s; }, 0); } catch(e){}
         const rmBizLine = rmRev ? `<span class="mcard-person-biz">${esc(inr(rmRev))}</span>` : '';
         return `<div class="mcard-person" data-name="${rmFullName}">${rmPic}<span class="mcard-person-name rm">${rmFirstName}</span>${rmBizLine}</div>`;
       })() +
@@ -5115,10 +5113,8 @@ function renderMeter(){
         /* Team members own no accounts themselves — they appear as RM (c.h).
            Match on first name since the sheet stores first names in that column. */
         const memberFirst = name.trim().split(/\s+/)[0].toLowerCase();
-        const memberRev = CLIENTS.reduce((s, c) => {
-          const h = (c.h || '').trim().split(/\s+/)[0].toLowerCase();
-          return h === memberFirst ? s + (c.r || 0) : s;
-        }, 0);
+        let memberRev = 0;
+        try { memberRev = CLIENTS.reduce((s, c) => { const h=(c.h||'').trim().split(/\s+/)[0].toLowerCase(); return h===memberFirst ? s+(+c.r||0) : s; }, 0); } catch(e){}
         const bizLine = memberRev ? `<span class="mcard-person-biz">${esc(inr(memberRev))}</span>` : '';
         return `<div class="mcard-person" data-name="${esc(name)}">${pic}<span class="mcard-person-name">${firstName}</span>${bizLine}</div>`;
       }).join('') +
@@ -5183,7 +5179,7 @@ function renderMeter(){
   const ms = $('meterSearch');
   if (ms && ms.value.trim()) ms.dispatchEvent(new Event('input'));
 
-  renderSalesCards();
+  try { renderSalesCards(); } catch(e) { console.warn('[renderSalesCards]', e); }
 }
 
 function renderSalesCards(){
@@ -6463,6 +6459,7 @@ async function load(){
     renderMonthPicker();
     showActive();
   }catch(err){
+    console.error('[KPI load error]', err);
     failed(String((err && err.message) || err),
            (err && err.hint) ||
            'If you opened this file directly from your computer rather than the deployed URL, ' +
