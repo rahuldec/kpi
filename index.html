@@ -3418,6 +3418,7 @@ function feedForTeam(lead){
    its own since the pod-gap banner that used to is intentionally hidden. */
 const EMAIL_NAME_OVERRIDE = {
   'kjain21569@gmail.com': 'Khushi Jain',
+  'harshada.mali@okiedokiepay.com': 'Harshada Mali',
 };
 
 function parseExport(text){
@@ -3433,7 +3434,7 @@ function parseExport(text){
   for(let i=head+1;i<rows.length;i++){
     const r=rows[i]; if(!r||r.length<2)continue;
     const due=normDate(r[ix.due]); if(!due)continue;
-    let n=(r[ix.name]||'').trim();
+    let n=(r[ix.name]||'').trim().replace(/\s*\(guest\)\s*$/i,'');
     if(!n||n.includes('@')){ // no display name in Asana — derive one from the email
       const emailRaw=((ix.email>-1?r[ix.email]:'')||n||'').trim();
       n=EMAIL_NAME_OVERRIDE[emailRaw.toLowerCase()] || tc(emailRaw.split('@')[0].replace(/[._-]+/g,' '));
