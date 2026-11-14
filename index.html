@@ -294,16 +294,16 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
 .mcard-person-eye:hover{background:rgba(0,0,0,.78)}
 .mcard-person-eye svg{pointer-events:none;display:block}
 /* Business breakdown popover */
-@keyframes bizpop-in{from{opacity:0;transform:translateX(-50%) translateY(-6px) scale(.95)}to{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}}
-.mcard-biz-pop{position:absolute;top:calc(100% + 10px);left:50%;transform:translateX(-50%);
+@keyframes bizpop-in{from{opacity:0;transform:translateY(-6px) scale(.95)}to{opacity:1;transform:translateY(0) scale(1)}}
+.mcard-biz-pop{position:fixed;
   background:var(--card);border:1px solid var(--line);border-radius:12px;
   box-shadow:0 14px 40px rgba(0,0,0,.2),0 2px 8px rgba(0,0,0,.07);
   min-width:210px;max-width:270px;width:max-content;
-  z-index:300;font-size:12px;overflow:hidden;
+  z-index:9999;font-size:12px;overflow:hidden;
   animation:bizpop-in .2s cubic-bezier(.22,.68,0,1.15) both}
-.mcard-biz-pop::before{content:'';position:absolute;bottom:100%;left:50%;
+.mcard-biz-pop::before{content:'';position:absolute;bottom:100%;left:var(--caret-left,50%);
   transform:translateX(-50%);border:7px solid transparent;border-bottom-color:var(--line)}
-.mcard-biz-pop::after{content:'';position:absolute;bottom:100%;left:50%;
+.mcard-biz-pop::after{content:'';position:absolute;bottom:100%;left:var(--caret-left,50%);
   transform:translateX(-50%) translateY(2px);border:7px solid transparent;border-bottom-color:var(--card)}
 .mcard-biz-pop-header{padding:9px 13px 8px;border-bottom:1px solid var(--hair)}
 .mcard-biz-pop-title{font-size:10px;font-weight:700;color:var(--faint);text-transform:uppercase;
@@ -5086,13 +5086,17 @@ function dial(label, value, sub, met, info){
 const EYE_SVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
 
 function openBizPop(btn){
-  const existing = btn.parentNode.querySelector('.mcard-biz-pop');
-  if (existing){ existing.remove(); return; }
-  document.querySelectorAll('.mcard-biz-pop').forEach(p => p.remove());
+  const existing = document.querySelector('.mcard-biz-pop');
+  if (existing){
+    const wasSame = existing._trigger === btn;
+    existing.remove();
+    if (wasSame) return;
+  }
   let clients = [];
   try { clients = JSON.parse(btn.dataset.clients || '[]'); } catch(e){}
   const total = clients.reduce((s, [, r]) => s + (r || 0), 0);
   const pop = document.createElement('div');
+  pop._trigger = btn;
   pop.className = 'mcard-biz-pop';
   if (!clients.length){
     pop.innerHTML = `<p class="mcard-biz-pop-none">No clients on file</p>`;
@@ -5106,10 +5110,18 @@ function openBizPop(btn){
       `</div>` +
       `<div class="mcard-biz-pop-footer"><span>Total</span><span>${inr(total)}</span></div>`;
   }
-  btn.parentNode.appendChild(pop);
+  document.body.appendChild(pop);
+  /* Position: center on button, clamped to viewport */
+  const br = btn.getBoundingClientRect();
+  const popW = pop.offsetWidth;
+  const btnCX = br.left + br.width / 2;
+  const left = Math.max(8, Math.min(btnCX - popW / 2, window.innerWidth - popW - 8));
+  pop.style.left = left + 'px';
+  pop.style.top = (br.bottom + 10) + 'px';
+  pop.style.setProperty('--caret-left', (btnCX - left) + 'px');
   setTimeout(() => {
     const close = e => {
-      if (!btn.parentNode.contains(e.target)){ pop.remove(); document.removeEventListener('click', close, true); }
+      if (e.target !== btn && !pop.contains(e.target)){ pop.remove(); document.removeEventListener('click', close, true); }
     };
     document.addEventListener('click', close, true);
   }, 0);
