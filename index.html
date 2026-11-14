@@ -286,6 +286,31 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
 .mcard-person-name.rm{font-size:13px;font-weight:700;color:var(--ink)}
 .mcard-person-biz{font-size:10.5px;font-weight:600;color:var(--faint);text-align:center;
   font-variant-numeric:tabular-nums;width:100%;line-height:1;margin-top:1px}
+/* Eye button on profile pictures */
+.mcard-person-eye{position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;
+  background:rgba(0,0,0,.52);border:none;display:flex;align-items:center;justify-content:center;
+  opacity:0;transition:opacity .15s;cursor:pointer;z-index:6;padding:0;color:#fff;line-height:1}
+.mcard-person:hover .mcard-person-eye,.mcard-person-eye:focus-visible{opacity:1}
+.mcard-person-eye:hover{background:rgba(0,0,0,.78)}
+.mcard-person-eye svg{pointer-events:none;display:block}
+/* Business breakdown popover */
+.mcard-biz-pop{position:absolute;top:calc(100% + 10px);left:50%;transform:translateX(-50%);
+  background:var(--card);border:1px solid var(--line);border-radius:10px;
+  box-shadow:0 8px 28px rgba(0,0,0,.18);padding:10px 13px;min-width:175px;max-width:240px;
+  z-index:300;font-size:12px;white-space:nowrap}
+.mcard-biz-pop::before{content:'';position:absolute;bottom:100%;left:50%;
+  transform:translateX(-50%);border:6px solid transparent;border-bottom-color:var(--line)}
+.mcard-biz-pop::after{content:'';position:absolute;bottom:100%;left:50%;
+  transform:translateX(-50%) translateY(2px);border:6px solid transparent;border-bottom-color:var(--card)}
+.mcard-biz-pop-title{font-size:10.5px;font-weight:700;color:var(--faint);text-transform:uppercase;
+  letter-spacing:.05em;margin:0 0 7px}
+.mcard-biz-pop-row{display:flex;justify-content:space-between;gap:12px;padding:4px 0;
+  border-top:1px solid var(--hair);line-height:1.3}
+.mcard-biz-pop-row .pn{flex:1;overflow:hidden;text-overflow:ellipsis;color:var(--body)}
+.mcard-biz-pop-row .pa{font-weight:600;color:var(--ink);flex-shrink:0}
+.mcard-biz-pop-total{margin-top:6px;padding-top:6px;border-top:1.5px solid var(--line);
+  display:flex;justify-content:space-between;font-weight:700;font-size:12.5px;color:var(--ink)}
+.mcard-biz-pop-none{color:var(--faint);font-style:italic}
 .mcard-body{display:grid;
   grid-template-columns:minmax(130px,1fr) minmax(170px,1.5fr) minmax(190px,1.2fr);
   align-items:start}
@@ -5047,6 +5072,36 @@ function dial(label, value, sub, met, info){
          `<div class="track ${cls}"><i style="width:${Math.min(100, p || 0)}%"></i></div>`;
 }
 
+const EYE_SVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+
+function openBizPop(btn){
+  const existing = btn.parentNode.querySelector('.mcard-biz-pop');
+  if (existing){ existing.remove(); return; }
+  document.querySelectorAll('.mcard-biz-pop').forEach(p => p.remove());
+  let clients = [];
+  try { clients = JSON.parse(btn.dataset.clients || '[]'); } catch(e){}
+  const total = clients.reduce((s, [, r]) => s + (r || 0), 0);
+  const pop = document.createElement('div');
+  pop.className = 'mcard-biz-pop';
+  if (!clients.length){
+    pop.innerHTML = `<p class="mcard-biz-pop-none">No clients on file</p>`;
+  } else {
+    pop.innerHTML =
+      `<div class="mcard-biz-pop-title">Clients (${clients.length})</div>` +
+      clients.map(([n, r]) =>
+        `<div class="mcard-biz-pop-row"><span class="pn">${esc(n)}</span><span class="pa">${inr(r||0)}</span></div>`
+      ).join('') +
+      `<div class="mcard-biz-pop-total"><span>Total</span><span>${inr(total)}</span></div>`;
+  }
+  btn.parentNode.appendChild(pop);
+  setTimeout(() => {
+    const close = e => {
+      if (!btn.parentNode.contains(e.target)){ pop.remove(); document.removeEventListener('click', close, true); }
+    };
+    document.addEventListener('click', close, true);
+  }, 0);
+}
+
 function renderMeter(){
   const {ym, rows, loose, excluded} = meterRows();
   const pct = v => v === null ? null : Math.round(v * 100);
@@ -5103,9 +5158,12 @@ function renderMeter(){
         const rmFullName = esc(r.lead);
         const rmFirst = r.lead.trim().split(/\s+/)[0].toLowerCase();
         let rmRev = 0;
-        try { rmRev = CLIENTS.reduce((s, c) => { const h=(c.h||'').trim().split(/\s+/)[0].toLowerCase(); return h===rmFirst ? s+(+c.r||0) : s; }, 0); } catch(e){}
+        let rmClients = [];
+        try { rmClients = CLIENTS.filter(c => (c.h||'').trim().split(/\s+/)[0].toLowerCase() === rmFirst).sort((a,b) => (b.r||0)-(a.r||0)); rmRev = rmClients.reduce((s,c)=>s+(+c.r||0),0); } catch(e){}
         const rmBizLine = rmRev ? `<span class="mcard-person-biz">${esc(inr(rmRev))}</span>` : '';
-        return `<div class="mcard-person" data-name="${rmFullName}">${rmPic}<span class="mcard-person-name rm">${rmFirstName}</span>${rmBizLine}</div>`;
+        const rmCD = esc(JSON.stringify(rmClients.map(c=>[c.n,c.r||0])));
+        const rmEye = `<button type="button" class="mcard-person-eye" data-clients="${rmCD}" onclick="openBizPop(this)" aria-label="View ${rmFirstName}'s clients">${EYE_SVG}</button>`;
+        return `<div class="mcard-person" data-name="${rmFullName}">${rmPic}${rmEye}<span class="mcard-person-name rm">${rmFirstName}</span>${rmBizLine}</div>`;
       })() +
       /* Team members, same size */ r.team.map(name => {
         const mp = PHOTOS[name];
@@ -5118,9 +5176,12 @@ function renderMeter(){
            Match on first name since the sheet stores first names in that column. */
         const memberFirst = name.trim().split(/\s+/)[0].toLowerCase();
         let memberRev = 0;
-        try { memberRev = CLIENTS.reduce((s, c) => { const h=(c.h||'').trim().split(/\s+/)[0].toLowerCase(); return h===memberFirst ? s+(+c.r||0) : s; }, 0); } catch(e){}
+        let memberClients = [];
+        try { memberClients = CLIENTS.filter(c => (c.h||'').trim().split(/\s+/)[0].toLowerCase() === memberFirst).sort((a,b) => (b.r||0)-(a.r||0)); memberRev = memberClients.reduce((s,c)=>s+(+c.r||0),0); } catch(e){}
         const bizLine = memberRev ? `<span class="mcard-person-biz">${esc(inr(memberRev))}</span>` : '';
-        return `<div class="mcard-person" data-name="${esc(name)}">${pic}<span class="mcard-person-name">${firstName}</span>${bizLine}</div>`;
+        const mCD = esc(JSON.stringify(memberClients.map(c=>[c.n,c.r||0])));
+        const mEye = `<button type="button" class="mcard-person-eye" data-clients="${mCD}" onclick="openBizPop(this)" aria-label="View ${firstName}'s clients">${EYE_SVG}</button>`;
+        return `<div class="mcard-person" data-name="${esc(name)}">${pic}${mEye}<span class="mcard-person-name">${firstName}</span>${bizLine}</div>`;
       }).join('') +
       `</div>` +
       /* Business summary on the right */ (() => {
