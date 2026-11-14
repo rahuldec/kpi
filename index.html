@@ -2300,8 +2300,12 @@ const thisMonth = () => iso(new Date()).slice(0, 7);
 function coveredMonths(){
   const froms = TRACKERS.map(t => COVER[t] && COVER[t].from).filter(Boolean);
   const first = froms.length ? froms.sort()[0].slice(0, 7) : thisMonth();
+  // Safety floor: never go further back than 3 years, guarding against a
+  // corrupted COVER.from (e.g. from a task with an ancient due date in Asana).
+  const floor = ymAdd(thisMonth(), -36);
+  const start = first > floor ? first : floor;
   const out = [];
-  for (let m = thisMonth(); m >= first; m = ymAdd(m, -1)) out.push(m);
+  for (let m = thisMonth(); m >= start; m = ymAdd(m, -1)) out.push(m);
   /* A month restored from a previous visit can have since aged out of the export
      window. It is still listed — otherwise it would be silently scored with no way
      to see or untick it — and the coverage warning explains what happened. */
@@ -6021,7 +6025,11 @@ async function fetchRaw(src, params){
 async function fetchSource(src){
   const body = await fetchRaw(src);
   const parsed = parseExport(body);
-  const dues = parsed.map(r => r.due).sort();
+  // Filter out dates from before 2000 for COVER computation — a task with an
+  // ancient due date (e.g. year 264 AD from a data-entry error in Asana) would
+  // set COVER.from to that year, causing coveredMonths() to loop thousands of
+  // times and crash the page.
+  const dues = parsed.map(r => r.due).filter(d => d >= '2000-01-01').sort();
   COVER[src] = {rows: parsed.length, from: dues[0], to: dues[dues.length-1],
                 capped: parsed.length >= EXPORT_CAP - 5};
   return parsed;
@@ -6193,7 +6201,7 @@ async function load(){
     const internalAll = mergeArchive(internal, archInternal);
     const clientAll = mergeArchive(client, archClient);
     for (const [src, merged] of [['internal', internalAll], ['client', clientAll]]){
-      const dues = merged.map(r => r.due).sort();
+      const dues = merged.map(r => r.due).filter(d => d >= '2000-01-01').sort();
       COVER[src] = {...COVER[src], rows: merged.length, from: dues[0], to: dues[dues.length - 1]};
     }
     /* Drop hidden people once, here, rather than at each place that counts.
