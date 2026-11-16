@@ -5185,7 +5185,7 @@ function renderMeter(){
         const rmFirst = r.lead.trim().split(/\s+/)[0].toLowerCase();
         let rmRev = 0;
         let rmClients = [];
-        try { rmClients = CLIENTS.filter(c => (c.h||'').trim().split(/\s+/)[0].toLowerCase() === rmFirst).sort((a,b) => (b.r||0)-(a.r||0)); rmRev = rmClients.reduce((s,c)=>s+(+c.r||0),0); } catch(e){}
+        try { rmClients = CLIENTS.filter(c => (c.o||'').trim().split(/\s+/)[0].toLowerCase() === rmFirst).sort((a,b) => (b.r||0)-(a.r||0)); rmRev = rmClients.reduce((s,c)=>s+(+c.r||0),0); } catch(e){}
         const rmBizLine = rmRev ? `<span class="mcard-person-biz">${esc(inr(rmRev))}</span>` : '';
         const rmCD = esc(JSON.stringify(rmClients.map(c=>[c.n,c.r||0])));
         const rmEye = `<button type="button" class="mcard-person-eye" data-clients="${rmCD}" onclick="openBizPop(this)" aria-label="View ${rmFirstName}'s clients">${EYE_SVG}</button>`;
