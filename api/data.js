@@ -49,9 +49,9 @@ const SOURCES = {
      ASANA_CLIENT_SECRET and ASANA_REFRESH_TOKEN, plus the numeric project id
      from the project's own URL (.../project/<this number>/...). */
   internal:    { asanaProject: process.env.ASANA_INTERNAL_PROJECT_GID || '1214776273281376',
-                 envVar: 'ASANA_INTERNAL_PROJECT_GID' },
+                 envVar: 'ASANA_INTERNAL_PROJECT_GID', completedSince: true },
   client:      { asanaProject: process.env.ASANA_CLIENT_PROJECT_GID || '1214674246739192',
-                 envVar: 'ASANA_CLIENT_PROJECT_GID' },
+                 envVar: 'ASANA_CLIENT_PROJECT_GID', completedSince: true },
   /* Client Escalations, also read directly from Asana now rather than its old
      Sheets export. Different shape from the trackers above — see `asanaShape`
      and grabAsanaEscalations — so it is marked to use that instead of the
@@ -267,13 +267,14 @@ async function getAsanaAccessToken() {
    what the old Sheets export carried: a date, not a time. Subtasks are not
    included unless someone has explicitly added them to the project too, which
    is the same scope the Sheets export had. */
-async function grabAsanaProject(projectGid, token) {
+async function grabAsanaProject(projectGid, token, completedSince) {
   const fields = 'name,due_on,created_at,assignee.name,assignee.email';
   const rows = [['Due Date', 'Assignee', 'Assignee Email', 'Created At']];
   let offset = '';
+  const sinceParam = completedSince ? `&completed_since=${encodeURIComponent(completedSince)}` : '';
   do {
     const url = `https://app.asana.com/api/1.0/projects/${projectGid}/tasks` +
-                `?opt_fields=${fields}&limit=100` + (offset ? `&offset=${offset}` : '');
+                `?opt_fields=${fields}&limit=100${sinceParam}` + (offset ? `&offset=${offset}` : '');
     const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
     if (!r.ok) return { ok: false, status: r.status };
     const json = await r.json();
@@ -902,7 +903,8 @@ module.exports = async (req, res) => {
             : source.asanaShape === 'websiteTasks' ? await grabAsanaWebsiteTasks(target, accessToken)
             : source.asanaShape === 'pexPending' ? await grabAsanaPexPending(target, accessToken)
             : source.asanaShape === 'timesheetContent' ? await grabAsanaTimesheetContent(target, accessToken)
-            : await grabAsanaProject(target, accessToken);
+            : await grabAsanaProject(target, accessToken,
+                source.completedSince ? new Date(Date.now() - 90 * 86400000).toISOString() : null);
       } catch (e) {
         return fail(`Could not reach Asana: ${e.message}`, 'Check the Asana API status.');
       }
