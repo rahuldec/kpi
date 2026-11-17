@@ -49,9 +49,9 @@ const SOURCES = {
      ASANA_CLIENT_SECRET and ASANA_REFRESH_TOKEN, plus the numeric project id
      from the project's own URL (.../project/<this number>/...). */
   internal:    { asanaProject: process.env.ASANA_INTERNAL_PROJECT_GID || '1214776273281376',
-                 envVar: 'ASANA_INTERNAL_PROJECT_GID' },
+                 envVar: 'ASANA_INTERNAL_PROJECT_GID', noCache: true },
   client:      { asanaProject: process.env.ASANA_CLIENT_PROJECT_GID || '1214674246739192',
-                 envVar: 'ASANA_CLIENT_PROJECT_GID' },
+                 envVar: 'ASANA_CLIENT_PROJECT_GID', noCache: true },
   /* Client Escalations, also read directly from Asana now rather than its old
      Sheets export. Different shape from the trackers above — see `asanaShape`
      and grabAsanaEscalations — so it is marked to use that instead of the
@@ -787,9 +787,11 @@ module.exports = async (req, res) => {
   const BASE = `https://docs.google.com/spreadsheets/d/${SHEET_ID}`;
 
   const send = hit => {
-    // Cached at the edge for 5 minutes, served stale for another 10 while it
-    // refreshes behind the scenes. Keeps the page fast without going far stale.
-    res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600');
+    // Tracker sources (internal/client calls) are never cached — they have
+    // 1000+ tasks and paginate 15+ Asana calls; stale-while-revalidate would
+    // keep serving October data while the background fetch times out silently.
+    const noCache = source.noCache;
+    res.setHeader('Cache-Control', noCache ? 'no-store' : 's-maxage=300, stale-while-revalidate=600');
     res.setHeader('Content-Type', source.json ? 'application/json; charset=utf-8' : 'text/csv; charset=utf-8');
     res.setHeader('X-Sheet-Gid', String(hit.gid ?? 'default'));
     res.setHeader('X-Sheet-Source', SOURCES[src] ? src : 'internal');
