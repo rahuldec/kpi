@@ -1353,6 +1353,7 @@ tr.scoredetail .tk{flex:0 0 96px;color:var(--faint);font-weight:500}
     <span class="presets" id="presets">
       <button type="button" data-mode="today">Today</button>
       <button type="button" data-mode="yesterday">Yesterday</button>
+      <button type="button" data-mode="month">This month</button>
       <button type="button" data-mode="custom">Date range</button>
     </span>
     <span class="month" id="monthwrap" hidden>
@@ -5962,6 +5963,13 @@ function applyMode(mode, remember){
     // A single day: the chase list is the point of these two views.
     CHASE_DAY = mode === 'today' ? todayWorking() : yesterdayWorking();
     $('from').value = $('to').value = CHASE_DAY;
+  } else if (mode === 'month'){
+    // Current calendar month, first day through today.
+    const t = new Date();
+    const from = iso(new Date(t.getFullYear(), t.getMonth(), 1));
+    const to   = iso(t);
+    $('from').value = from; $('to').value = to;
+    CHASE_DAY = lastWorkingDayIn(from, to);
   } else {
     // Custom: restore the last range used, else a fortnight ending today.
     let from = '', to = '';
@@ -5986,7 +5994,7 @@ function lastWorkingDayIn(from, to){
 
 function setDefaultRange(){
   const saved = readStore(MODE_KEY);
-  applyMode(saved === 'yesterday' || saved === 'custom' ? saved : 'today', false);
+  applyMode(saved === 'yesterday' || saved === 'custom' || saved === 'month' ? saved : 'today', false);
 }
 
 /* Every branch below feeds $('fresh') from the same global arrays the tab
