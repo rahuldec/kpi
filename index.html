@@ -111,6 +111,21 @@ body{
   font-size:10px;font-weight:700;letter-spacing:.01em}
 .log-date{font-variant-numeric:tabular-nums;white-space:nowrap;font-size:12.5px}
 .log-email{font-size:12px;color:var(--faint)}
+.log-totals{background:var(--card);border:1px solid var(--hair);border-radius:16px;
+  overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:12px}
+.log-total-row{display:flex;align-items:center;justify-content:space-between;
+  padding:10px 16px;border-bottom:1px solid var(--hair);gap:12px}
+.log-total-row:last-child{border-bottom:0}
+.log-total-badge{font-size:12px;font-weight:600;color:var(--brand);
+  background:var(--brand-soft);border-radius:20px;padding:2px 10px;white-space:nowrap;flex-shrink:0}
+.log-pager{display:flex;align-items:center;justify-content:center;gap:14px;
+  margin-bottom:12px;font-size:13px;color:var(--body)}
+.log-pager-btn{font:inherit;font-size:13px;font-weight:600;color:var(--brand);
+  background:var(--card);border:1px solid var(--line);border-radius:8px;
+  padding:5px 14px;cursor:pointer;transition:background .12s}
+.log-pager-btn:hover:not(:disabled){background:var(--brand);color:#fff;border-color:var(--brand)}
+.log-pager-btn:disabled{opacity:.4;cursor:default}
+.log-pager-info{font-variant-numeric:tabular-nums}
 .viewscope{
   font-size:13px;color:var(--body);background:var(--brand-soft);
   border-radius:8px;padding:8px 12px;margin:0 0 16px;text-align:right;
@@ -221,7 +236,9 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
    averaged into a single figure: compliance is this month's behaviour, business
    is the standing book, and a team can be strong on one and weak on the other.
    Collapsing them would hide exactly the case worth looking at. */
-.meters{display:flex;flex-direction:column;gap:16px}
+.meters{display:flex;flex-direction:row;flex-wrap:wrap;gap:16px}
+.meters .kpi{flex:1;min-width:180px}
+.meters .mcard{flex:1;min-width:260px}
 .mcard{border:1px solid var(--line);border-radius:16px;overflow:hidden;
   box-shadow:0 2px 6px rgba(0,0,0,.06),0 10px 32px rgba(0,0,0,.10);
   display:flex;flex-direction:column;background:var(--card)}
@@ -6281,24 +6298,70 @@ async function loadLoginLog(){
     }
     const {entries} = await res.json();
     if (!entries.length) { wrap.innerHTML = '<p class="sum">No logins recorded yet.</p>'; return; }
+
     const fmt = ts => {
       const d = new Date(ts);
       return d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) +
              ' · ' + d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
     };
     const initials = name => (name||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase();
+
+    // Per-employee totals
+    const totals = new Map();
+    for (const e of entries) {
+      const key = e.email;
+      if (!totals.has(key)) totals.set(key, {name: e.name||e.email, count: 0});
+      totals.get(key).count++;
+    }
+    const sortedTotals = [...totals.entries()].sort((a,b) => b[1].count - a[1].count);
+
     $('loginLogSection').querySelector('.log-heading').innerHTML =
       `Login log <span class="log-count">${entries.length}</span>`;
-    wrap.innerHTML =
-      `<div class="log-card"><table class="log-table">` +
-      `<thead><tr><th>When</th><th>User</th><th>Email</th></tr></thead><tbody>` +
-      entries.map(e =>
+
+    const PAGE = 10;
+    let page = 0;
+    const totalPages = () => Math.ceil(entries.length / PAGE);
+
+    const renderPage = () => {
+      const start = page * PAGE;
+      const slice = entries.slice(start, start + PAGE);
+      const rows = slice.map(e =>
         `<tr>` +
         `<td class="log-date">${esc(fmt(e.ts))}</td>` +
         `<td><span class="log-user"><span class="log-avatar">${esc(initials(e.name||e.email))}</span>${esc(e.name||'—')}</span></td>` +
         `<td class="log-email">${esc(e.email)}</td></tr>`
-      ).join('') +
-      `</tbody></table></div>`;
+      ).join('');
+
+      const totalsHtml = `<div class="log-totals">` +
+        sortedTotals.map(([email, {name, count}]) =>
+          `<div class="log-total-row">` +
+          `<span class="log-user"><span class="log-avatar">${esc(initials(name))}</span>${esc(name)}</span>` +
+          `<span class="log-total-badge">${count} visit${count===1?'':'s'}</span>` +
+          `</div>`
+        ).join('') + `</div>`;
+
+      const pagerHtml = totalPages() > 1 ?
+        `<div class="log-pager">` +
+        `<button class="log-pager-btn" id="logPrev" ${page===0?'disabled':''}>&#8592; Prev</button>` +
+        `<span class="log-pager-info">${start+1}–${Math.min(start+PAGE, entries.length)} of ${entries.length}</span>` +
+        `<button class="log-pager-btn" id="logNext" ${page>=totalPages()-1?'disabled':''}>Next &#8594;</button>` +
+        `</div>` : '';
+
+      wrap.innerHTML =
+        totalsHtml +
+        pagerHtml +
+        `<div class="log-card"><table class="log-table">` +
+        `<thead><tr><th>When</th><th>User</th><th>Email</th></tr></thead><tbody>` +
+        rows +
+        `</tbody></table></div>` +
+        pagerHtml;
+
+      const prev = $('logPrev'), next = $('logNext');
+      if (prev) prev.addEventListener('click', () => { page--; renderPage(); });
+      if (next) next.addEventListener('click', () => { page++; renderPage(); });
+    };
+
+    renderPage();
   } catch(e) { wrap.innerHTML = '<p class="sum">Error loading logs.</p>'; }
 }
 
