@@ -6689,7 +6689,7 @@ async function loadAndRenderTraining(){
   $('trainingSummary').innerHTML = '<p class="tr-state">Loading training content…</p>';
   $('trainingModules').innerHTML = '';
   try {
-    const res = await fetch('/api/training', {cache: 'no-store'});
+    const res = await fetch('/api/data?src=training', {cache: 'no-store'});
     if (!res.ok) throw new Error(`Server returned ${res.status}`);
     const json = await res.json();
     TRAINING_MODULES = Array.isArray(json.modules) ? json.modules : [];

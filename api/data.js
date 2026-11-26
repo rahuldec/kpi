@@ -776,6 +776,58 @@ async function discoverGids(base) {
   return [];
 }
 
+function parseTrainingCsv(csv) {
+  const rows = parseCsvSimple(csv);
+  if (rows.length < 2) return [];
+  const header = rows[0].map(h => h.trim().toLowerCase());
+  const col = k => header.indexOf(k);
+  const iMod = col('module'), iSub = col('sub parts'), iLink = col('link'), iAssign = col('assignment');
+  if (iMod < 0) return [];
+  const modules = [];
+  let curMod = null;
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    const modName = row[iMod]?.trim();
+    const subPart = iSub    >= 0 ? row[iSub]?.trim()    : '';
+    const link    = iLink   >= 0 ? row[iLink]?.trim()   : '';
+    const assign  = iAssign >= 0 ? row[iAssign]?.trim() : '';
+    if (modName) { curMod = { id: slugify(modName), title: modName, lessons: [] }; modules.push(curMod); }
+    if (!curMod || !subPart) continue;
+    const sub = subPart.toLowerCase();
+    const kind = sub === 'assignment' ? 'assignment' : sub === 'review' ? 'review'
+               : (assign && !link) ? 'assignment' : 'video';
+    curMod.lessons.push({
+      id: `${curMod.id}__${slugify(subPart)}`, title: subPart, kind,
+      videoUrl:  kind === 'video'       ? drivePreviewUrl(link) : null,
+      assignUrl: kind === 'assignment'  ? (link || assign)      : null,
+    });
+  }
+  return modules.filter(m => m.lessons.length > 0);
+}
+function drivePreviewUrl(url) {
+  if (!url) return null;
+  const m = url.match(/\/file\/d\/([^/?#]+)/) || url.match(/[?&]id=([^&]+)/);
+  return m ? `https://drive.google.com/file/d/${m[1]}/preview` : url;
+}
+function slugify(s) { return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''); }
+function parseCsvSimple(text) {
+  const rows = []; let row = [], field = '', inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQ) {
+      if (c === '"') { if (text[i+1] === '"') { field += '"'; i++; } else inQ = false; }
+      else field += c;
+    } else {
+      if      (c === '"') inQ = true;
+      else if (c === ',') { row.push(field); field = ''; }
+      else if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+      else if (c !== '\r') field += c;
+    }
+  }
+  if (field || row.length) { row.push(field); rows.push(row); }
+  return rows.filter(r => r.some(f => f.trim()));
+}
+
 module.exports = async (req, res) => {
   const attempted = [];
   const src = (req.query && req.query.src) ||
@@ -823,6 +875,24 @@ module.exports = async (req, res) => {
       res.setHeader('Content-Type', ct);
       res.setHeader('Cache-Control', 'public, s-maxage=86400, stale-while-revalidate=3600');
       return res.status(200).send(buf);
+    }
+
+    /* Training modules: fetch and parse the ERP training Google Sheet, return
+       JSON {modules:[...]}. Same CSV format as api/training.js (now removed to
+       stay inside the Hobby plan's 12-function limit). */
+    if (src === 'training') {
+      const sheetUrl = process.env.TRAINING_SHEET_URL;
+      if (!sheetUrl) {
+        res.setHeader('Cache-Control', 'no-store');
+        return res.status(200).json({ modules: [], note: 'TRAINING_SHEET_URL not set' });
+      }
+      const r = await fetch(sheetUrl, { cache: 'no-store' });
+      if (!r.ok) return res.status(502).json({ error: `Sheet returned ${r.status}` });
+      const csv = await r.text();
+      const modules = parseTrainingCsv(csv);
+      res.setHeader('Cache-Control', 's-maxage=120, stale-while-revalidate=60');
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      return res.status(200).json({ modules });
     }
 
     /* 0a. Tabs by name, one per RM per quarter. The client sends the RM names it
