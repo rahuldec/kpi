@@ -437,14 +437,14 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
    asserts .met's presence for "target met"), only what paints them. */
 .mcard .dial:last-of-type + .track{margin-bottom:0}
 /* Standalone mcards (adoption/feedback): h4 + dial as direct mcard children */
-.mcard > h4{padding:20px 22px 6px}
-.mcard > .dial{padding:0 22px;flex-direction:column;align-items:flex-start;
+.mcard--standalone > h4{padding:20px 22px 6px}
+.mcard--standalone > .dial{padding:0 22px;flex-direction:column;align-items:flex-start;
   gap:3px;flex-wrap:nowrap;margin-bottom:0}
-.mcard > .dial .lbl{width:auto;white-space:nowrap;font-size:11px}
-.mcard > .dial .val{font-size:34px;font-weight:700;line-height:1.1;letter-spacing:-.03em}
-.mcard > .dial .sub{margin-left:0;text-align:left;white-space:normal;font-size:12px}
-.mcard > .track{margin:10px 22px 6px}
-.mcard > .covwho{padding:6px 22px 20px;margin:0}
+.mcard--standalone > .dial .lbl{width:auto;white-space:nowrap;font-size:11px}
+.mcard--standalone > .dial .val{font-size:34px;font-weight:700;line-height:1.1;letter-spacing:-.03em}
+.mcard--standalone > .dial .sub{margin-left:0;text-align:left;white-space:normal;font-size:12px}
+.mcard--standalone > .track{margin:10px 22px 6px}
+.mcard--standalone > .covwho{padding:6px 22px 20px;margin:0}
 
 /* A simple horizontal bar chart, reusing the same track/fill the dials use —
    one brand-orange bar per row rather than a new visual language, so a chart
@@ -807,7 +807,7 @@ html.modalopen{overflow:hidden}
 .board tr.flat td{color:var(--faint)}
 
 .escwho,.covwho,.implwho,.prwho{font-size:12.5px;line-height:1.45;color:var(--miss);margin:5px 0 0 97px}
-.mcard > .covwho{margin-left:0}
+.mcard--standalone > .covwho{margin-left:0}
 .escwho.cool,.covwho.cool,.implwho.cool,.prwho.cool{color:var(--faint)}
 
 /* ── client book ─
@@ -4809,12 +4809,12 @@ function renderAdoption(){
      the first without the second is how a partial exercise starts being read as
      a complete one. */
   $('adopttotals').innerHTML =
-    `<div class="mcard"><h4>Overall adoption</h4>` +
+    `<div class="mcard mcard--standalone"><h4>Overall adoption</h4>` +
     dial('Modules in use', applic ? pooled / applic : null,
          `${pooled} of ${applic} applicable`, applic && pooled / applic >= ADOPTION_TARGET) +
     `<p class="covwho cool">Across ${scored.length} scored ` +
     `${scored.length === 1 ? 'client' : 'clients'}, ${ADOPTION_MODULES.length} modules.</p></div>` +
-    `<div class="mcard"><h4>How much of the book this covers</h4>` +
+    `<div class="mcard mcard--standalone"><h4>How much of the book this covers</h4>` +
     dial('Revenue scored', bookTotal ? covered / bookTotal : null,
          `${esc(inr(covered))} of ${esc(inr(bookTotal))}`, unscored.length === 0) +
     `<p class="covwho${unscored.length ? '' : ' cool'}">${scored.length} of ` +
@@ -5040,14 +5040,14 @@ function renderFeedback(){
   /* Coverage card first, and it carries the sample-size warning. */
   const thin = latest.length > 0 && latest.length < FEEDBACK_MIN_N;
   $('feedtotals').innerHTML =
-    `<div class="mcard"><h4>How much of the book has been heard from</h4>` +
+    `<div class="mcard mcard--standalone"><h4>How much of the book has been heard from</h4>` +
     dial('Clients heard from', owned.length ? latest.length / owned.length : null,
          `${latest.length} of ${owned.length} clients`, silent.length === 0) +
     `<p class="covwho${silent.length ? '' : ' cool'}">` +
     `${esc(inr(heardRev))} of ${esc(inr(bookTotal))} of the book` +
     (total > latest.length ? ` · ${total} submissions in all` : '') +
     (silent.length ? `. The rest are listed at the foot of this page.` : `.`) + `</p></div>` +
-    `<div class="mcard"><h4>What they said</h4>` +
+    `<div class="mcard mcard--standalone"><h4>What they said</h4>` +
     dial('Satisfaction', sat === null ? null : sat / 5,
          sat === null ? 'nobody has answered' : `${sat.toFixed(1)} of 5`,
          sat !== null && !thin && sat / 5 >= FEEDBACK_TARGET) +
@@ -5610,7 +5610,7 @@ function renderQbr(){
         row.majorIssueDetail && ['Unresolved issue', row.majorIssueDetail],
         row.topActions && ['Top actions', row.topActions],
       ].filter(Boolean);
-      return `<div class="mcard"><h4>${esc(r.client.n)}</h4>` +
+      return `<div class="mcard mcard--standalone"><h4>${esc(r.client.n)}</h4>` +
         `<p class="who">${esc(row.rm || 'RM not recorded')} &middot; ${esc(r.label)} &middot; ` +
         `score ${r.score ?? '—'}</p>` +
         lines.map(([label, text]) => `<p class="sum"><b>${esc(label)}:</b> ${esc(text)}</p>`).join('') +
