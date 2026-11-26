@@ -1387,13 +1387,6 @@ tr.scoredetail .tk{flex:0 0 96px;color:var(--faint);font-weight:500}
     </div>
 
     <div class="group">
-      <span class="grouplabel">RM Review</span>
-      <div class="sources" id="sources7">
-        <button type="button" data-src="qbr">QBR</button>
-      </div>
-    </div>
-
-    <div class="group">
       <span class="grouplabel">LMS</span>
       <div class="sources" id="sources8">
         <button type="button" data-src="training">Learning Hub <span class="nav-new">New</span></button>
@@ -6001,7 +5994,7 @@ function moveNavPill(animate){
 }
 
 function markSource(){
-  for (const g of ['sources','sources2','sources3','sources4','sources6','sources7','sources8'])
+  for (const g of ['sources','sources2','sources3','sources4','sources6','sources8'])
     for (const b of $(g).children)
       b.setAttribute('aria-pressed', String(b.dataset.src === SOURCE));
   const mode = modeOf(SOURCE);
@@ -6981,7 +6974,7 @@ $('scoreSearch').addEventListener('input', e => {
 });
 /* Every group's tabs share one handler — a new group needs its id here and
    nothing else. Binding per group is how a tab ends up silently inert. */
-for (const g of ['sources','sources2','sources3','sources4','sources6','sources7','sources8'])
+for (const g of ['sources','sources2','sources3','sources4','sources6','sources8'])
   $(g).addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b || b.dataset.src === SOURCE) return;
     SOURCE = b.dataset.src;
