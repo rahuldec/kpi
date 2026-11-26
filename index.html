@@ -1229,6 +1229,41 @@ tr.scoredetail .tk{flex:0 0 96px;color:var(--faint);font-weight:500}
 .exempt{font-size:13px;color:var(--faint);margin:-8px 0 0;padding:0 4px;letter-spacing:-.006em}
 .exempt:empty{display:none}
 
+/* ── training tracker ─────────────────────────────────────────────────────── */
+.tr-progress{background:var(--card);border:1px solid var(--line);border-radius:14px;
+  padding:18px 22px;margin-bottom:20px;display:flex;align-items:center;gap:20px;
+  box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.tr-progress-bar{flex:1;height:7px;background:var(--hair);border-radius:4px;overflow:hidden}
+.tr-progress-fill{height:100%;background:var(--brand);border-radius:4px;transition:width .3s}
+.tr-progress-label{font-size:14px;font-weight:600;color:var(--ink);white-space:nowrap}
+.tr-progress-sub{font-size:12px;color:var(--faint);margin-top:2px}
+.tr-module{background:var(--card);border:1px solid var(--line);border-radius:14px;
+  overflow:hidden;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.tr-module-head{padding:14px 20px;background:var(--brand-soft);
+  border-bottom:1px solid rgba(236,103,36,.18);
+  display:flex;align-items:center;justify-content:space-between;gap:12px}
+.tr-module-title{font-size:15px;font-weight:600;color:var(--ink);letter-spacing:-.01em}
+.tr-module-count{font-size:12px;color:var(--body);flex-shrink:0}
+.tr-lesson{display:flex;align-items:center;gap:12px;padding:11px 20px;
+  border-bottom:1px solid var(--hair);cursor:pointer;transition:background .12s}
+.tr-lesson:last-child{border-bottom:0}
+.tr-lesson:hover{background:var(--page)}
+.tr-lesson-icon{width:28px;height:28px;border-radius:50%;background:var(--hair);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:12px}
+.tr-lesson-icon.video{background:var(--brand-soft);color:var(--brand)}
+.tr-lesson-icon.watched{background:var(--ok);color:#fff}
+.tr-lesson-name{flex:1;font-size:14px;color:var(--ink);min-width:0;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.tr-lesson-name.watched{color:var(--faint);text-decoration:line-through}
+.tr-lesson-action{flex-shrink:0;font:inherit;font-size:12px;font-weight:600;
+  color:var(--brand);background:none;border:1px solid var(--brand);
+  border-radius:20px;padding:3px 10px;cursor:pointer;white-space:nowrap}
+.tr-lesson-action:hover{background:var(--brand);color:#fff}
+.tr-lesson-action.watched{color:var(--faint);border-color:var(--line)}
+.tr-lesson-action.watched:hover{background:var(--hair);color:var(--ink)}
+.tr-state{font-size:14px;color:var(--faint);text-align:center;padding:32px 0}
+#section\:training .pill{font-size:13px}
+
 /* Below 1000px a 264px rail plus a card grid does not fit, so the rail returns
    to the top of the page and lays its groups out along a row again — the layout
    this replaced. Overall loses its pin here: in a row there is no foot to pin
@@ -1331,6 +1366,13 @@ tr.scoredetail .tk{flex:0 0 96px;color:var(--faint);font-weight:500}
       <span class="grouplabel">RM Review</span>
       <div class="sources" id="sources7">
         <button type="button" data-src="qbr">QBR</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <span class="grouplabel">Training</span>
+      <div class="sources" id="sources8">
+        <button type="button" data-src="training">Training tracker</button>
       </div>
     </div>
 
@@ -1500,6 +1542,11 @@ tr.scoredetail .tk{flex:0 0 96px;color:var(--faint);font-weight:500}
     </div>
   </section>
 
+  <section id="training" hidden>
+    <div id="trainingSummary"></div>
+    <div id="trainingModules"></div>
+  </section>
+
   <section id="qbr" hidden>
     <div class="card">
       <h3>By team</h3>
@@ -1588,6 +1635,29 @@ tr.scoredetail .tk{flex:0 0 96px;color:var(--faint);font-weight:500}
   <!-- The (i) panel. One dialog, reused by every card: the content is built into
        each card hidden and copied in here on open, so there is exactly one copy
        of the layout to style and one thing on screen at a time. -->
+  <div class="modal" id="trainingModal" hidden>
+    <div class="modalback" id="trainingModalBack"></div>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="trainingModalTitle" style="max-width:720px">
+      <div class="sheethead">
+        <div class="sheetid">
+          <p class="sheetkicker" id="trainingModalModule"></p>
+          <h4 id="trainingModalTitle"></h4>
+        </div>
+        <button type="button" class="x" id="trainingModalClose" aria-label="Close">&times;</button>
+      </div>
+      <div class="sheetbody" style="padding:0 0 20px">
+        <div id="trainingModalFrame" style="position:relative;padding-top:56.25%">
+          <iframe id="trainingModalIframe" style="position:absolute;inset:0;width:100%;height:100%;border:0"
+            allowfullscreen allow="autoplay"></iframe>
+        </div>
+        <div style="padding:14px 22px 0;display:flex;align-items:center;justify-content:space-between;gap:12px">
+          <span id="trainingModalLesson" style="font-size:13.5px;color:var(--body)"></span>
+          <button type="button" id="trainingModalWatch" class="pill" style="flex-shrink:0"></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="modal" id="howmodal" hidden>
     <div class="modalback" id="howback"></div>
     <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="howtitle">
@@ -2317,7 +2387,8 @@ const SOURCES = {
   adoption:  {label: 'ERP module adoption',            noun: 'calls'},
   feedback:  {label: 'Feedback',                       noun: 'calls'},
   visits:    {label: 'Visits',                         noun: 'calls'},
-  qbr:       {label: 'Quarterly Business Review',      noun: 'reviews'}
+  qbr:       {label: 'Quarterly Business Review',      noun: 'reviews'},
+  training:  {label: 'ERP Training Tracker',           noun: 'lessons'},
 };
 const TRACKERS = ['internal','client'];
 const MONTH_KEY = 'kpi.months';
@@ -5873,6 +5944,7 @@ const modeOf = src => src === 'scorecard' ? 'scorecard'
                     : src === 'feedback'  ? 'feedback'
                     : src === 'visits'    ? 'visits'
                     : src === 'qbr'       ? 'qbr'
+                    : src === 'training'  ? 'training'
                     : 'daily';
 
 /* Slides the selection pill onto the current tab.
@@ -5905,7 +5977,7 @@ function moveNavPill(animate){
 }
 
 function markSource(){
-  for (const g of ['sources','sources2','sources3','sources4','sources5','sources6','sources7'])
+  for (const g of ['sources','sources2','sources3','sources4','sources5','sources6','sources7','sources8'])
     for (const b of $(g).children)
       b.setAttribute('aria-pressed', String(b.dataset.src === SOURCE));
   const mode = modeOf(SOURCE);
@@ -5917,6 +5989,7 @@ function markSource(){
      : mode === 'feedback' ? 'client feedback'
      : mode === 'visits'   ? 'client visits'
      : mode === 'qbr'      ? 'quarterly business review'
+     : mode === 'training' ? 'training tracker'
      : SOURCES[SOURCE].label);
   $('h1').innerHTML = mode === 'scorecard' ? 'Missed days, <em>counted</em>.'
                     : mode === 'clients'   ? 'Who owns <em>what</em>.'
@@ -5924,6 +5997,7 @@ function markSource(){
                     : mode === 'feedback'  ? 'What the clients <em>say</em>.'
                     : mode === 'visits'    ? 'Who went <em>out</em>.'
                     : mode === 'qbr'       ? 'Who needs <em>attention</em>.'
+                    : mode === 'training'  ? 'What we\'ve <em>learned</em>.'
                     : 'Who <em>hasn\'t</em> filed.';
   const daily = mode === 'daily';
   $('lede').hidden = !daily;
@@ -5934,6 +6008,7 @@ function markSource(){
   $('feedback').hidden  = mode !== 'feedback';
   $('visits').hidden    = mode !== 'visits';
   $('qbr').hidden       = mode !== 'qbr';
+  $('training').hidden  = mode !== 'training';
   for (const id of DAILY_PANELS){ const el = $(id); if (el) el.hidden = !daily; }
   $('presets').hidden   = !daily;
   $('monthwrap').hidden = mode !== 'scorecard' && mode !== 'meter' && mode !== 'visits';
@@ -5942,7 +6017,8 @@ function markSource(){
   /* Quarterly, and not per-person: neither the month picker nor the joined
      toggle changes a single figure on this tab, so neither is shown. */
   $('joinedwrap').hidden = mode === 'clients' || mode === 'adoption' ||
-                           mode === 'feedback' || mode === 'visits' || mode === 'qbr';
+                           mode === 'feedback' || mode === 'visits' || mode === 'qbr' ||
+                           mode === 'training';
   $('h1').innerHTML = mode === 'meter' ? 'Compliance and <em>business</em>.' : $('h1').innerHTML;
   if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => moveNavPill());
   else moveNavPill();
@@ -6071,6 +6147,11 @@ function showActive(){
       : `${meetingsCount} ${meetingsCount === 1 ? 'meeting' : 'meetings'} · ` +
         `${n} person-visits on file`;
     renderVisits();
+    return;
+  }
+  if (SOURCE === 'training'){
+    showContent();
+    loadAndRenderTraining();
     return;
   }
   if (SOURCE === 'clients'){
@@ -6580,6 +6661,197 @@ async function load(){
   }
 }
 
+/* ── training tracker ─────────────────────────────────────────────────────── */
+let TRAINING_MODULES = [];
+let TRAINING_LOADED  = false;
+let TRAINING_LOADING = false;
+let TRAINING_ERROR   = null;
+
+const TRAINING_WATCHED_KEY = () =>
+  'kpi.training.watched.' + (VIEWER && VIEWER.email ? VIEWER.email : '_anon');
+
+function trainingWatched(){
+  try { return new Set(JSON.parse(readStore(TRAINING_WATCHED_KEY()) || '[]')); }
+  catch(e){ return new Set(); }
+}
+function saveWatched(set){
+  try { writeStore(TRAINING_WATCHED_KEY(), JSON.stringify([...set])); }
+  catch(e){}
+}
+
+async function loadAndRenderTraining(){
+  if (TRAINING_LOADING) return;
+  if (TRAINING_LOADED){
+    renderTraining();
+    return;
+  }
+  TRAINING_LOADING = true;
+  $('trainingSummary').innerHTML = '<p class="tr-state">Loading training content…</p>';
+  $('trainingModules').innerHTML = '';
+  try {
+    const res = await fetch('/api/training', {cache: 'no-store'});
+    if (!res.ok) throw new Error(`Server returned ${res.status}`);
+    const json = await res.json();
+    TRAINING_MODULES = Array.isArray(json.modules) ? json.modules : [];
+    TRAINING_ERROR   = null;
+  } catch(e) {
+    TRAINING_ERROR   = (e && e.message) || String(e);
+    TRAINING_MODULES = [];
+  }
+  TRAINING_LOADED  = true;
+  TRAINING_LOADING = false;
+  renderTraining();
+}
+
+function renderTraining(){
+  if (SOURCE !== 'training') return;
+  const modules  = TRAINING_MODULES;
+  const watched  = trainingWatched();
+
+  if (TRAINING_ERROR || !modules.length){
+    const msg = TRAINING_ERROR
+      ? `Could not load training content: ${TRAINING_ERROR}`
+      : 'No training modules found. Set TRAINING_SHEET_URL in Vercel environment variables.';
+    $('trainingSummary').innerHTML = `<p class="tr-state">${esc(msg)}</p>`;
+    $('trainingModules').innerHTML = '';
+    $('fresh').textContent = '';
+    return;
+  }
+
+  const videos  = modules.flatMap(m => m.lessons.filter(l => l.kind === 'video'));
+  const total   = videos.length;
+  const done    = videos.filter(l => watched.has(l.id)).length;
+  const pct     = total ? Math.round(done / total * 100) : 0;
+
+  $('fresh').textContent = `${done} of ${total} videos watched`;
+
+  $('trainingSummary').innerHTML =
+    `<div class="tr-progress">` +
+    `<div>` +
+    `<div class="tr-progress-label">${done} / ${total} videos watched</div>` +
+    `<div class="tr-progress-sub">${pct}% complete</div>` +
+    `</div>` +
+    `<div class="tr-progress-bar" style="max-width:280px">` +
+    `<div class="tr-progress-fill" style="width:${pct}%"></div>` +
+    `</div>` +
+    `</div>`;
+
+  let html = '';
+  for (const mod of modules){
+    const modVideos  = mod.lessons.filter(l => l.kind === 'video');
+    const modDone    = modVideos.filter(l => watched.has(l.id)).length;
+    const countLabel = modVideos.length
+      ? `${modDone}/${modVideos.length} watched`
+      : '';
+    html += `<div class="tr-module">` +
+      `<div class="tr-module-head">` +
+      `<span class="tr-module-title">${esc(mod.title)}</span>` +
+      `<span class="tr-module-count">${esc(countLabel)}</span>` +
+      `</div>`;
+    for (const lesson of mod.lessons){
+      if (lesson.kind === 'assignment') continue;
+      const isWatched = watched.has(lesson.id);
+      const iconHtml = lesson.kind === 'video'
+        ? `<svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><polygon points="3,1 11,6 3,11"/></svg>`
+        : `<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="6" r="5"/></svg>`;
+      const iconClass = lesson.kind === 'video'
+        ? (isWatched ? 'tr-lesson-icon video watched' : 'tr-lesson-icon video')
+        : 'tr-lesson-icon';
+      html +=
+        `<div class="tr-lesson" data-lesson-id="${esc(lesson.id)}" data-module-id="${esc(mod.id)}">` +
+        `<span class="${esc(iconClass)}">${iconHtml}</span>` +
+        `<span class="tr-lesson-name${isWatched ? ' watched' : ''}">${esc(lesson.title)}</span>` +
+        (lesson.kind === 'video' && lesson.videoUrl
+          ? `<button type="button" class="tr-lesson-action${isWatched ? ' watched' : ''}" data-action="toggle">${isWatched ? 'Watched' : 'Mark watched'}</button>` +
+            `<button type="button" class="tr-lesson-action" data-action="play" style="margin-left:4px">Play ▶</button>`
+          : lesson.kind === 'video'
+            ? `<span style="font-size:12px;color:var(--faint)">No link yet</span>`
+            : '') +
+        `</div>`;
+    }
+    html += `</div>`;
+  }
+  $('trainingModules').innerHTML = html;
+}
+
+/* Training module click delegation */
+document.addEventListener('click', e => {
+  if (SOURCE !== 'training') return;
+
+  /* Toggle watched from the button */
+  const toggleBtn = e.target.closest('[data-action="toggle"]');
+  if (toggleBtn){
+    e.stopPropagation();
+    const row  = toggleBtn.closest('.tr-lesson');
+    const id   = row && row.dataset.lessonId;
+    if (!id) return;
+    const set  = trainingWatched();
+    set.has(id) ? set.delete(id) : set.add(id);
+    saveWatched(set);
+    renderTraining();
+    return;
+  }
+
+  /* Play video — either the button or clicking the lesson row */
+  const playBtn  = e.target.closest('[data-action="play"]');
+  const lessonRow = !playBtn && e.target.closest('.tr-lesson');
+  const row = playBtn ? playBtn.closest('.tr-lesson') : lessonRow;
+  if (!row) return;
+  const lessonId = row.dataset.lessonId;
+  if (!lessonId) return;
+  const lesson = TRAINING_MODULES
+    .flatMap(m => m.lessons)
+    .find(l => l.id === lessonId);
+  if (!lesson || lesson.kind !== 'video' || !lesson.videoUrl) return;
+  const mod = TRAINING_MODULES.find(m => m.id === row.dataset.moduleId);
+  openTrainingModal(lesson, mod ? mod.title : '');
+});
+
+let TRAINING_MODAL_LESSON_ID = null;
+
+function openTrainingModal(lesson, moduleName){
+  TRAINING_MODAL_LESSON_ID = lesson.id;
+  $('trainingModalModule').textContent  = moduleName;
+  $('trainingModalTitle').textContent   = lesson.title;
+  $('trainingModalIframe').src          = lesson.videoUrl;
+  $('trainingModalLesson').textContent  = lesson.title;
+  updateTrainingModalWatchBtn();
+  $('trainingModal').hidden = false;
+  document.documentElement.classList.add('modalopen');
+  $('trainingModalClose').focus();
+}
+
+function closeTrainingModal(){
+  if ($('trainingModal').hidden) return;
+  $('trainingModal').hidden = true;
+  $('trainingModalIframe').src = '';
+  document.documentElement.classList.remove('modalopen');
+  TRAINING_MODAL_LESSON_ID = null;
+}
+
+function updateTrainingModalWatchBtn(){
+  const btn = $('trainingModalWatch');
+  const watched = trainingWatched();
+  const isWatched = TRAINING_MODAL_LESSON_ID && watched.has(TRAINING_MODAL_LESSON_ID);
+  btn.textContent = isWatched ? '✓ Watched' : 'Mark as watched';
+  btn.style.background = isWatched ? 'var(--ok)' : '';
+  btn.style.borderColor = isWatched ? 'var(--ok)' : '';
+  btn.style.color = isWatched ? '#fff' : '';
+}
+
+$('trainingModalClose').addEventListener('click', closeTrainingModal);
+$('trainingModal').addEventListener('click', e => {
+  if (!e.target.closest('.sheet')) closeTrainingModal();
+});
+$('trainingModalWatch').addEventListener('click', () => {
+  if (!TRAINING_MODAL_LESSON_ID) return;
+  const set = trainingWatched();
+  set.has(TRAINING_MODAL_LESSON_ID) ? set.delete(TRAINING_MODAL_LESSON_ID) : set.add(TRAINING_MODAL_LESSON_ID);
+  saveWatched(set);
+  updateTrainingModalWatchBtn();
+  if (SOURCE === 'training') renderTraining();
+});
+
 /* ---------------- wiring ---------------- */
 for (const id of ['from','to']){
   $(id).addEventListener('change', () => {
@@ -6639,7 +6911,7 @@ $('scoreSearch').addEventListener('input', e => {
 });
 /* Every group's tabs share one handler — a new group needs its id here and
    nothing else. Binding per group is how a tab ends up silently inert. */
-for (const g of ['sources','sources2','sources3','sources4','sources5','sources6','sources7'])
+for (const g of ['sources','sources2','sources3','sources4','sources5','sources6','sources7','sources8'])
   $(g).addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b || b.dataset.src === SOURCE) return;
     SOURCE = b.dataset.src;
