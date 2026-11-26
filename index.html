@@ -436,6 +436,15 @@ tr.flagged td:first-child{box-shadow:inset 3px 0 0 var(--miss);padding-left:11px
    classes themselves are untouched (dial() still computes them, qa.js still
    asserts .met's presence for "target met"), only what paints them. */
 .mcard .dial:last-of-type + .track{margin-bottom:0}
+/* Standalone mcards (adoption/feedback): h4 + dial as direct mcard children */
+.mcard > h4{padding:20px 22px 6px}
+.mcard > .dial{padding:0 22px;flex-direction:column;align-items:flex-start;
+  gap:3px;flex-wrap:nowrap;margin-bottom:0}
+.mcard > .dial .lbl{width:auto;white-space:nowrap;font-size:11px}
+.mcard > .dial .val{font-size:34px;font-weight:700;line-height:1.1;letter-spacing:-.03em}
+.mcard > .dial .sub{margin-left:0;text-align:left;white-space:normal;font-size:12px}
+.mcard > .track{margin:10px 22px 6px}
+.mcard > .covwho{padding:6px 22px 20px;margin:0}
 
 /* A simple horizontal bar chart, reusing the same track/fill the dials use —
    one brand-orange bar per row rather than a new visual language, so a chart
@@ -798,6 +807,7 @@ html.modalopen{overflow:hidden}
 .board tr.flat td{color:var(--faint)}
 
 .escwho,.covwho,.implwho,.prwho{font-size:12.5px;line-height:1.45;color:var(--miss);margin:5px 0 0 97px}
+.mcard > .covwho{margin-left:0}
 .escwho.cool,.covwho.cool,.implwho.cool,.prwho.cool{color:var(--faint)}
 
 /* ── client book ─
@@ -1366,13 +1376,6 @@ tr.scoredetail .tk{flex:0 0 96px;color:var(--faint);font-weight:500}
       <span class="grouplabel">Product</span>
       <div class="sources" id="sources4">
         <button type="button" data-src="adoption">ERP module adoption</button>
-      </div>
-    </div>
-
-    <div class="group">
-      <span class="grouplabel">Voice</span>
-      <div class="sources" id="sources5">
-        <button type="button" data-src="feedback">Feedback</button>
       </div>
     </div>
 
@@ -5998,7 +6001,7 @@ function moveNavPill(animate){
 }
 
 function markSource(){
-  for (const g of ['sources','sources2','sources3','sources4','sources5','sources6','sources7','sources8'])
+  for (const g of ['sources','sources2','sources3','sources4','sources6','sources7','sources8'])
     for (const b of $(g).children)
       b.setAttribute('aria-pressed', String(b.dataset.src === SOURCE));
   const mode = modeOf(SOURCE);
@@ -6978,7 +6981,7 @@ $('scoreSearch').addEventListener('input', e => {
 });
 /* Every group's tabs share one handler — a new group needs its id here and
    nothing else. Binding per group is how a tab ends up silently inert. */
-for (const g of ['sources','sources2','sources3','sources4','sources5','sources6','sources7','sources8'])
+for (const g of ['sources','sources2','sources3','sources4','sources6','sources7','sources8'])
   $(g).addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b || b.dataset.src === SOURCE) return;
     SOURCE = b.dataset.src;
