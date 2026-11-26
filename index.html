@@ -903,6 +903,10 @@ table.board th.num,table.board th.num button{justify-content:flex-end}
   letter-spacing:.1em;color:var(--ink);margin:0 0 2px;padding:0 10px;
 }
 
+.nav-new{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.04em;
+  text-transform:uppercase;color:#fff;background:#e53935;border-radius:4px;
+  padding:1px 5px;margin-left:4px;vertical-align:middle;line-height:1.5;pointer-events:none}
+
 /* ── hero ─────────────────────────────────────────────────────────────────── */
 .eyebrow{
   font-size:15px;font-weight:600;letter-spacing:-.008em;color:var(--faint);
@@ -1387,9 +1391,9 @@ tr.scoredetail .tk{flex:0 0 96px;color:var(--faint);font-weight:500}
     </div>
 
     <div class="group">
-      <span class="grouplabel">Training</span>
+      <span class="grouplabel">LMS</span>
       <div class="sources" id="sources8">
-        <button type="button" data-src="training">Training tracker</button>
+        <button type="button" data-src="training">Learning Hub <span class="nav-new">New</span></button>
       </div>
     </div>
 
@@ -2405,7 +2409,7 @@ const SOURCES = {
   feedback:  {label: 'Feedback',                       noun: 'calls'},
   visits:    {label: 'Visits',                         noun: 'calls'},
   qbr:       {label: 'Quarterly Business Review',      noun: 'reviews'},
-  training:  {label: 'ERP Training Tracker',           noun: 'lessons'},
+  training:  {label: 'Learning Hub',                   noun: 'lessons'},
 };
 const TRACKERS = ['internal','client'];
 const MONTH_KEY = 'kpi.months';
@@ -6006,7 +6010,7 @@ function markSource(){
      : mode === 'feedback' ? 'client feedback'
      : mode === 'visits'   ? 'client visits'
      : mode === 'qbr'      ? 'quarterly business review'
-     : mode === 'training' ? 'training tracker'
+     : mode === 'training' ? 'learning hub'
      : SOURCES[SOURCE].label);
   $('h1').innerHTML = mode === 'scorecard' ? 'Missed days, <em>counted</em>.'
                     : mode === 'clients'   ? 'Who owns <em>what</em>.'
